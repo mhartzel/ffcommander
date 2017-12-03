@@ -11,6 +11,8 @@ import (
 
 // Global map, slice, variable definitions
 var complete_stream_info_map = make(map[int][]string)
+var video_stream_info_map = make(map[string]string)
+var audio_stream_info_map = make(map[string]string)
 var wrapper_info_map = make(map[string]string)
 
 func run_external_command(command_to_run_str_slice []string) ([]string,  error) {
@@ -49,7 +51,7 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_slice []string) (
 	var stream_number int
 	var stream_data string
 
-	// Collect information about all strems in the media file.
+	// Collect information about all streams in the media file.
         // The info is collected to stream specific slices and stored in map: complete_stream_info_map
         // The stream number is used as the map key when saving info slice to map
 
@@ -93,6 +95,67 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_slice []string) (
 		if strings.HasPrefix(item, "format") {
 			temp_wrapper_slice = strings.Split(strings.Replace(item, "format.", "", 1), "=")
 			wrapper_info_map[strings.TrimSpace(temp_wrapper_slice[0])] = strings.TrimSpace(strings.Replace(temp_wrapper_slice[1],"\"", "", -1))
+		}
+
+		//temp_info_slice = nil
+		//temp_item_slice = nil
+
+		//for stream_number,_ := range complete_stream_info_map {
+		//	//temp_info_slice := complete_stream_info_map[stream_number]
+		//	fmt.Println(stream_number)
+
+		//	//for item := range temp_info_slice {
+		//	//	fmt.Printf("%s",item)
+		//	//}
+		//}
+
+
+		for _, info_slice := range complete_stream_info_map {
+
+			stream_type_is_video := false
+			stream_type_is_audio := false
+
+			for _, info_string := range info_slice {
+
+				if strings.Contains(info_string, "codec_type=\"video\"") {
+					stream_type_is_video = true
+				}
+
+			}
+
+			for _, info_string := range info_slice {
+
+				if strings.Contains(info_string, "codec_type=\"audio\"") {
+					stream_type_is_audio = true
+				}
+
+			}
+
+			if stream_type_is_video == true {
+
+				for _, info_string := range info_slice {
+
+					temp_slice := strings.Split(info_string ,"=")
+					video_key := temp_slice[0]
+					video_value := strings.Replace(temp_slice[1] ,"\"", "", 2)
+					video_stream_info_map[video_key] = video_value
+					}
+
+			}
+
+			if stream_type_is_audio == true {
+				for _, info_string := range info_slice {
+
+					temp_slice := strings.Split(info_string ,"=")
+					audio_key := temp_slice[0]
+					audio_value := strings.Replace(temp_slice[1] ,"\"", "", 2)
+					audio_stream_info_map[audio_key] = audio_value
+					}
+
+			}
+			// for _,value := range info_slice {
+			// 	fmt.Println("value:", value)
+			// }
 		}
 
 	}
@@ -147,16 +210,46 @@ func main() {
 		sort_raw_ffprobe_information(command_output_str_slice)
 
 		// FIXME
-		for item := range complete_stream_info_map {
-			fmt.Println(item, " = ", complete_stream_info_map[item], "\n")
+		fmt.Println(file_name, "complete_stream_info_map:", "\n")
+		// for item, info_slice := range complete_stream_info_map {
+		for key, info_slice := range complete_stream_info_map {
+			fmt.Println("\n")
+			fmt.Println("key:", key)
+			fmt.Println("-----------------------------------")
+			// fmt.Println("info_slice:", info_slice)
+			for _,value := range info_slice {
+				fmt.Println(value)
+			}
+			// fmt.Println(item, " = ", complete_stream_info_map[item], "\n")
 		}
-		fmt.Println()
+		fmt.Println("\n")
+		fmt.Println("Wrapper info:")
+		fmt.Println("-------------")
 
 		for item := range wrapper_info_map {
 			fmt.Println(item, " = ", wrapper_info_map[item])
 		}
 		fmt.Println()
 
+		fmt.Println("video_stream_info_map:")
+		fmt.Println("-----------------------")
+
+		for item := range video_stream_info_map {
+			fmt.Println(item, "=", video_stream_info_map[item])
+		}
+		fmt.Println()
+
+		fmt.Println("audio_stream_info_map:")
+		fmt.Println("-----------------------")
+
+		for item := range audio_stream_info_map {
+			fmt.Println(item, "=", audio_stream_info_map[item])
+		}
+		fmt.Println()
+
+
+
+		// ffprobe -loglevel 16 -show_entries format:stream -print_format flat -i /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/00-valmiit/Fifth_Element-1997.m4v.mp4
 		// length := len("# Filename") + len(file_name) + len(" #") + 1
 		// fmt.Println(strings.Repeat("#", length))
 		// fmt.Println("# Filename", file_name, "#")
