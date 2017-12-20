@@ -1,0 +1,232 @@
+false false 0 false false false false
+
+Slice: [/home/mika/Downloads/tnss0135_h264b_640x368_256.mp4]
+
+
+/home/mika/Downloads/tnss0135_h264b_640x368_256.mp4 complete_stream_info_map: 
+
+
+
+key: 0
+-----------------------------------
+index=0
+codec_name="h264"
+codec_long_name="H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10"
+profile="Constrained Baseline"
+codec_type="video"
+codec_time_base="50/2997"
+codec_tag_string="avc1"
+codec_tag="0x31637661"
+width=640
+height=360
+coded_width=640
+coded_height=360
+has_b_frames=0
+sample_aspect_ratio="0:1"
+display_aspect_ratio="0:1"
+pix_fmt="yuv420p"
+level=30
+color_range="unknown"
+color_space="unknown"
+color_transfer="unknown"
+color_primaries="unknown"
+chroma_location="left"
+field_order="unknown"
+timecode="N/A"
+refs=1
+is_avc="true"
+nal_length_size="4"
+id="N/A"
+r_frame_rate="2997/100"
+avg_frame_rate="2997/100"
+time_base="1/11988"
+start_pts=0
+start_time="0.000000"
+duration_ts=70195207
+duration="5855.456039"
+bit_rate="248065"
+max_bit_rate="N/A"
+bits_per_raw_sample="8"
+nb_frames="175488"
+nb_read_frames="N/A"
+nb_read_packets="N/A"
+disposition.default=1
+disposition.dub=0
+disposition.original=0
+disposition.comment=0
+disposition.lyrics=0
+disposition.karaoke=0
+disposition.forced=0
+disposition.hearing_impaired=0
+disposition.visual_impaired=0
+disposition.clean_effects=0
+disposition.attached_pic=0
+disposition.timed_thumbnails=0
+tags.language="eng"
+tags.handler_name="VideoHandler"
+
+
+key: 1
+-----------------------------------
+index=1
+codec_name="aac"
+codec_long_name="AAC (Advanced Audio Coding)"
+profile="LC"
+codec_type="audio"
+codec_time_base="1/48000"
+codec_tag_string="mp4a"
+codec_tag="0x6134706d"
+sample_fmt="fltp"
+sample_rate="48000"
+channels=2
+channel_layout="stereo"
+bits_per_sample=0
+id="N/A"
+r_frame_rate="0/0"
+avg_frame_rate="0/0"
+time_base="1/48000"
+start_pts=-576
+start_time="-0.012000"
+duration_ts=281059296
+duration="5855.402000"
+bit_rate="96000"
+max_bit_rate="96000"
+bits_per_raw_sample="N/A"
+nb_frames="274474"
+nb_read_frames="N/A"
+nb_read_packets="N/A"
+disposition.default=1
+disposition.dub=0
+disposition.original=0
+disposition.comment=0
+disposition.lyrics=0
+disposition.karaoke=0
+disposition.forced=0
+disposition.hearing_impaired=0
+disposition.visual_impaired=0
+disposition.clean_effects=0
+disposition.attached_pic=0
+disposition.timed_thumbnails=0
+tags.language="eng"
+tags.handler_name="SoundHandler"
+
+
+Wrapper info:
+-------------
+size = 256876444
+tags.major_brand = isom
+tags.minor_version = 512
+nb_streams = 2
+probe_score = 100
+tags.encoder = Lavf55.14.102
+filename = /home/mika/Downloads/tnss0135_h264b_640x368_256.mp4
+nb_programs = 0
+format_name = mov,mp4,m4a,3gp,3g2,mj2
+start_time = -0.012000
+duration = 5855.456000
+bit_rate = 350956
+format_long_name = QuickTime / MOV
+tags.compatible_brands = isomiso2avc1mp41
+
+video_stream_info_map:
+-----------------------
+codec_tag = 0x31637661
+color_space = unknown
+time_base = 1/11988
+disposition.forced = 0
+disposition.lyrics = 0
+index = 0
+codec_long_name = H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10
+level = 30
+refs = 1
+avg_frame_rate = 2997/100
+nb_frames = 175488
+color_transfer = unknown
+color_primaries = unknown
+field_order = unknown
+nal_length_size = 4
+bits_per_raw_sample = 8
+duration = 5855.456039
+disposition.default = 1
+profile = Constrained Baseline
+codec_tag_string = avc1
+color_range = unknown
+r_frame_rate = 2997/100
+nb_read_frames = N/A
+disposition.dub = 0
+codec_name = h264
+id = N/A
+is_avc = true
+nb_read_packets = N/A
+disposition.timed_thumbnails = 0
+chroma_location = left
+timecode = N/A
+codec_time_base = 50/2997
+width = 640
+coded_width = 640
+disposition.clean_effects = 0
+sample_aspect_ratio = 0:1
+max_bit_rate = N/A
+tags.language = eng
+tags.handler_name = VideoHandler
+disposition.karaoke = 0
+disposition.visual_impaired = 0
+codec_type = video
+coded_height = 360
+has_b_frames = 0
+display_aspect_ratio = 0:1
+start_time = 0.000000
+disposition.original = 0
+start_pts = 0
+disposition.comment = 0
+height = 360
+pix_fmt = yuv420p
+duration_ts = 70195207
+disposition.hearing_impaired = 0
+disposition.attached_pic = 0
+bit_rate = 248065
+
+audio_stream_info_map:
+-----------------------
+disposition.attached_pic = 0
+index = 1
+r_frame_rate = 0/0
+bits_per_raw_sample = N/A
+nb_read_packets = N/A
+disposition.karaoke = 0
+disposition.forced = 0
+disposition.clean_effects = 0
+codec_name = aac
+codec_long_name = AAC (Advanced Audio Coding)
+codec_tag_string = mp4a
+time_base = 1/48000
+bit_rate = 96000
+disposition.original = 0
+sample_rate = 48000
+bits_per_sample = 0
+duration_ts = 281059296
+nb_frames = 274474
+nb_read_frames = N/A
+disposition.timed_thumbnails = 0
+tags.handler_name = SoundHandler
+profile = LC
+channel_layout = stereo
+avg_frame_rate = 0/0
+max_bit_rate = 96000
+disposition.default = 1
+disposition.visual_impaired = 0
+codec_tag = 0x6134706d
+tags.language = eng
+disposition.hearing_impaired = 0
+codec_time_base = 1/48000
+sample_fmt = fltp
+channels = 2
+id = N/A
+start_pts = -576
+duration = 5855.402000
+codec_type = audio
+start_time = -0.012000
+disposition.comment = 0
+disposition.lyrics = 0
+disposition.dub = 0
+

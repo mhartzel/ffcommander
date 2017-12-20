@@ -10,14 +10,16 @@ import (
 )
 
 // Global map, slice, variable definitions
+// var complete_stream_info_map = make(map[int][]string)
 var complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
 var wrapper_info_map = make(map[string]string)
 
+
 func run_external_command(command_to_run_str_slice []string) ([]string,  error) {
 
-	var command_output_str_slice []string
+	var unsorted_ffprobe_information_str_slice []string
 	command_output_str := ""
 
 	// Create the struct needed for running the external command
@@ -30,102 +32,102 @@ func run_external_command(command_to_run_str_slice []string) ([]string,  error) 
 
 	// Split the output of the command to lines and store in a slice
 	for _, line := range strings.Split(command_output_str, "\n")  {
-		command_output_str_slice = append(command_output_str_slice, line)
+		unsorted_ffprobe_information_str_slice = append(unsorted_ffprobe_information_str_slice, line)
 	}
 
-	return command_output_str_slice, error_message
+	return unsorted_ffprobe_information_str_slice, error_message
 }
 
-func sort_raw_ffprobe_information(unsorted_ffprobe_information_slice []string) () {
+func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []string) () {
 
 	// Parse ffprobe output, find wrapper, video- and audiostream information in it,
         // and store this info in stream specific maps
-        // Store all stream maps in slices.
+        // Store all stream maps in slices. FIXME päteeks tää lause ?
 
-	// var video_stream_temp_slice []string
-	// var audio_stream_temp_slice []string
-	var temp_info_slice []string
-	var temp_item_slice []string
-	var temp_wrapper_slice []string
+	// var complete_stream_info_map = make(map[int][]string)
+	// var video_stream_info_map = make(map[string]string)
+	// var audio_stream_info_map = make(map[string]string)
+	// var wrapper_info_map = make(map[string]string)
 
-	var stream_number int
-	var stream_data string
+	var stream_info_str_slice []string
+	var text_line_str_slice []string
+	var wrapper_info_str_slice []string
+
+	var stream_number_int int
+	var stream_data_str string
+	var string_to_remove_str_slice []string
 
 	// Collect information about all streams in the media file.
         // The info is collected to stream specific slices and stored in map: complete_stream_info_map
         // The stream number is used as the map key when saving info slice to map
 
-	for _,item := range unsorted_ffprobe_information_slice {
-		stream_number = -1
-		temp_info_slice = nil
+	for _,text_line := range unsorted_ffprobe_information_str_slice {
+		stream_number_int = -1
+		stream_info_str_slice = nil
 
 		// If there are many programs in the file, then the stream information is listed twice by ffprobe,
                 // discard duplicate data.
-		if strings.HasPrefix(item, "programs.program"){
+		if strings.HasPrefix(text_line, "programs.program"){
 			continue
 		}
 
-		if strings.HasPrefix(item, "streams.stream") {
-			temp_item_slice = strings.Split(strings.Replace(item, "streams.stream.","",1),".")
+		if strings.HasPrefix(text_line, "streams.stream") {
+			text_line_str_slice = strings.Split(strings.Replace(text_line, "streams.stream.","",1),".")
 
-			if _, error := strconv.Atoi(temp_item_slice[0]) ; error == nil {
-				stream_number,_ = strconv.Atoi(temp_item_slice[0])
+			// Convert stream number from string to int
+			if _, error := strconv.Atoi(text_line_str_slice[0]) ; error == nil {
+				stream_number_int,_ = strconv.Atoi(text_line_str_slice[0])
 			} else {
 				// Stream number could not be understood, skip the stream
 				continue
 			}
 
 			// If stream number is -1 then we did not find the stream number, skip the stream
-			if stream_number < 0 {
+			if stream_number_int < 0 {
 				continue
 			}
-			
-			temp_str_slice := []string{"streams.stream.",strconv.Itoa(stream_number),"."}
-			stream_data = strings.Replace(item, strings.Join(temp_str_slice,""),"",1)
 
-			// Add found stream info line to a slice of previous info
+			string_to_remove_str_slice = string_to_remove_str_slice[:0] // Empty the slice so that allocated slice ram space remains and is not garbage collected.
+			string_to_remove_str_slice = append(string_to_remove_str_slice, "streams.stream.",strconv.Itoa(stream_number_int),".")
+			stream_data_str = strings.Replace(text_line, strings.Join(string_to_remove_str_slice,""),"",1) // Remove the unwanted string in front of the text line.
+			stream_data_str = strings.Replace(stream_data_str, "\"", "", -1) // Remove " characters from the data.
+
+			// Add found stream info line to a slice of previously stored info
 			// and store it in a map. The stream number acts as the map key.
-			if _, found := complete_stream_info_map[stream_number] ; found {
-				temp_info_slice = complete_stream_info_map[stream_number]
+			if _, item_found := complete_stream_info_map[stream_number_int] ; item_found == true {
+				stream_info_str_slice = complete_stream_info_map[stream_number_int]
 			}
-			temp_info_slice = append(temp_info_slice, stream_data)
-			complete_stream_info_map[stream_number] = temp_info_slice
+			stream_info_str_slice = append(stream_info_str_slice, stream_data_str)
+			complete_stream_info_map[stream_number_int] = stream_info_str_slice
 		}
 		// Get media file wrapper information and store it in a slice.
-		if strings.HasPrefix(item, "format") {
-			temp_wrapper_slice = strings.Split(strings.Replace(item, "format.", "", 1), "=")
-			wrapper_info_map[strings.TrimSpace(temp_wrapper_slice[0])] = strings.TrimSpace(strings.Replace(temp_wrapper_slice[1],"\"", "", -1))
+		if strings.HasPrefix(text_line, "format") {
+			wrapper_info_str_slice = strings.Split(strings.Replace(text_line, "format.", "", 1), "=")
+			wrapper_info_map[strings.TrimSpace(wrapper_info_str_slice[0])] = strings.TrimSpace(strings.Replace(wrapper_info_str_slice[1],"\"", "", -1))
 		}
 
-		//temp_info_slice = nil
-		//temp_item_slice = nil
+		// Find video and audio stream information and store it as key value pairs in video and audio specific maps.
+		// Discard streams that are not audio or video
+		var stream_type_is_video bool = false
+		var stream_type_is_audio bool = false
+		text_line = ""
 
-		//for stream_number,_ := range complete_stream_info_map {
-		//	//temp_info_slice := complete_stream_info_map[stream_number]
-		//	fmt.Println(stream_number)
+		for _, stream_info_str_slice := range complete_stream_info_map {
 
-		//	//for item := range temp_info_slice {
-		//	//	fmt.Printf("%s",item)
-		//	//}
-		//}
+			stream_type_is_video = false
+			stream_type_is_audio = false
 
+			for _, text_line := range stream_info_str_slice {
 
-		for _, info_slice := range complete_stream_info_map {
-
-			stream_type_is_video := false
-			stream_type_is_audio := false
-
-			for _, info_string := range info_slice {
-
-				if strings.Contains(info_string, "codec_type=\"video\"") {
+				if strings.Contains(text_line, "codec_type=video") {
 					stream_type_is_video = true
 				}
 
 			}
 
-			for _, info_string := range info_slice {
+			for _, text_line := range stream_info_str_slice {
 
-				if strings.Contains(info_string, "codec_type=\"audio\"") {
+				if strings.Contains(text_line, "codec_type=audio") {
 					stream_type_is_audio = true
 				}
 
@@ -133,36 +135,40 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_slice []string) (
 
 			if stream_type_is_video == true {
 
-				for _, info_string := range info_slice {
+				for _, text_line := range stream_info_str_slice {
 
-					temp_slice := strings.Split(info_string ,"=")
-					video_key := temp_slice[0]
-					video_value := strings.Replace(temp_slice[1] ,"\"", "", 2)
+					temp_slice := strings.Split(text_line, "=")
+					video_key := strings.TrimSpace(temp_slice[0])
+					video_value := strings.TrimSpace(temp_slice[1])
 					video_stream_info_map[video_key] = video_value
 					}
 
 			}
 
 			if stream_type_is_audio == true {
-				for _, info_string := range info_slice {
+				for _, text_line := range stream_info_str_slice {
 
-					temp_slice := strings.Split(info_string ,"=")
-					audio_key := temp_slice[0]
-					audio_value := strings.Replace(temp_slice[1] ,"\"", "", 2)
+					temp_slice := strings.Split(text_line, "=")
+					audio_key := strings.TrimSpace(temp_slice[0])
+					audio_value := strings.TrimSpace(temp_slice[1])
 					audio_stream_info_map[audio_key] = audio_value
 					}
 
 			}
-			// for _,value := range info_slice {
-			// 	fmt.Println("value:", value)
-			// }
 		}
 
 	}
-	// Go through the stream info we collected above in map 'complete_stream_info_map' and
-        // find and collect audio and video specific info. Store this info in audio and video specific slices.
-        // Discard streams that are not audio or video
 }
+
+
+// FIXME Nyt kaikkien videoiden tiedot summautuu slaisseihin, kun slaisseja ei nollata missään.
+// Tässä koodissa on ilmeisesti vielä sekaisin globaalit ja paikalliset slaissit.
+// Lisäks pitää funtsata miten lopulliset striimitiedot tallennetaan: Ehkä näin:
+// video_stream_info_map, audio_stream_info_map ja wrapper_info_map tallennetaan listaan: video_file_info_list
+// ja tämä puolestaan mäppiin all_video_files_info_map, jossa avaimena on tiedoston nimi.
+// Tässä on vielä se ongelma, että audiostreameja voi olla monia. Nyt koodi ottaa vain yhden audiostreamin tiedot
+// tai vielä todennäköisemmin yhdistää kaikkien audiostreamien tiedot. Pitää estää muiden kuin ensimmäisen audiostreamin käsittely.
+// Olisko tämä nyt struct:in paikka ?
 
 func main() {
 
@@ -201,23 +207,23 @@ func main() {
 		command_to_run_str_slice = append(command_to_run_str_slice, "ffprobe","-loglevel","16","-show_entries","format:stream","-print_format","flat","-i")
 		command_to_run_str_slice = append(command_to_run_str_slice, file_name)
 
-		command_output_str_slice, error_message := run_external_command(command_to_run_str_slice)
+		unsorted_ffprobe_information_str_slice, error_message := run_external_command(command_to_run_str_slice)
 
 		if error_message != nil {
 			log.Fatal(error_message)
 		}
 
-		sort_raw_ffprobe_information(command_output_str_slice)
+		sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice)
 
 		// FIXME
 		fmt.Println(file_name, "complete_stream_info_map:", "\n")
-		// for item, info_slice := range complete_stream_info_map {
-		for key, info_slice := range complete_stream_info_map {
+		// for item, stream_info_str_slice := range complete_stream_info_map {
+		for key, stream_info_str_slice := range complete_stream_info_map {
 			fmt.Println("\n")
 			fmt.Println("key:", key)
 			fmt.Println("-----------------------------------")
-			// fmt.Println("info_slice:", info_slice)
-			for _,value := range info_slice {
+			// fmt.Println("stream_info_str_slice:", stream_info_str_slice)
+			for _,value := range stream_info_str_slice {
 				fmt.Println(value)
 			}
 			// fmt.Println(item, " = ", complete_stream_info_map[item], "\n")
@@ -227,7 +233,7 @@ func main() {
 		fmt.Println("-------------")
 
 		for item := range wrapper_info_map {
-			fmt.Println(item, " = ", wrapper_info_map[item])
+			fmt.Println(item, "=", wrapper_info_map[item])
 		}
 		fmt.Println()
 
@@ -247,22 +253,5 @@ func main() {
 		}
 		fmt.Println()
 
-
-
-		// ffprobe -loglevel 16 -show_entries format:stream -print_format flat -i /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/00-valmiit/Fifth_Element-1997.m4v.mp4
-		// length := len("# Filename") + len(file_name) + len(" #") + 1
-		// fmt.Println(strings.Repeat("#", length))
-		// fmt.Println("# Filename", file_name, "#")
-		// fmt.Println(strings.Repeat("#", length))
-		// for _, line := range(command_output_str_slice) {
-		// fmt.Println(line)
-		// }
-
-		// fmt.Printf("Tyyppi: %T\n", command_output_str_slice)
-		// fmt.Println("Len: ",len(command_output_str_slice))
-		// fmt.Println("\n")
-		// fmt.Println("command_output_str_slice:", command_output_str_slice)
-
 	}
 }
-
