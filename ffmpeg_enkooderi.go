@@ -9,12 +9,16 @@ import (
 	"strconv"
 )
 
-// Global map, slice, variable definitions
-// var complete_stream_info_map = make(map[int][]string)
-var complete_stream_info_map = make(map[int][]string)
-var video_stream_info_map = make(map[string]string)
-var audio_stream_info_map = make(map[string]string)
-var wrapper_info_map = make(map[string]string)
+// Global variable definitions
+type Video_data struct {
+	audio_codec string
+	sample_rate int
+	number_of_channels int
+	video_codec string
+	vertical_resolution int
+	horizontal_resolution int
+	aspect_ratio string
+}
 
 
 func run_external_command(command_to_run_str_slice []string) ([]string,  error) {
@@ -38,16 +42,15 @@ func run_external_command(command_to_run_str_slice []string) ([]string,  error) 
 	return unsorted_ffprobe_information_str_slice, error_message
 }
 
-func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []string) () {
+func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []string) (Video_data) {
 
 	// Parse ffprobe output, find wrapper, video- and audiostream information in it,
         // and store this info in stream specific maps
-        // Store all stream maps in slices. FIXME päteeks tää lause ?
 
-	// var complete_stream_info_map = make(map[int][]string)
-	// var video_stream_info_map = make(map[string]string)
-	// var audio_stream_info_map = make(map[string]string)
-	// var wrapper_info_map = make(map[string]string)
+	var complete_stream_info_map = make(map[int][]string)
+	var video_stream_info_map = make(map[string]string)
+	var audio_stream_info_map = make(map[string]string)
+	var wrapper_info_map = make(map[string]string)
 
 	var stream_info_str_slice []string
 	var text_line_str_slice []string
@@ -105,70 +108,73 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 			wrapper_info_str_slice = strings.Split(strings.Replace(text_line, "format.", "", 1), "=")
 			wrapper_info_map[strings.TrimSpace(wrapper_info_str_slice[0])] = strings.TrimSpace(strings.Replace(wrapper_info_str_slice[1],"\"", "", -1))
 		}
+	}
 
-		// Find video and audio stream information and store it as key value pairs in video and audio specific maps.
-		// Discard streams that are not audio or video
-		var stream_type_is_video bool = false
-		var stream_type_is_audio bool = false
-		text_line = ""
+	// Find video and audio stream information and store it as key value pairs in video_stream_info_map and audio_stream_info_map.
+	// Discard streams that are not audio or video
+	var stream_type_is_video bool = false
+	var stream_type_is_audio bool = false
 
-		for _, stream_info_str_slice := range complete_stream_info_map {
+	for _, stream_info_str_slice := range complete_stream_info_map {
 
-			stream_type_is_video = false
-			stream_type_is_audio = false
+		stream_type_is_video = false
+		stream_type_is_audio = false
+
+		for _, text_line := range stream_info_str_slice {
+
+			if strings.Contains(text_line, "codec_type=video") {
+				stream_type_is_video = true
+			}
+
+		}
+
+		for _, text_line := range stream_info_str_slice {
+
+			if strings.Contains(text_line, "codec_type=audio") {
+				stream_type_is_audio = true
+			}
+
+		}
+
+		if stream_type_is_video == true {
 
 			for _, text_line := range stream_info_str_slice {
 
-				if strings.Contains(text_line, "codec_type=video") {
-					stream_type_is_video = true
+				temp_slice := strings.Split(text_line, "=")
+				video_key := strings.TrimSpace(temp_slice[0])
+				video_value := strings.TrimSpace(temp_slice[1])
+				video_stream_info_map[video_key] = video_value
 				}
 
-			}
+		}
 
+		if stream_type_is_audio == true {
 			for _, text_line := range stream_info_str_slice {
 
-				if strings.Contains(text_line, "codec_type=audio") {
-					stream_type_is_audio = true
+				temp_slice := strings.Split(text_line, "=")
+				audio_key := strings.TrimSpace(temp_slice[0])
+				audio_value := strings.TrimSpace(temp_slice[1])
+				audio_stream_info_map[audio_key] = audio_value
 				}
 
-			}
-
-			if stream_type_is_video == true {
-
-				for _, text_line := range stream_info_str_slice {
-
-					temp_slice := strings.Split(text_line, "=")
-					video_key := strings.TrimSpace(temp_slice[0])
-					video_value := strings.TrimSpace(temp_slice[1])
-					video_stream_info_map[video_key] = video_value
-					}
-
-			}
-
-			if stream_type_is_audio == true {
-				for _, text_line := range stream_info_str_slice {
-
-					temp_slice := strings.Split(text_line, "=")
-					audio_key := strings.TrimSpace(temp_slice[0])
-					audio_value := strings.TrimSpace(temp_slice[1])
-					audio_stream_info_map[audio_key] = audio_value
-					}
-
-			}
 		}
 
 	}
+
+	// Find specific video and audio info we need and store in a struct that we return to the main program.
+	var video_info_struct Video_data
+
+	video_info_struct.audio_codec = audio_stream_info_map["codec_name"]
+	video_info_struct.sample_rate,_ = strconv.Atoi(audio_stream_info_map["sample_rate"])
+	video_info_struct.number_of_channels,_ = strconv.Atoi(audio_stream_info_map["channels"])
+	video_info_struct.video_codec = video_stream_info_map["codec_name"]
+	video_info_struct.vertical_resolution,_ = strconv.Atoi(video_stream_info_map["width"])
+	video_info_struct.horizontal_resolution,_ = strconv.Atoi(video_stream_info_map["height"])
+	video_info_struct.aspect_ratio = video_stream_info_map["display_aspect_ratio"]
+
+	return(video_info_struct)
 }
 
-
-// FIXME Nyt kaikkien videoiden tiedot summautuu slaisseihin, kun slaisseja ei nollata missään.
-// Tässä koodissa on ilmeisesti vielä sekaisin globaalit ja paikalliset slaissit.
-// Lisäks pitää funtsata miten lopulliset striimitiedot tallennetaan: Ehkä näin:
-// video_stream_info_map, audio_stream_info_map ja wrapper_info_map tallennetaan listaan: video_file_info_list
-// ja tämä puolestaan mäppiin all_video_files_info_map, jossa avaimena on tiedoston nimi.
-// Tässä on vielä se ongelma, että audiostreameja voi olla monia. Nyt koodi ottaa vain yhden audiostreamin tiedot
-// tai vielä todennäköisemmin yhdistää kaikkien audiostreamien tiedot. Pitää estää muiden kuin ensimmäisen audiostreamin käsittely.
-// Olisko tämä nyt struct:in paikka ?
 
 func main() {
 
@@ -213,45 +219,55 @@ func main() {
 			log.Fatal(error_message)
 		}
 
-		sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice)
+		video_info_struct := sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice)
 
-		// FIXME
-		fmt.Println(file_name, "complete_stream_info_map:", "\n")
-		// for item, stream_info_str_slice := range complete_stream_info_map {
-		for key, stream_info_str_slice := range complete_stream_info_map {
-			fmt.Println("\n")
-			fmt.Println("key:", key)
-			fmt.Println("-----------------------------------")
-			// fmt.Println("stream_info_str_slice:", stream_info_str_slice)
-			for _,value := range stream_info_str_slice {
-				fmt.Println(value)
-			}
-			// fmt.Println(item, " = ", complete_stream_info_map[item], "\n")
-		}
-		fmt.Println("\n")
-		fmt.Println("Wrapper info:")
-		fmt.Println("-------------")
-
-		for item := range wrapper_info_map {
-			fmt.Println(item, "=", wrapper_info_map[item])
-		}
+		fmt.Println(file_name)
+		fmt.Println("video_info_struct.audio_codec:", video_info_struct.audio_codec)
+		fmt.Println("video_info_struct.sample_rate:", video_info_struct.sample_rate)
+		fmt.Println("video_info_struct.number_of_channels:", video_info_struct.number_of_channels)
+		fmt.Println("video_info_struct.video_codec:", video_info_struct.video_codec)
+		fmt.Println("video_info_struct.vertical_resolution:", video_info_struct.vertical_resolution)
+		fmt.Println("video_info_struct.horizontal_resolution:", video_info_struct.horizontal_resolution)
+		fmt.Println("video_info_struct.aspect_ratio:", video_info_struct.aspect_ratio)
 		fmt.Println()
 
-		fmt.Println("video_stream_info_map:")
-		fmt.Println("-----------------------")
+		// // FIXME
+		// fmt.Println(file_name, "complete_stream_info_map:", "\n")
+		// // for item, stream_info_str_slice := range complete_stream_info_map {
+		// for key, stream_info_str_slice := range complete_stream_info_map {
+		// 	fmt.Println("\n")
+		// 	fmt.Println("key:", key)
+		// 	fmt.Println("-----------------------------------")
+		// 	// fmt.Println("stream_info_str_slice:", stream_info_str_slice)
+		// 	for _,value := range stream_info_str_slice {
+		// 		fmt.Println(value)
+		// 	}
+		// 	// fmt.Println(item, " = ", complete_stream_info_map[item], "\n")
+		// }
+		// fmt.Println("\n")
+		// fmt.Println("Wrapper info:")
+		// fmt.Println("-------------")
 
-		for item := range video_stream_info_map {
-			fmt.Println(item, "=", video_stream_info_map[item])
-		}
-		fmt.Println()
+		// for item := range wrapper_info_map {
+		// 	fmt.Println(item, "=", wrapper_info_map[item])
+		// }
+		// fmt.Println()
 
-		fmt.Println("audio_stream_info_map:")
-		fmt.Println("-----------------------")
+		// fmt.Println("video_stream_info_map:")
+		// fmt.Println("-----------------------")
 
-		for item := range audio_stream_info_map {
-			fmt.Println(item, "=", audio_stream_info_map[item])
-		}
-		fmt.Println()
+		// for item := range video_stream_info_map {
+		// 	fmt.Println(item, "=", video_stream_info_map[item])
+		// }
+		// fmt.Println()
+
+		// fmt.Println("audio_stream_info_map:")
+		// fmt.Println("-----------------------")
+
+		// for item := range audio_stream_info_map {
+		// 	fmt.Println(item, "=", audio_stream_info_map[item])
+		// }
+		// fmt.Println()
 
 	}
 }
