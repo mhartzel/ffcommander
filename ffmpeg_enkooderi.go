@@ -18,6 +18,7 @@ type Video_data struct {
 	vertical_resolution int
 	horizontal_resolution int
 	aspect_ratio string
+	commandline []string
 }
 
 
@@ -196,7 +197,7 @@ func main() {
 		input_filenames = append(input_filenames, file_name)
 	}
 
-	// star_options_for_the_filter := "-vf "
+	// start_options_for_the_filter := "-vf "
 	// decomb_options_string := "idet,yadif=0:deint=interlaced"
 	// denoise_options_string := ",hqdn3d=3.0:3.0:2.0:3.0"
 
@@ -229,6 +230,7 @@ func main() {
 		fmt.Println("video_info_struct.vertical_resolution:", video_info_struct.vertical_resolution)
 		fmt.Println("video_info_struct.horizontal_resolution:", video_info_struct.horizontal_resolution)
 		fmt.Println("video_info_struct.aspect_ratio:", video_info_struct.aspect_ratio)
+		fmt.Println("video_info_struct.commandline:", video_info_struct.commandline)
 		fmt.Println()
 
 		// // FIXME
