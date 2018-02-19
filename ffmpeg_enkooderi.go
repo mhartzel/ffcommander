@@ -60,6 +60,7 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 	var stream_number_int int
 	var stream_data_str string
 	var string_to_remove_str_slice []string
+	var error error // a variable named error of type error
 
 	// Collect information about all streams in the media file.
         // The info is collected to stream specific slices and stored in map: complete_stream_info_map
@@ -79,15 +80,10 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 			text_line_str_slice = strings.Split(strings.Replace(text_line, "streams.stream.","",1),".")
 
 			// Convert stream number from string to int
-			if _, error := strconv.Atoi(text_line_str_slice[0]) ; error == nil {
-				stream_number_int,_ = strconv.Atoi(text_line_str_slice[0])
-			} else {
-				// Stream number could not be understood, skip the stream
-				continue
-			}
+			error = nil
 
-			// If stream number is -1 then we did not find the stream number, skip the stream
-			if stream_number_int < 0 {
+			if stream_number_int, error = strconv.Atoi(text_line_str_slice[0]) ; error != nil {
+				// Stream number could not be understood, skip the stream
 				continue
 			}
 
@@ -107,7 +103,9 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 		// Get media file wrapper information and store it in a slice.
 		if strings.HasPrefix(text_line, "format") {
 			wrapper_info_str_slice = strings.Split(strings.Replace(text_line, "format.", "", 1), "=")
-			wrapper_info_map[strings.TrimSpace(wrapper_info_str_slice[0])] = strings.TrimSpace(strings.Replace(wrapper_info_str_slice[1],"\"", "", -1))
+			wrapper_key := strings.TrimSpace(wrapper_info_str_slice[0])
+			wrapper_value := strings.TrimSpace(strings.Replace(wrapper_info_str_slice[1],"\"", "", -1)) // Remove whitespace and " charcters from the data
+			wrapper_info_map[wrapper_key] = wrapper_value
 		}
 	}
 
@@ -179,9 +177,12 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 
 func main() {
 
+	// FIXME
+	// wrapper_info_mapin tieto kerätään mutta sitä ei käytetä mitenkään.
+
 	// Define commandline options
 	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace")
-	var subtitle_int = flag.Int("s", 0, "Subtitle `number`")
+	var subtitle_int = flag.Int("s", -1, "Subtitle `number`")
 	var grayscale_bool = flag.Bool("gr", false, "Grayscale")
 	var denoise_bool = flag.Bool("dn", false, "Denoise")
 	var force_stereo_bool = flag.Bool("st", false, "Force Audio To Stereo")
@@ -191,6 +192,34 @@ func main() {
 
 	// Parse commandline options
 	flag.Parse()
+
+	compression_options_sd := []string{"-c:v", "libx264", "-preset", "medium", "-profile", "main", "-level", "4.0", "-b:v", "1600k"}
+	compression_options_hd := []string{"-c:v", "libx264", "-preset", "medium", "-profile", "high", "-level", "4.1", "-b:v", "8000k"}
+	compression_pass_1_options := []string{"-pass", "1", "-acodec", "copy", "-f", "mp4", "/dev/null"}
+	compression_pass_2_options := []string{"-pass", "2", "-acodec", "copy", "-f", "mp4"}
+	denoise_options := []string{"hqdn3d=3.0:3.0:2.0:3.0"}
+	deinterlace_options := []string{"idet,yadif=0:deint=interlaced"}
+	ffmpeg_commandline_start := []string{"ffmpeg", "-y", "-loglevel", "8", "-threads", "auto"}
+	subtitle_number := *subtitle_int
+	grayscale_options := []string{"lut=u=128:v=128"}
+	var crop_options []string
+	subtitle_options := ""
+
+	var ffmpeg_commandline []string
+
+	fmt.Println()
+	fmt.Println("compression_options_sd:",compression_options_sd)
+	fmt.Println("compression_options_hd:",compression_options_hd)
+	fmt.Println("compression_pass_1_options:",compression_pass_1_options)
+	fmt.Println("compression_pass_2_options:",compression_pass_2_options)
+	fmt.Println("denoise_options:",denoise_options)
+	fmt.Println("deinterlace_options:",deinterlace_options)
+	fmt.Println("ffmpeg_commandline_start:",ffmpeg_commandline_start)
+	fmt.Println("subtitle_number:",subtitle_number)
+	fmt.Println("grayscale_options:",grayscale_options)
+	fmt.Println("subtitle_options:",subtitle_options)
+	fmt.Println("crop_options",crop_options)
+	fmt.Println()
 
 	// The unparsed options left on the commandline are filenames, store them in a slice.
 	for _,file_name := range flag.Args()  {
@@ -232,6 +261,132 @@ func main() {
 		fmt.Println("video_info_struct.aspect_ratio:", video_info_struct.aspect_ratio)
 		fmt.Println("video_info_struct.commandline:", video_info_struct.commandline)
 		fmt.Println()
+
+		println("autocrop_bool:", *autocrop_bool)
+
+		if *autocrop_bool == true {
+			autocrop_settings_slice := []string{"ffmpeg", "-t", "1800", "-i", file_name, "-sn", "-f", "matroska", "-an", "-vf", "cropdetect=24:16:0", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null", "2>&1", "|", "grep", "-o", "crop=.*", "|", "sort", "-bh", "|", "uniq", "-c", "|", "sort", "-bh", "|", "tail", "-n1", "|", "grep", "-o", "crop.*"}
+			println("autocrop_settings_slice:")
+			for _,item := range autocrop_settings_slice {
+				print(item, " ")
+			}
+			println()
+			println()
+		}
+
+		// Create the start of ffmpeg commandline
+		ffmpeg_commandline = append(ffmpeg_commandline, ffmpeg_commandline_start...)
+		ffmpeg_commandline = append(ffmpeg_commandline, "-i", file_name)
+
+		// If there is no subtitles to overlay on video use simple video filter processing in ffmpeg
+		if subtitle_number == -1 {
+			ffmpeg_commandline = append(ffmpeg_commandline, "-vf")
+
+			// Add deinterlace commands to ffmpeg commandline
+			if *no_deinterlace_bool == false {
+				ffmpeg_commandline = append(ffmpeg_commandline, deinterlace_options...)
+			}
+
+			// Add crop options to ffmpeg commandline
+			if len(crop_options) > 0 {
+				if ffmpeg_commandline[len(ffmpeg_commandline)-1] != "-vf" {
+					ffmpeg_commandline = append(ffmpeg_commandline, ",")
+				}
+				ffmpeg_commandline = append(ffmpeg_commandline, deinterlace_options...)
+			}
+			// Add denoise options to ffmpeg commandline
+			if *denoise_bool == true {
+				if ffmpeg_commandline[len(ffmpeg_commandline)-1] != "-vf" {
+					ffmpeg_commandline = append(ffmpeg_commandline, ",")
+				}
+				ffmpeg_commandline = append(ffmpeg_commandline, denoise_options...)
+			}
+
+			// Add grayscale options to ffmpeg commandline
+			if *grayscale_bool == true {
+				if ffmpeg_commandline[len(ffmpeg_commandline)-1] != "-vf" {
+					ffmpeg_commandline = append(ffmpeg_commandline, ",")
+				}
+				ffmpeg_commandline = append(ffmpeg_commandline, grayscale_options...)
+			}
+		}
+
+
+		fmt.Println("ffmpeg_commandline:", ffmpeg_commandline)
+
+
+// Ilman optioita, Denoise päällä:
+//
+// Pass 1 Pakkauskomento: ffmpeg -y -loglevel 8 -threads auto -i FileIn -vf idet,yadif=0:deint=interlaced,hqdn3d=3.0:3.0:2.0:3.0 -c:v libx264 -preset medium -profile main -level 4.0 -b:v 1600k -pass 1 -acodec copy -f mp4 /dev/null
+// Pass 2 Pakkauskomento: ffmpeg -y -loglevel 8 -threads auto -i FileIn -vf idet,yadif=0:deint=interlaced,hqdn3d=3.0:3.0:2.0:3.0 -c:v libx264 -preset medium -profile main -level 4.0 -b:v 1600k -pass 2 -acodec copy -f mp4 FileOut
+
+// AUTOCROP - KOMENTO:
+// ffmpeg -t 1800 -i FileIn -sn -f matroska -an -vf cropdetect=24:16:0 -y -crf 51 -preset ultrafast /dev/null 2>&1 | grep -o crop=.* | sort -bh | uniq -c | sort -bh | tail -n1 | grep -o crop.*
+
+// Subtitle nro 2 + Denoise:
+//
+// Pass 1 Pakkauskomento: ffmpeg -y -loglevel 8 -threads auto -i FileIn -filter_complex " [0:s:2] copy [kropattu_tekstitys] ; [0:v:0] idet,yadif=0:deint=interlaced,hqdn3d=3.0:3.0:2.0:3.0 [kropattu_video] ; [kropattu_video] [kropattu_tekstitys] overlay=main_w-overlay_w-0:main_h-overlay_h+55 [valmis_kropattu_video]" -map [valmis_kropattu_video] -c:v libx264 -preset medium -profile main -level 4.0 -b:v 1600k -pass 1 -map 0:a:0 -acodec copy -f mp4 /dev/null
+// Pass 2 Pakkauskomento: ffmpeg -y -loglevel 8 -threads auto -i FileIn -filter_complex " [0:s:2] copy [kropattu_tekstitys] ; [0:v:0] idet,yadif=0:deint=interlaced,hqdn3d=3.0:3.0:2.0:3.0 [kropattu_video] ; [kropattu_video] [kropattu_tekstitys] overlay=main_w-overlay_w-0:main_h-overlay_h+55 [valmis_kropattu_video]" -map [valmis_kropattu_video] -c:v libx264 -preset medium -profile main -level 4.0 -b:v 1600k -pass 2 -map 0:a:0 -acodec copy -f mp4 FileOut
+//
+// Subtitle + Deinterlace + Denoise + Grayscale
+//
+// Pass 1 Pakkauskomento: ffmpeg -y -loglevel 8 -threads auto -i FileIn -filter_complex " [0:s:7] copy [kropattu_tekstitys] ; [0:v:0] idet,yadif=0:deint=interlaced,hqdn3d=3.0:3.0:2.0:3.0,lut=u=128:v=128 [kropattu_video] ; [kropattu_video] [kropattu_tekstitys] overlay=main_w-overlay_w-0:main_h-overlay_h+55 [valmis_kropattu_video]" -map [valmis_kropattu_video] -c:v libx264 -preset medium -profile main -level 4.0 -b:v 1600k -pass 1 -map 0:a:0 -acodec copy -f mp4 /dev/null
+// Pass 2 Pakkauskomento: ffmpeg -y -loglevel 8 -threads auto -i FileIn -filter_complex " [0:s:7] copy [kropattu_tekstitys] ; [0:v:0] idet,yadif=0:deint=interlaced,hqdn3d=3.0:3.0:2.0:3.0,lut=u=128:v=128 [kropattu_video] ; [kropattu_video] [kropattu_tekstitys] overlay=main_w-overlay_w-0:main_h-overlay_h+55 [valmis_kropattu_video]" -map [valmis_kropattu_video] -c:v libx264 -preset medium -profile main -level 4.0 -b:v 1600k -pass 2 -map 0:a:0 -acodec copy -f mp4 FileOut
+//
+// ##########################################
+// # Filttereiden komentorivin rakentaminen #
+// ##########################################
+// # filttereillä luodaan 2 erillistä videon käsittelyputkea, toisessa käsitellään video ja toisessa tekstitys.
+// # Erillisellä käsittelyllä saadaan teksti pysymään videon päällä, vaikka alla olevaa videota pienennetään (kropataan).
+// # Käsitellyt kuvastreamit yhdistetään sitten overlay - komennolla.
+// # Käsittelyputki 1 järjestys: subtitle, crop
+// # Käsittelyputki 2 järjestys: decomb, crop, denoise, grayscale
+// # audiodelay
+// #
+// # -filter_complex "[0:s:10] crop=1920:816:1920-0:1080-816 [kropattu_tekstitys] ; [0:v:0] idet,yadif=0:deint=interlaced,crop=1920:816:0:132 [kropattu_video] ; [kropattu_video] [kropattu_tekstitys] overlay [valmis_kropattu_video]"  -map [valmis_kropattu_video] -c:v libx264 
+
+
+// HD + Denoise:
+//
+// Pass 1 Pakkauskomento: ffmpeg -y -loglevel 8 -threads auto -i FileIn -vf idet,yadif=0:deint=interlaced,hqdn3d=3.0:3.0:2.0:3.0 -c:v libx264 -preset medium -profile high -level 4.1 -b:v 8000k -pass 1 -acodec copy -f mp4 /dev/null
+// Pass 2 Pakkauskomento: ffmpeg -y -loglevel 8 -threads auto -i FileIn -vf idet,yadif=0:deint=interlaced,hqdn3d=3.0:3.0:2.0:3.0 -c:v libx264 -preset medium -profile high -level 4.1 -b:v 8000k -pass 2 -acodec copy -f mp4 FileOut
+
+// No Deinterlace + Denoise:
+//
+// Pass 1 Pakkauskomento: ffmpeg -y -loglevel 8 -threads auto -i FileIn -vf ,hqdn3d=3.0:3.0:2.0:3.0 -c:v libx264 -preset medium -profile main -level 4.0 -b:v 1600k -pass 1 -acodec copy -f mp4 /dev/null
+// Pass 2 Pakkauskomento: ffmpeg -y -loglevel 8 -threads auto -i FileIn -vf ,hqdn3d=3.0:3.0:2.0:3.0 -c:v libx264 -preset medium -profile main -level 4.0 -b:v 1600k -pass 2 -acodec copy -f mp4 FileOut
+
+// Grayscale + Denoise:
+//
+// Pass 1 Pakkauskomento: ffmpeg -y -loglevel 8 -threads auto -i FileIn -vf idet,yadif=0:deint=interlaced,hqdn3d=3.0:3.0:2.0:3.0,lut=u=128:v=128 -c:v libx264 -preset medium -profile main -level 4.0 -b:v 1600k -pass 1 -acodec copy -f mp4 /dev/null
+// Pass 2 Pakkauskomento: ffmpeg -y -loglevel 8 -threads auto -i FileIn -vf idet,yadif=0:deint=interlaced,hqdn3d=3.0:3.0:2.0:3.0,lut=u=128:v=128 -c:v libx264 -preset medium -profile main -level 4.0 -b:v 1600k -pass 2 -acodec copy -f mp4 FileOut
+
+
+
+
+
+
+
+                // # Pakkaus Pass 1
+                // echo
+                // echo "Pass 1 Pakkauskomento: "$PAKKAUSKOMENTO1
+
+                // bash -c "ffmpeg -y $LOGLEVEL $THREADS -i "$LAHDETIEDOSTO" $FILTTEREIDEN_KOMENNOT $FRAMERATE -c:v libx264 -preset $PRESET -profile $PROFILE -level $LEVEL -b:v $BITRATE -pass 1 $AUDIO_MAP_ASETUKSET $AUDIO_DELAY_COMMAND $AUDION_ASETUKSET -f mp4 /dev/null"
+                // # "$PAKKAUSKOMENTO1"
+                // if [ "$?" -ne "0"  ] ; then echo ; echo "Pass 1 pakkauskomento tuotti virheen" ; echo ; exit 1 ; fi
+                // echo
+                // echo "Pass 2 Pakkauskomento: "$PAKKAUSKOMENTO2
+
+                // # Pakkaus Pass 2
+                // bash -c "ffmpeg -y $LOGLEVEL $THREADS -i "$LAHDETIEDOSTO" $FILTTEREIDEN_KOMENNOT $FRAMERATE -c:v libx264 -preset $PRESET -profile $PROFILE -level $LEVEL -b:v $BITRATE -pass 2 $AUDIO_MAP_ASETUKSET $AUDIO_DELAY_COMMAND $AUDION_ASETUKSET -f mp4 "$KOHDEPOLKU"/"$KOHDETIEDOSTO""
+                // # "$PAKKAUSKOMENTO2"
+                // if [ "$?" -ne "0"  ] ; then echo ; echo "Pass 2 pakkauskomento tuotti virheen" ; echo ; exit 1 ; fi
+                // echo
+                // echo "###############################################################################"
+                // echo "# Tiedosto "$KOHDETIEDOSTO" on valmis :)"
+                // echo "# Se löytyy hakemistosta: "$KOHDEPOLKU
+                // echo "###############################################################################"
+                // echo
 
 		// // FIXME
 		// fmt.Println(file_name, "complete_stream_info_map:", "\n")
