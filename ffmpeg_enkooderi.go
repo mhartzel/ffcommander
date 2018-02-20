@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"os/exec"
+	"os"
 	"strings"
 	"flag"
 	"log"
 	"strconv"
+	"path/filepath"
 )
 
 // Global variable definitions
@@ -204,6 +206,7 @@ func main() {
 	grayscale_options := []string{"lut=u=128:v=128"}
 	var crop_options []string
 	subtitle_options := ""
+	output_directory_name := "00-valmiit"
 
 	var ffmpeg_commandline []string
 
@@ -230,6 +233,7 @@ func main() {
 	// decomb_options_string := "idet,yadif=0:deint=interlaced"
 	// denoise_options_string := ",hqdn3d=3.0:3.0:2.0:3.0"
 
+
 	// FIXME
 	fmt.Println(*autocrop_bool, *grayscale_bool, *subtitle_int, *no_deinterlace_bool, *denoise_bool, *force_stereo_bool, *force_hd_bool)
 	fmt.Println("\nSlice:", input_filenames)
@@ -239,6 +243,23 @@ func main() {
 	for _,file_name := range input_filenames {
 
 		var command_to_run_str_slice []string
+
+		// Split filename to path + filename
+		inputfile_absolute_path,_ := filepath.Abs(file_name)
+		inputfile_path := filepath.Dir(inputfile_absolute_path)
+		inputfile_name := filepath.Base(file_name)
+		output_filename_extension := filepath.Ext(inputfile_name)
+		output_file_absolute_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, output_filename_extension) + ".mp4")
+
+		// If output directory does not exist in the input file path then create it.
+		if _, err := os.Stat(filepath.Join(inputfile_path, output_directory_name)); os.IsNotExist(err) {
+			os.Mkdir(filepath.Join(inputfile_path, output_directory_name), 0777)
+		}
+
+		// FIXME
+		fmt.Println("inputfile_path:", inputfile_path)
+		fmt.Println("inputfile_name:", inputfile_name)
+		fmt.Println("output_file_absolute_path:", output_file_absolute_path)
 
 		command_to_run_str_slice = append(command_to_run_str_slice, "ffprobe","-loglevel","16","-show_entries","format:stream","-print_format","flat","-i")
 		command_to_run_str_slice = append(command_to_run_str_slice, file_name)
@@ -251,6 +272,7 @@ func main() {
 
 		video_info_struct := sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice)
 
+		// FIXME
 		fmt.Println(file_name)
 		fmt.Println("video_info_struct.audio_codec:", video_info_struct.audio_codec)
 		fmt.Println("video_info_struct.sample_rate:", video_info_struct.sample_rate)
@@ -261,15 +283,19 @@ func main() {
 		fmt.Println("video_info_struct.aspect_ratio:", video_info_struct.aspect_ratio)
 		fmt.Println("video_info_struct.commandline:", video_info_struct.commandline)
 		fmt.Println()
-
-		println("autocrop_bool:", *autocrop_bool)
+		fmt.Println("autocrop_bool:", *autocrop_bool)
 
 		if *autocrop_bool == true {
 			autocrop_settings_slice := []string{"ffmpeg", "-t", "1800", "-i", file_name, "-sn", "-f", "matroska", "-an", "-vf", "cropdetect=24:16:0", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null", "2>&1", "|", "grep", "-o", "crop=.*", "|", "sort", "-bh", "|", "uniq", "-c", "|", "sort", "-bh", "|", "tail", "-n1", "|", "grep", "-o", "crop.*"}
+
+			// FIXME
 			println("autocrop_settings_slice:")
+
 			for _,item := range autocrop_settings_slice {
 				print(item, " ")
 			}
+
+			// FIXME
 			println()
 			println()
 		}
@@ -311,9 +337,24 @@ func main() {
 			}
 		}
 
+		// If video horizontal resolution is over 700 pixel choose HD video compression settings
+		compression_options := compression_options_sd
 
+		if *force_hd_bool || video_info_struct.horizontal_resolution > 700 {
+			compression_options = compression_options_hd
+		}
+
+		// Add compression options to ffmpeg commandline
+		ffmpeg_commandline = append(ffmpeg_commandline, compression_options...)
+
+
+		// Add outfile path to ffmpeg commandline
+		ffmpeg_commandline = append(ffmpeg_commandline, output_file_absolute_path)
+
+		// FIXME
 		fmt.Println("ffmpeg_commandline:", ffmpeg_commandline)
 
+		run_external_command(ffmpeg_commandline)
 
 // Ilman optioita, Denoise päällä:
 //
