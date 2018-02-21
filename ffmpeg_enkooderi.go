@@ -304,38 +304,44 @@ func main() {
 		ffmpeg_commandline = append(ffmpeg_commandline, ffmpeg_commandline_start...)
 		ffmpeg_commandline = append(ffmpeg_commandline, "-i", file_name)
 
+		ffmpeg_filter_options := ""
+
 		// If there is no subtitles to overlay on video use simple video filter processing in ffmpeg
 		if subtitle_number == -1 {
 			ffmpeg_commandline = append(ffmpeg_commandline, "-vf")
 
 			// Add deinterlace commands to ffmpeg commandline
 			if *no_deinterlace_bool == false {
-				ffmpeg_commandline = append(ffmpeg_commandline, deinterlace_options...)
+				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(deinterlace_options, "")
 			}
 
+			// FIXME mihkäs tää croppi kuuluu ?
 			// Add crop options to ffmpeg commandline
 			if len(crop_options) > 0 {
-				if ffmpeg_commandline[len(ffmpeg_commandline)-1] != "-vf" {
-					ffmpeg_commandline = append(ffmpeg_commandline, ",")
+				if ffmpeg_filter_options != "" {
+					ffmpeg_filter_options = ffmpeg_filter_options + ","
 				}
-				ffmpeg_commandline = append(ffmpeg_commandline, deinterlace_options...)
+				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(crop_options, "")
 			}
 			// Add denoise options to ffmpeg commandline
 			if *denoise_bool == true {
-				if ffmpeg_commandline[len(ffmpeg_commandline)-1] != "-vf" {
-					ffmpeg_commandline = append(ffmpeg_commandline, ",")
+				if ffmpeg_filter_options != "" {
+					ffmpeg_filter_options = ffmpeg_filter_options + ","
 				}
-				ffmpeg_commandline = append(ffmpeg_commandline, denoise_options...)
+				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(denoise_options, "")
 			}
 
 			// Add grayscale options to ffmpeg commandline
 			if *grayscale_bool == true {
-				if ffmpeg_commandline[len(ffmpeg_commandline)-1] != "-vf" {
-					ffmpeg_commandline = append(ffmpeg_commandline, ",")
+				if ffmpeg_filter_options != "" {
+					ffmpeg_filter_options =  ffmpeg_filter_options + ","
 				}
-				ffmpeg_commandline = append(ffmpeg_commandline, grayscale_options...)
+				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(grayscale_options, "")
 			}
 		}
+
+		// Add video filter options to ffmpeg commanline
+		ffmpeg_commandline = append(ffmpeg_commandline, ffmpeg_filter_options)
 
 		// If video horizontal resolution is over 700 pixel choose HD video compression settings
 		compression_options := compression_options_sd
@@ -355,6 +361,10 @@ func main() {
 		fmt.Println("ffmpeg_commandline:", ffmpeg_commandline)
 
 		run_external_command(ffmpeg_commandline)
+
+// -passlogfile[:stream_specifier] prefix (output,per-stream)
+// Set two-pass log file name prefix to prefix, the default file name prefix is ``ffmpeg2pass''. The complete file name will be PREFIX-N.log, where N is a number specific to the output stream
+
 
 // Ilman optioita, Denoise päällä:
 //
