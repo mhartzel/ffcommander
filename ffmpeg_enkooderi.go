@@ -409,26 +409,26 @@ func main() {
 
 		// FIXME
 		fmt.Println("ffmpeg_pass_1_commandline:", ffmpeg_pass_1_commandline)
-		// ffmpeg_pass_1_output, ffmpeg_pass_1_error := run_external_command(ffmpeg_pass_1_commandline)
+		ffmpeg_pass_1_output, ffmpeg_pass_1_error := run_external_command(ffmpeg_pass_1_commandline)
 
-		// if ffmpeg_pass_1_output != nil {
-		// 	fmt.Println(ffmpeg_pass_1_output)
-		// }
+		if ffmpeg_pass_1_output != nil {
+			fmt.Println(ffmpeg_pass_1_output)
+		}
 
-		// if ffmpeg_pass_1_error != nil {
-		// 	fmt.Println(ffmpeg_pass_1_error)
-		// }
+		if ffmpeg_pass_1_error != nil {
+			fmt.Println(ffmpeg_pass_1_error)
+		}
 
-		// fmt.Println("ffmpeg_pass_2_commandline:", ffmpeg_pass_2_commandline)
-		// ffmpeg_pass_2_output, ffmpeg_pass_2_error :=  run_external_command(ffmpeg_pass_2_commandline)
+		fmt.Println("ffmpeg_pass_2_commandline:", ffmpeg_pass_2_commandline)
+		ffmpeg_pass_2_output, ffmpeg_pass_2_error :=  run_external_command(ffmpeg_pass_2_commandline)
 
-		// if ffmpeg_pass_2_output != nil {
-		// 	fmt.Println(ffmpeg_pass_2_output)
-		// }
+		if ffmpeg_pass_2_output != nil {
+			fmt.Println(ffmpeg_pass_2_output)
+		}
 
-		// if ffmpeg_pass_2_error != nil {
-		// 	fmt.Println(ffmpeg_pass_2_error)
-		// }
+		if ffmpeg_pass_2_error != nil {
+			fmt.Println(ffmpeg_pass_2_error)
+		}
 
 		// Remove ffmpeg 2 - pass logfiles
 		if _, err := os.Stat(ffmpeg_2_pass_logfile_path + "-0.log"); err == nil {
