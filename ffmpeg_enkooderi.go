@@ -23,6 +23,11 @@ type Video_data struct {
 	commandline []string
 }
 
+var complete_stream_info_map = make(map[int][]string)
+var video_stream_info_map = make(map[string]string)
+var audio_stream_info_map = make(map[string]string)
+var wrapper_info_map = make(map[string]string)
+
 
 func run_external_command(command_to_run_str_slice []string) ([]string,  error) {
 
@@ -49,11 +54,6 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 
 	// Parse ffprobe output, find wrapper, video- and audiostream information in it,
         // and store this info in stream specific maps
-
-	var complete_stream_info_map = make(map[int][]string)
-	var video_stream_info_map = make(map[string]string)
-	var audio_stream_info_map = make(map[string]string)
-	var wrapper_info_map = make(map[string]string)
 
 	var stream_info_str_slice []string
 	var text_line_str_slice []string
@@ -112,7 +112,7 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 	}
 
 	// Find video and audio stream information and store it as key value pairs in video_stream_info_map and audio_stream_info_map.
-	// Discard streams that are not audio or video
+	// Discard info about streams that are not audio or video
 	var stream_type_is_video bool = false
 	var stream_type_is_audio bool = false
 
@@ -190,25 +190,33 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Test if ffprobe can be found in path
+	if _,error := exec.LookPath("ffprobe") ; error != nil {
+		fmt.Println()
+		fmt.Println("Error, cant find FFprobe in path, can't continue.")
+		fmt.Println()
+		os.Exit(1)
+	}
+
 	// Define commandline options
 	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace")
 	var subtitle_int = flag.Int("s", -1, "Subtitle `number`")
 	var audio_stream_number_int = flag.Int("an", 0, "Audio stream `number`")
-	var video_stream_number_int = flag.Int("vn", 0, "Audio stream `number`")
 	var grayscale_bool = flag.Bool("gr", false, "Grayscale")
 	var denoise_bool = flag.Bool("dn", false, "Denoise")
 	var force_stereo_bool = flag.Bool("st", false, "Force Audio To Stereo")
 	var autocrop_bool = flag.Bool("ac", false, "Autocrop")
 	var force_hd_bool = flag.Bool("hd", false, "Force Video To HD, Profile = High, Level = 4.1, Bitrate = 8000k")
+	var scan_mode_only_bool = flag.Bool("scan", false, "Only scan inputfile and print video and audio stream info.")
+	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables.")
 	var input_filenames []string
 
 	// Parse commandline options
 	flag.Parse()
 
+	// Define some more variables
 	video_compression_options_sd := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "main", "-level", "4.0", "-b:v", "1600k"}
 	video_compression_options_hd := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "4.1", "-b:v", "8000k"}
-	// FIXME
-	// audio_compression_options := []string{"-map", strconv.Itoa(*video_stream_number_int) + ":a:" + strconv.Itoa(*audio_stream_number_int), "-acodec", "copy"}
 	audio_compression_options := []string{"-acodec", "copy"}
 	denoise_options := []string{"hqdn3d=3.0:3.0:2.0:3.0"}
 	deinterlace_options := []string{"idet,yadif=0:deint=interlaced"}
@@ -219,69 +227,65 @@ func main() {
 	subtitle_options := ""
 	output_directory_name := "00-valmiit"
 	output_video_format := []string{"-f", "mp4"}
-
 	var ffmpeg_pass_1_commandline []string
 	var ffmpeg_pass_2_commandline []string
-
-	fmt.Println()
-	fmt.Println("video_compression_options_sd:",video_compression_options_sd)
-	fmt.Println("video_compression_options_hd:",video_compression_options_hd)
-	fmt.Println("audio_compression_options:", audio_compression_options)
-	fmt.Println("denoise_options:",denoise_options)
-	fmt.Println("deinterlace_options:",deinterlace_options)
-	fmt.Println("ffmpeg_pass_2_commandline_start:",ffmpeg_pass_2_commandline_start)
-	fmt.Println("subtitle_number:",subtitle_number)
-	fmt.Println("grayscale_options:",grayscale_options)
-	fmt.Println("subtitle_options:",subtitle_options)
-	fmt.Println("crop_options",crop_options)
-	fmt.Println()
 
 	// The unparsed options left on the commandline are filenames, store them in a slice.
 	for _,file_name := range flag.Args()  {
 		input_filenames = append(input_filenames, file_name)
 	}
 
-	// start_options_for_the_filter := "-vf "
-	// decomb_options_string := "idet,yadif=0:deint=interlaced"
-	// denoise_options_string := ",hqdn3d=3.0:3.0:2.0:3.0"
+	if *debug_mode_on == true {
+		fmt.Println()
+		fmt.Println("video_compression_options_sd:",video_compression_options_sd)
+		fmt.Println("video_compression_options_hd:",video_compression_options_hd)
+		fmt.Println("audio_compression_options:", audio_compression_options)
+		fmt.Println("denoise_options:",denoise_options)
+		fmt.Println("deinterlace_options:",deinterlace_options)
+		fmt.Println("ffmpeg_pass_2_commandline_start:",ffmpeg_pass_2_commandline_start)
+		fmt.Println("subtitle_number:",subtitle_number)
+		fmt.Println("grayscale_options:",grayscale_options)
+		fmt.Println("subtitle_options:",subtitle_options)
+		fmt.Println("crop_options",crop_options)
+		fmt.Println("*autocrop_bool:", *autocrop_bool)
+		fmt.Println("*grayscale_bool:", *grayscale_bool)
+		fmt.Println("*subtitle_int:", *subtitle_int)
+		fmt.Println("*no_deinterlace_bool:", *no_deinterlace_bool)
+		fmt.Println("*denoise_bool:", *denoise_bool)
+		fmt.Println("*force_stereo_bool:", *force_stereo_bool)
+		fmt.Println("*force_hd_bool:", *force_hd_bool)
+		fmt.Println("*audio_stream_number_int:", *audio_stream_number_int)
+		fmt.Println("*scan_mode_only_bool", *scan_mode_only_bool)
+		fmt.Println("*debug_mode_on", *debug_mode_on)
+		fmt.Println()
+		fmt.Println("input_filenames:", input_filenames)
+		fmt.Println("\n")
+}
 
-
-	// FIXME
-	fmt.Println("*autocrop_bool:", *autocrop_bool)
-	fmt.Println("*grayscale_bool:", *grayscale_bool)
-	fmt.Println("*subtitle_int:", *subtitle_int)
-	fmt.Println("*no_deinterlace_bool:", *no_deinterlace_bool)
-	fmt.Println("*denoise_bool:", *denoise_bool)
-	fmt.Println("*force_stereo_bool:", *force_stereo_bool)
-	fmt.Println("*force_hd_bool:", *force_hd_bool)
-	fmt.Println("*audio_stream_number_int:", *audio_stream_number_int)
-	fmt.Println("*video_stream_number_int:", *video_stream_number_int)
-	fmt.Println()
-	fmt.Println("\nSlice:", input_filenames)
-	fmt.Println("\n")
-
-
+	// File processing starts here
 	for _,file_name := range input_filenames {
 
 		var command_to_run_str_slice []string
 
-		// Split filename to path + filename
+		// Create input + output filenames and paths
 		inputfile_absolute_path,_ := filepath.Abs(file_name)
 		inputfile_path := filepath.Dir(inputfile_absolute_path)
 		inputfile_name := filepath.Base(file_name)
 		output_filename_extension := filepath.Ext(inputfile_name)
 		output_file_absolute_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, output_filename_extension) + ".mp4")
 
-		// If output directory does not exist in the input file path then create it.
+		if *debug_mode_on == true {
+			fmt.Println("inputfile_path:", inputfile_path)
+			fmt.Println("inputfile_name:", inputfile_name)
+			fmt.Println("output_file_absolute_path:", output_file_absolute_path)
+		}
+
+		// If output directory does not exist in the input path then create it.
 		if _, err := os.Stat(filepath.Join(inputfile_path, output_directory_name)); os.IsNotExist(err) {
 			os.Mkdir(filepath.Join(inputfile_path, output_directory_name), 0777)
 		}
 
-		// FIXME
-		fmt.Println("inputfile_path:", inputfile_path)
-		fmt.Println("inputfile_name:", inputfile_name)
-		fmt.Println("output_file_absolute_path:", output_file_absolute_path)
-
+		// Get video info with: ffprobe -loglevel 16 -show_entries format:stream -print_format flat -i InputFile
 		command_to_run_str_slice = append(command_to_run_str_slice, "ffprobe","-loglevel","16","-show_entries","format:stream","-print_format","flat","-i")
 		command_to_run_str_slice = append(command_to_run_str_slice, file_name)
 
@@ -293,18 +297,20 @@ func main() {
 
 		video_info_struct := sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice)
 
-		// FIXME
-		fmt.Println(file_name)
-		fmt.Println("video_info_struct.audio_codec:", video_info_struct.audio_codec)
-		fmt.Println("video_info_struct.sample_rate:", video_info_struct.sample_rate)
-		fmt.Println("video_info_struct.number_of_channels:", video_info_struct.number_of_channels)
-		fmt.Println("video_info_struct.video_codec:", video_info_struct.video_codec)
-		fmt.Println("video_info_struct.vertical_resolution:", video_info_struct.vertical_resolution)
-		fmt.Println("video_info_struct.horizontal_resolution:", video_info_struct.horizontal_resolution)
-		fmt.Println("video_info_struct.aspect_ratio:", video_info_struct.aspect_ratio)
-		fmt.Println("video_info_struct.commandline:", video_info_struct.commandline)
-		fmt.Println()
-		fmt.Println("autocrop_bool:", *autocrop_bool)
+		
+		if *debug_mode_on == true {
+			fmt.Println(file_name)
+			fmt.Println("video_info_struct.audio_codec:", video_info_struct.audio_codec)
+			fmt.Println("video_info_struct.sample_rate:", video_info_struct.sample_rate)
+			fmt.Println("video_info_struct.number_of_channels:", video_info_struct.number_of_channels)
+			fmt.Println("video_info_struct.video_codec:", video_info_struct.video_codec)
+			fmt.Println("video_info_struct.vertical_resolution:", video_info_struct.vertical_resolution)
+			fmt.Println("video_info_struct.horizontal_resolution:", video_info_struct.horizontal_resolution)
+			fmt.Println("video_info_struct.aspect_ratio:", video_info_struct.aspect_ratio)
+			fmt.Println("video_info_struct.commandline:", video_info_struct.commandline)
+			fmt.Println("autocrop_bool:", *autocrop_bool)
+			fmt.Println()
+		}
 
 		if *autocrop_bool == true {
 			autocrop_settings_slice := []string{"ffmpeg", "-t", "1800", "-i", file_name, "-sn", "-f", "matroska", "-an", "-vf", "cropdetect=24:16:0", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null", "2>&1", "|", "grep", "-o", "crop=.*", "|", "sort", "-bh", "|", "uniq", "-c", "|", "sort", "-bh", "|", "tail", "-n1", "|", "grep", "-o", "crop.*"}
@@ -321,162 +327,166 @@ func main() {
 			println()
 		}
 
-		// Create the start of ffmpeg commandline
-		ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_pass_2_commandline_start...)
-		ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name)
+		if *scan_mode_only_bool == true {
 
-		// Add video and audiomapping options on the commanline
-		ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", strconv.Itoa(*video_stream_number_int) + ":v", "-map", strconv.Itoa(*video_stream_number_int) + ":a:" + strconv.Itoa(*audio_stream_number_int))
-
-		ffmpeg_filter_options := ""
-
-		// If there is no subtitles to overlay on video use simple video filter processing in ffmpeg
-		if subtitle_number == -1 {
-			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-vf")
-
-			// Add deinterlace commands to ffmpeg commandline
-			if *no_deinterlace_bool == false {
-				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(deinterlace_options, "")
-			}
-
-			// FIXME mihkäs tää croppi kuuluu ?
-			// Add crop options to ffmpeg commandline
-			if len(crop_options) > 0 {
-				if ffmpeg_filter_options != "" {
-					ffmpeg_filter_options = ffmpeg_filter_options + ","
+			fmt.Println(file_name, "complete_stream_info_map:", "\n")
+			// for item, stream_info_str_slice := range complete_stream_info_map {
+			for key, stream_info_str_slice := range complete_stream_info_map {
+				fmt.Println("\n")
+				fmt.Println("key:", key)
+				fmt.Println("-----------------------------------")
+				// fmt.Println("stream_info_str_slice:", stream_info_str_slice)
+				for _,value := range stream_info_str_slice {
+					fmt.Println(value)
 				}
-				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(crop_options, "")
+				// fmt.Println(item, " = ", complete_stream_info_map[item], "\n")
 			}
-			// Add denoise options to ffmpeg commandline
-			if *denoise_bool == true {
-				if ffmpeg_filter_options != "" {
-					ffmpeg_filter_options = ffmpeg_filter_options + ","
-				}
-				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(denoise_options, "")
+			fmt.Println("\n")
+			fmt.Println("Wrapper info:")
+			fmt.Println("-------------")
+
+			for item := range wrapper_info_map {
+				fmt.Println(item, "=", wrapper_info_map[item])
 			}
-
-			// Add grayscale options to ffmpeg commandline
-			if *grayscale_bool == true {
-				if ffmpeg_filter_options != "" {
-					ffmpeg_filter_options =  ffmpeg_filter_options + ","
-				}
-				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(grayscale_options, "")
-			}
-		}
-
-		// Add video filter options to ffmpeg commanline
-		ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_filter_options)
-
-		// If video horizontal resolution is over 700 pixel choose HD video compression settings
-		video_compression_options := video_compression_options_sd
-
-		if *force_hd_bool || video_info_struct.horizontal_resolution > 700 {
-			video_compression_options = video_compression_options_hd
-		}
-
-		// Add video processing options to ffmpeg commandline
-		ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, video_compression_options...)
-
-		// Add audio compression options to ffmpeg commandline
-		ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, audio_compression_options...)
-		
-		// Add 2 - pass logfile path to ffmpeg commandline
-		ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-passlogfile")
-		ffmpeg_2_pass_logfile_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, output_filename_extension))
-		ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_2_pass_logfile_path)
-	
-		// Add video output format to ffmpeg commandline
-		ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, output_video_format...)
-
-		// Copy ffmpeg pass 2 commandline to ffmpeg pass 1 commandline
-		ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, ffmpeg_pass_2_commandline...)
-
-		// Add pass 1/2 info on ffmpeg commandline
-		ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, "-pass", "1")
-		ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-pass", "2")
-
-		// Add /dev/null output option to ffmpeg pass 1 commandline
-		ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, "/dev/null")
-
-		// Add outfile path to ffmpeg pass 2 commandline
-		ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, output_file_absolute_path)
-
-		// FIXME
-		for _,item := range ffmpeg_pass_1_commandline{
-			fmt.Printf("%q", item)
 			fmt.Println()
+
+			fmt.Println("video_stream_info_map:")
+			fmt.Println("-----------------------")
+
+			for item := range video_stream_info_map {
+				fmt.Println(item, "=", video_stream_info_map[item])
+			}
+			fmt.Println()
+
+			fmt.Println("audio_stream_info_map:")
+			fmt.Println("-----------------------")
+
+			for item := range audio_stream_info_map {
+				fmt.Println(item, "=", audio_stream_info_map[item])
+			}
+			fmt.Println()
+
+			os.Exit(0)
 		}
 
-		// FIXME
-		fmt.Println("ffmpeg_pass_1_commandline:", ffmpeg_pass_1_commandline)
-		ffmpeg_pass_1_output, ffmpeg_pass_1_error := run_external_command(ffmpeg_pass_1_commandline)
+		if *scan_mode_only_bool != true {
 
-		if ffmpeg_pass_1_output != nil {
-			fmt.Println(ffmpeg_pass_1_output)
+			// Create the start of ffmpeg commandline
+			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_pass_2_commandline_start...)
+			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name)
+
+			// Add video and audiomapping options on the commanline
+			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:v", "-map", "0:a:" + strconv.Itoa(*audio_stream_number_int))
+
+			ffmpeg_filter_options := ""
+
+			// If there is no subtitles to overlay on video use simple video filter processing in ffmpeg
+			if subtitle_number == -1 {
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-vf")
+
+				// Add deinterlace commands to ffmpeg commandline
+				if *no_deinterlace_bool == false {
+					ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(deinterlace_options, "")
+				}
+
+				// FIXME mihkäs tää croppi kuuluu ?
+				// Add crop options to ffmpeg commandline
+				if len(crop_options) > 0 {
+					if ffmpeg_filter_options != "" {
+						ffmpeg_filter_options = ffmpeg_filter_options + ","
+					}
+					ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(crop_options, "")
+				}
+				// Add denoise options to ffmpeg commandline
+				if *denoise_bool == true {
+					if ffmpeg_filter_options != "" {
+						ffmpeg_filter_options = ffmpeg_filter_options + ","
+					}
+					ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(denoise_options, "")
+				}
+
+				// Add grayscale options to ffmpeg commandline
+				if *grayscale_bool == true {
+					if ffmpeg_filter_options != "" {
+						ffmpeg_filter_options =  ffmpeg_filter_options + ","
+					}
+					ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(grayscale_options, "")
+				}
+			}
+
+			// Add video filter options to ffmpeg commanline
+			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_filter_options)
+
+			// If video horizontal resolution is over 700 pixel choose HD video compression settings
+			video_compression_options := video_compression_options_sd
+
+			if *force_hd_bool || video_info_struct.horizontal_resolution > 700 {
+				video_compression_options = video_compression_options_hd
+			}
+
+			// Add video processing options to ffmpeg commandline
+			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, video_compression_options...)
+
+			// Add audio compression options to ffmpeg commandline
+			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, audio_compression_options...)
+			
+			// Add 2 - pass logfile path to ffmpeg commandline
+			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-passlogfile")
+			ffmpeg_2_pass_logfile_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, output_filename_extension))
+			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_2_pass_logfile_path)
+		
+			// Add video output format to ffmpeg commandline
+			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, output_video_format...)
+
+			// Copy ffmpeg pass 2 commandline to ffmpeg pass 1 commandline
+			ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, ffmpeg_pass_2_commandline...)
+
+			// Add pass 1/2 info on ffmpeg commandline
+			ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, "-pass", "1")
+			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-pass", "2")
+
+			// Add /dev/null output option to ffmpeg pass 1 commandline
+			ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, "/dev/null")
+
+			// Add outfile path to ffmpeg pass 2 commandline
+			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, output_file_absolute_path)
+
+			fmt.Println()
+			fmt.Println("ffmpeg_pass_1_commandline:", ffmpeg_pass_1_commandline)
+			ffmpeg_pass_1_output, ffmpeg_pass_1_error := run_external_command(ffmpeg_pass_1_commandline)
+			fmt.Println()
+
+			if ffmpeg_pass_1_output != nil {
+				fmt.Println(ffmpeg_pass_1_output)
+			}
+
+			if ffmpeg_pass_1_error != nil {
+				fmt.Println(ffmpeg_pass_1_error)
+			}
+
+			fmt.Println()
+			fmt.Println("ffmpeg_pass_2_commandline:", ffmpeg_pass_2_commandline)
+			ffmpeg_pass_2_output, ffmpeg_pass_2_error :=  run_external_command(ffmpeg_pass_2_commandline)
+			fmt.Println()
+
+			if ffmpeg_pass_2_output != nil {
+				fmt.Println(ffmpeg_pass_2_output)
+			}
+
+			if ffmpeg_pass_2_error != nil {
+				fmt.Println(ffmpeg_pass_2_error)
+			}
+
+			// Remove ffmpeg 2 - pass logfiles
+			if _, err := os.Stat(ffmpeg_2_pass_logfile_path + "-0.log"); err == nil {
+				os.Remove(ffmpeg_2_pass_logfile_path + "-0.log")
+			}
+
+			if _, err := os.Stat(ffmpeg_2_pass_logfile_path + "-0.log.mbtree"); err == nil {
+				os.Remove(ffmpeg_2_pass_logfile_path + "-0.log.mbtree")
+			}
 		}
 
-		if ffmpeg_pass_1_error != nil {
-			fmt.Println(ffmpeg_pass_1_error)
-		}
-
-		fmt.Println("ffmpeg_pass_2_commandline:", ffmpeg_pass_2_commandline)
-		ffmpeg_pass_2_output, ffmpeg_pass_2_error :=  run_external_command(ffmpeg_pass_2_commandline)
-
-		if ffmpeg_pass_2_output != nil {
-			fmt.Println(ffmpeg_pass_2_output)
-		}
-
-		if ffmpeg_pass_2_error != nil {
-			fmt.Println(ffmpeg_pass_2_error)
-		}
-
-		// Remove ffmpeg 2 - pass logfiles
-		if _, err := os.Stat(ffmpeg_2_pass_logfile_path + "-0.log"); err == nil {
-			os.Remove(ffmpeg_2_pass_logfile_path + "-0.log")
-		}
-
-		if _, err := os.Stat(ffmpeg_2_pass_logfile_path + "-0.log.mbtree"); err == nil {
-			os.Remove(ffmpeg_2_pass_logfile_path + "-0.log.mbtree")
-		}
-
-
-		// // FIXME
-		// fmt.Println(file_name, "complete_stream_info_map:", "\n")
-		// // for item, stream_info_str_slice := range complete_stream_info_map {
-		// for key, stream_info_str_slice := range complete_stream_info_map {
-		// 	fmt.Println("\n")
-		// 	fmt.Println("key:", key)
-		// 	fmt.Println("-----------------------------------")
-		// 	// fmt.Println("stream_info_str_slice:", stream_info_str_slice)
-		// 	for _,value := range stream_info_str_slice {
-		// 		fmt.Println(value)
-		// 	}
-		// 	// fmt.Println(item, " = ", complete_stream_info_map[item], "\n")
-		// }
-		// fmt.Println("\n")
-		// fmt.Println("Wrapper info:")
-		// fmt.Println("-------------")
-
-		// for item := range wrapper_info_map {
-		// 	fmt.Println(item, "=", wrapper_info_map[item])
-		// }
-		// fmt.Println()
-
-		// fmt.Println("video_stream_info_map:")
-		// fmt.Println("-----------------------")
-
-		// for item := range video_stream_info_map {
-		// 	fmt.Println(item, "=", video_stream_info_map[item])
-		// }
-		// fmt.Println()
-
-		// fmt.Println("audio_stream_info_map:")
-		// fmt.Println("-----------------------")
-
-		// for item := range audio_stream_info_map {
-		// 	fmt.Println(item, "=", audio_stream_info_map[item])
-		// }
-		// fmt.Println()
 
 	}
 }
