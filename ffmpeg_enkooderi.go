@@ -50,7 +50,7 @@ func run_external_command(command_to_run_str_slice []string) ([]string,  error) 
 	return unsorted_ffprobe_information_str_slice, error_message
 }
 
-func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []string) (Video_data) {
+func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []string) {
 
 	// Parse ffprobe output, find wrapper, video- and audiostream information in it,
         // and store this info in stream specific maps
@@ -110,6 +110,9 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 			wrapper_info_map[wrapper_key] = wrapper_value
 		}
 	}
+}
+
+func get_video_and_audio_stream_information() (Video_data) {
 
 	// Find video and audio stream information and store it as key value pairs in video_stream_info_map and audio_stream_info_map.
 	// Discard info about streams that are not audio or video
@@ -295,7 +298,11 @@ func main() {
 			log.Fatal(error_message)
 		}
 
-		video_info_struct := sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice)
+		// Sort info about video and audio streams in the file to a map
+		sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice)
+
+		// Get specific video and audio stream information
+		video_info_struct := get_video_and_audio_stream_information()
 
 		
 		if *debug_mode_on == true {
