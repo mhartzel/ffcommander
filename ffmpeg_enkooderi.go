@@ -31,7 +31,7 @@ var wrapper_info_map = make(map[string]string)
 
 func run_external_command(command_to_run_str_slice []string) ([]string,  error) {
 
-	var unsorted_ffprobe_information_str_slice []string
+	var command_output_str_slice []string
 	command_output_str := ""
 
 	// Create the struct needed for running the external command
@@ -44,16 +44,16 @@ func run_external_command(command_to_run_str_slice []string) ([]string,  error) 
 
 	// Split the output of the command to lines and store in a slice
 	for _, line := range strings.Split(command_output_str, "\n")  {
-		unsorted_ffprobe_information_str_slice = append(unsorted_ffprobe_information_str_slice, line)
+		command_output_str_slice = append(command_output_str_slice, line)
 	}
 
-	return unsorted_ffprobe_information_str_slice, error_message
+	return command_output_str_slice, error_message
 }
 
 func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []string) {
 
 	// Parse ffprobe output, find wrapper, video- and audiostream information in it,
-        // and store this info in stream specific maps
+	// and store this info in global maps: complete_stream_info_map and wrapper_info_map.
 
 	var stream_info_str_slice []string
 	var text_line_str_slice []string
@@ -185,7 +185,9 @@ func main() {
 	// FIXME
 	// wrapper_info_mapin tieto kerätään mutta sitä ei käytetä mitenkään.
 
-	// Test if ffmpeg can be found in path
+	/////////////////////////////////////////////////////
+	// Test if ffmpeg and ffprobe can be found in path //
+	/////////////////////////////////////////////////////
 	if _,error := exec.LookPath("ffmpeg") ; error != nil {
 		fmt.Println()
 		fmt.Println("Error, cant find FFmpeg in path, can't continue.")
@@ -201,7 +203,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Define commandline options
+	//////////////////////////////////////////
+	// Define and parse commandline options //
+	//////////////////////////////////////////
 	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace")
 	var subtitle_int = flag.Int("s", -1, "Subtitle `number`")
 	var audio_stream_number_int = flag.Int("an", 0, "Audio stream `number`")
@@ -217,7 +221,14 @@ func main() {
 	// Parse commandline options
 	flag.Parse()
 
-	// Define some more variables
+	// The unparsed options left on the commandline are filenames, store them in a slice.
+	for _,file_name := range flag.Args()  {
+		input_filenames = append(input_filenames, file_name)
+	}
+
+	//////////////////////////////////////////////////
+	// Define default processing options for FFmpeg //
+	//////////////////////////////////////////////////
 	video_compression_options_sd := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "main", "-level", "4.0", "-b:v", "1600k"}
 	video_compression_options_hd := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "4.1", "-b:v", "8000k"}
 	audio_compression_options := []string{"-acodec", "copy"}
@@ -233,11 +244,9 @@ func main() {
 	var ffmpeg_pass_1_commandline []string
 	var ffmpeg_pass_2_commandline []string
 
-	// The unparsed options left on the commandline are filenames, store them in a slice.
-	for _,file_name := range flag.Args()  {
-		input_filenames = append(input_filenames, file_name)
-	}
-
+	/////////////////////////////////////////
+	// Print variable values in debug mode //
+	/////////////////////////////////////////
 	if *debug_mode_on == true {
 		fmt.Println()
 		fmt.Println("video_compression_options_sd:",video_compression_options_sd)
@@ -265,7 +274,9 @@ func main() {
 		fmt.Println("\n")
 }
 
-	// File processing starts here
+	/////////////////////////////////////////
+	// Main loop that processess all files //
+	/////////////////////////////////////////
 	for _,file_name := range input_filenames {
 
 		var command_to_run_str_slice []string
@@ -304,7 +315,9 @@ func main() {
 		// Get specific video and audio stream information
 		video_info_struct := get_video_and_audio_stream_information()
 
-		
+		/////////////////////////////////////////
+		// Print variable values in debug mode //
+		/////////////////////////////////////////
 		if *debug_mode_on == true {
 			fmt.Println(file_name)
 			fmt.Println("video_info_struct.audio_codec:", video_info_struct.audio_codec)
@@ -334,6 +347,9 @@ func main() {
 			println()
 		}
 
+		//////////////////////
+		// Scan - only mode //
+		//////////////////////
 		if *scan_mode_only_bool == true {
 
 			fmt.Println(file_name, "complete_stream_info_map:", "\n")
@@ -376,6 +392,58 @@ func main() {
 			os.Exit(0)
 		}
 
+		/////////////////////////////////////////////////////////////
+		// Find out autocrop parameters by scanning the input file //
+		/////////////////////////////////////////////////////////////
+
+		command_to_run_str_slice = nil
+		command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg","-t","1800","-i",file_name ,"-sn", "-f", "matroska", "-an", "-vf", "cropdetect=24:16:0", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
+
+		crop_value_counter := 0
+		var crop_value_map = make(map[string]int)
+
+		ffmpeg_crop_output, ffmpeg_crop_error := run_external_command(command_to_run_str_slice)
+
+		// fmt.Println()
+		// fmt.Println("ffmpeg_crop_output:", ffmpeg_crop_output)
+		// fmt.Println("ffmpeg_crop_error:", ffmpeg_crop_error)
+		// fmt.Println()
+
+		if ffmpeg_crop_error == nil {
+
+			for _,slice_item := range ffmpeg_crop_output {
+
+				for _,item := range strings.Split(slice_item, "\n") {
+
+					if strings.Contains(item, "crop="){
+
+						crop_value := strings.Split(item, "crop=")[1]
+
+						if _,item_found := crop_value_map[crop_value] ; item_found == true {
+							crop_value_counter = crop_value_map[crop_value]
+						}
+						crop_value_counter = crop_value_counter + 1
+						crop_value_map[crop_value] = crop_value_counter
+						crop_value_counter = 0
+					}
+				}
+			}
+			for crop_value := range crop_value_map {
+				fmt.Println(crop_value_map[crop_value], "=", crop_value)
+			}
+		} else {
+			fmt.Println()
+			fmt.Println("Scanning inputfile with FFmpeg resulted in an error:")
+			fmt.Println(ffmpeg_crop_error)
+			fmt.Println()
+		}
+
+		os.Exit(0)
+
+
+		/////////////////////////
+		// Encode video - mode //
+		/////////////////////////
 		if *scan_mode_only_bool != true {
 
 			// Create the start of ffmpeg commandline
