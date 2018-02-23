@@ -23,6 +23,18 @@ type Video_data struct {
 	commandline []string
 }
 
+type Crop_values struct {
+
+	// FFmpeg crop values. Cropping first discards "width_offset" amount of pixels from the left side of the picture.
+	// Then it discards "height_offset" amount of pixels from the top of the picture.
+	// Then cropping takes "picture_width" of pixels to the right and "picture_height" pixels down whats left of the picture.
+
+	picture_width int
+	picture_height int
+	width_offset int
+	height_offset int
+}
+
 var complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -243,6 +255,7 @@ func main() {
 	output_video_format := []string{"-f", "mp4"}
 	var ffmpeg_pass_1_commandline []string
 	var ffmpeg_pass_2_commandline []string
+	var final_crop_string string
 
 	/////////////////////////////////////////
 	// Print variable values in debug mode //
@@ -332,21 +345,6 @@ func main() {
 			fmt.Println()
 		}
 
-		if *autocrop_bool == true {
-			autocrop_settings_slice := []string{"ffmpeg", "-t", "1800", "-i", file_name, "-sn", "-f", "matroska", "-an", "-vf", "cropdetect=24:16:0", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null", "2>&1", "|", "grep", "-o", "crop=.*", "|", "sort", "-bh", "|", "uniq", "-c", "|", "sort", "-bh", "|", "tail", "-n1", "|", "grep", "-o", "crop.*"}
-
-			// FIXME
-			println("autocrop_settings_slice:")
-
-			for _,item := range autocrop_settings_slice {
-				print(item, " ")
-			}
-
-			// FIXME
-			println()
-			println()
-		}
-
 		//////////////////////
 		// Scan - only mode //
 		//////////////////////
@@ -396,50 +394,79 @@ func main() {
 		// Find out autocrop parameters by scanning the input file //
 		/////////////////////////////////////////////////////////////
 
-		command_to_run_str_slice = nil
-		command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg","-t","1800","-i",file_name ,"-sn", "-f", "matroska", "-an", "-vf", "cropdetect=24:16:0", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
+		if *autocrop_bool == true {
 
-		crop_value_counter := 0
-		var crop_value_map = make(map[string]int)
+			command_to_run_str_slice = nil
+			command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg","-t","1800","-i",file_name ,"-sn", "-f", "matroska", "-an", "-vf", "cropdetect=24:16:0", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
 
-		ffmpeg_crop_output, ffmpeg_crop_error := run_external_command(command_to_run_str_slice)
+			var crop_values_struct Crop_values
 
-		// fmt.Println()
-		// fmt.Println("ffmpeg_crop_output:", ffmpeg_crop_output)
-		// fmt.Println("ffmpeg_crop_error:", ffmpeg_crop_error)
-		// fmt.Println()
+			crop_value_counter := 0
+			var crop_value_map = make(map[string]int)
 
-		if ffmpeg_crop_error == nil {
+			ffmpeg_crop_output, ffmpeg_crop_error := run_external_command(command_to_run_str_slice)
 
-			for _,slice_item := range ffmpeg_crop_output {
+			if ffmpeg_crop_error == nil {
 
-				for _,item := range strings.Split(slice_item, "\n") {
+				for _,slice_item := range ffmpeg_crop_output {
 
-					if strings.Contains(item, "crop="){
+					for _,item := range strings.Split(slice_item, "\n") {
 
-						crop_value := strings.Split(item, "crop=")[1]
+						if strings.Contains(item, "crop="){
 
-						if _,item_found := crop_value_map[crop_value] ; item_found == true {
-							crop_value_counter = crop_value_map[crop_value]
+							crop_value := strings.Split(item, "crop=")[1]
+
+							if _,item_found := crop_value_map[crop_value] ; item_found == true {
+								crop_value_counter = crop_value_map[crop_value]
+							}
+							crop_value_counter = crop_value_counter + 1
+							crop_value_map[crop_value] = crop_value_counter
+							crop_value_counter = 0
 						}
-						crop_value_counter = crop_value_counter + 1
-						crop_value_map[crop_value] = crop_value_counter
-						crop_value_counter = 0
 					}
 				}
+				last_crop_value := 0
+
+				for crop_value := range crop_value_map {
+
+					if crop_value_map[crop_value] > last_crop_value {
+						last_crop_value = crop_value_map[crop_value]
+						final_crop_string = crop_value
+					}
+				}
+
+				crop_values_struct.picture_width,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[0])
+				crop_values_struct.picture_height,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[1])
+				crop_values_struct.width_offset,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[2])
+				crop_values_struct.height_offset,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[3])
+
+				/////////////////////////////////////////
+				// Print variable values in debug mode //
+				/////////////////////////////////////////
+				if *debug_mode_on == true {
+
+				fmt.Println()
+				fmt.Println("Crop values are:")
+
+				for crop_value := range crop_value_map {
+					fmt.Println(crop_value_map[crop_value], "=", crop_value)
+					
+				}
+				fmt.Println()
+				fmt.Println("Biggest crop value is", final_crop_string)
+				fmt.Println("crop_values_struct.picture_width:", crop_values_struct.picture_width)
+				fmt.Println("crop_values_struct.picture_height:", crop_values_struct.picture_height)
+				fmt.Println("crop_values_struct.width_offset:", crop_values_struct.width_offset)
+				fmt.Println("crop_values_struct.height_offset:", crop_values_struct.height_offset)
+				}
+
+			} else {
+				fmt.Println()
+				fmt.Println("Scanning inputfile with FFmpeg resulted in an error:")
+				fmt.Println(ffmpeg_crop_error)
+				fmt.Println()
 			}
-			for crop_value := range crop_value_map {
-				fmt.Println(crop_value_map[crop_value], "=", crop_value)
-			}
-		} else {
-			fmt.Println()
-			fmt.Println("Scanning inputfile with FFmpeg resulted in an error:")
-			fmt.Println(ffmpeg_crop_error)
-			fmt.Println()
 		}
-
-		os.Exit(0)
-
 
 		/////////////////////////
 		// Encode video - mode //
@@ -464,14 +491,14 @@ func main() {
 					ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(deinterlace_options, "")
 				}
 
-				// FIXME mihkäs tää croppi kuuluu ?
-				// Add crop options to ffmpeg commandline
-				if len(crop_options) > 0 {
+				// Add crop commands to ffmpeg commandline
+				if *autocrop_bool == true {
 					if ffmpeg_filter_options != "" {
 						ffmpeg_filter_options = ffmpeg_filter_options + ","
 					}
-					ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(crop_options, "")
+					ffmpeg_filter_options = ffmpeg_filter_options + "crop=" + final_crop_string
 				}
+
 				// Add denoise options to ffmpeg commandline
 				if *denoise_bool == true {
 					if ffmpeg_filter_options != "" {
