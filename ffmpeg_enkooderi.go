@@ -20,7 +20,6 @@ type Video_data struct {
 	vertical_resolution int
 	horizontal_resolution int
 	aspect_ratio string
-	commandline []string
 }
 
 type Crop_values struct {
@@ -178,17 +177,17 @@ func get_video_and_audio_stream_information() (Video_data) {
 	}
 
 	// Find specific video and audio info we need and store in a struct that we return to the main program.
-	var video_info_struct Video_data
+	var input_video_info_struct Video_data
 
-	video_info_struct.audio_codec = audio_stream_info_map["codec_name"]
-	video_info_struct.sample_rate,_ = strconv.Atoi(audio_stream_info_map["sample_rate"])
-	video_info_struct.number_of_channels,_ = strconv.Atoi(audio_stream_info_map["channels"])
-	video_info_struct.video_codec = video_stream_info_map["codec_name"]
-	video_info_struct.vertical_resolution,_ = strconv.Atoi(video_stream_info_map["width"])
-	video_info_struct.horizontal_resolution,_ = strconv.Atoi(video_stream_info_map["height"])
-	video_info_struct.aspect_ratio = video_stream_info_map["display_aspect_ratio"]
+	input_video_info_struct.audio_codec = audio_stream_info_map["codec_name"]
+	input_video_info_struct.sample_rate,_ = strconv.Atoi(audio_stream_info_map["sample_rate"])
+	input_video_info_struct.number_of_channels,_ = strconv.Atoi(audio_stream_info_map["channels"])
+	input_video_info_struct.video_codec = video_stream_info_map["codec_name"]
+	input_video_info_struct.vertical_resolution,_ = strconv.Atoi(video_stream_info_map["width"])
+	input_video_info_struct.horizontal_resolution,_ = strconv.Atoi(video_stream_info_map["height"])
+	input_video_info_struct.aspect_ratio = video_stream_info_map["display_aspect_ratio"]
 
-	return(video_info_struct)
+	return(input_video_info_struct)
 }
 
 
@@ -246,7 +245,7 @@ func main() {
 	audio_compression_options := []string{"-acodec", "copy"}
 	denoise_options := []string{"hqdn3d=3.0:3.0:2.0:3.0"}
 	deinterlace_options := []string{"idet,yadif=0:deint=interlaced"}
-	ffmpeg_pass_2_commandline_start := []string{"ffmpeg", "-y", "-loglevel", "8", "-threads", "auto"}
+	ffmpeg_commandline_start := []string{"ffmpeg", "-y", "-loglevel", "8", "-threads", "auto"}
 	subtitle_number := *subtitle_int
 	grayscale_options := []string{"lut=u=128:v=128"}
 	var crop_options []string
@@ -267,7 +266,7 @@ func main() {
 		fmt.Println("audio_compression_options:", audio_compression_options)
 		fmt.Println("denoise_options:",denoise_options)
 		fmt.Println("deinterlace_options:",deinterlace_options)
-		fmt.Println("ffmpeg_pass_2_commandline_start:",ffmpeg_pass_2_commandline_start)
+		fmt.Println("ffmpeg_commandline_start:",ffmpeg_commandline_start)
 		fmt.Println("subtitle_number:",subtitle_number)
 		fmt.Println("grayscale_options:",grayscale_options)
 		fmt.Println("subtitle_options:",subtitle_options)
@@ -326,21 +325,19 @@ func main() {
 		sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice)
 
 		// Get specific video and audio stream information
-		video_info_struct := get_video_and_audio_stream_information()
+		input_video_info_struct := get_video_and_audio_stream_information()
 
 		/////////////////////////////////////////
 		// Print variable values in debug mode //
 		/////////////////////////////////////////
 		if *debug_mode_on == true {
-			fmt.Println(file_name)
-			fmt.Println("video_info_struct.audio_codec:", video_info_struct.audio_codec)
-			fmt.Println("video_info_struct.sample_rate:", video_info_struct.sample_rate)
-			fmt.Println("video_info_struct.number_of_channels:", video_info_struct.number_of_channels)
-			fmt.Println("video_info_struct.video_codec:", video_info_struct.video_codec)
-			fmt.Println("video_info_struct.vertical_resolution:", video_info_struct.vertical_resolution)
-			fmt.Println("video_info_struct.horizontal_resolution:", video_info_struct.horizontal_resolution)
-			fmt.Println("video_info_struct.aspect_ratio:", video_info_struct.aspect_ratio)
-			fmt.Println("video_info_struct.commandline:", video_info_struct.commandline)
+			fmt.Println("input_video_info_struct.audio_codec:", input_video_info_struct.audio_codec)
+			fmt.Println("input_video_info_struct.sample_rate:", input_video_info_struct.sample_rate)
+			fmt.Println("input_video_info_struct.number_of_channels:", input_video_info_struct.number_of_channels)
+			fmt.Println("input_video_info_struct.video_codec:", input_video_info_struct.video_codec)
+			fmt.Println("input_video_info_struct.vertical_resolution:", input_video_info_struct.vertical_resolution)
+			fmt.Println("input_video_info_struct.horizontal_resolution:", input_video_info_struct.horizontal_resolution)
+			fmt.Println("input_video_info_struct.aspect_ratio:", input_video_info_struct.aspect_ratio)
 			fmt.Println("autocrop_bool:", *autocrop_bool)
 			fmt.Println()
 		}
@@ -471,10 +468,10 @@ func main() {
 		/////////////////////////
 		// Encode video - mode //
 		/////////////////////////
-		if *scan_mode_only_bool != true {
+		if *scan_mode_only_bool == false {
 
 			// Create the start of ffmpeg commandline
-			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_pass_2_commandline_start...)
+			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_commandline_start...)
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name)
 
 			// Add video and audiomapping options on the commanline
@@ -484,7 +481,7 @@ func main() {
 
 			// If there is no subtitles to overlay on video use simple video filter processing in ffmpeg
 			if subtitle_number == -1 {
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-vf")
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-sn", "-vf")
 
 				// Add deinterlace commands to ffmpeg commandline
 				if *no_deinterlace_bool == false {
@@ -522,7 +519,7 @@ func main() {
 			// If video horizontal resolution is over 700 pixel choose HD video compression settings
 			video_compression_options := video_compression_options_sd
 
-			if *force_hd_bool || video_info_struct.horizontal_resolution > 700 {
+			if *force_hd_bool || input_video_info_struct.horizontal_resolution > 700 {
 				video_compression_options = video_compression_options_hd
 			}
 
