@@ -244,10 +244,34 @@ func main() {
 	video_compression_options_hd := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "4.1", "-b:v", "8000k"}
 	audio_compression_options := []string{"-acodec", "copy"}
 	denoise_options := []string{"hqdn3d=3.0:3.0:2.0:3.0"}
-	deinterlace_options := []string{"idet,yadif=0:deint=interlaced"}
+
+	var deinterlace_options []string
+
+	if *no_deinterlace_bool == true {
+		deinterlace_options = []string{"copy"}
+	} else {
+		deinterlace_options = []string{"idet,yadif=0:deint=interlaced"}
+	}
 	ffmpeg_commandline_start := []string{"ffmpeg", "-y", "-loglevel", "8", "-threads", "auto"}
 	subtitle_number := *subtitle_int
-	grayscale_options := []string{"lut=u=128:v=128"}
+
+	var grayscale_options []string
+
+	if *grayscale_bool == false {
+
+		grayscale_options = []string{""}
+
+	} else {
+
+		if subtitle_number == -1 {
+			grayscale_options = []string{"lut=u=128:v=128"}
+		}
+
+		if subtitle_number >= 0 {
+			grayscale_options = []string{",lut=u=128:v=128"}
+		}
+	}
+
 	var crop_options []string
 	subtitle_options := ""
 	output_directory_name := "00-valmiit"
@@ -268,11 +292,11 @@ func main() {
 		fmt.Println("deinterlace_options:",deinterlace_options)
 		fmt.Println("ffmpeg_commandline_start:",ffmpeg_commandline_start)
 		fmt.Println("subtitle_number:",subtitle_number)
+		fmt.Println("*grayscale_bool:", *grayscale_bool)
 		fmt.Println("grayscale_options:",grayscale_options)
 		fmt.Println("subtitle_options:",subtitle_options)
 		fmt.Println("crop_options",crop_options)
 		fmt.Println("*autocrop_bool:", *autocrop_bool)
-		fmt.Println("*grayscale_bool:", *grayscale_bool)
 		fmt.Println("*subtitle_int:", *subtitle_int)
 		fmt.Println("*no_deinterlace_bool:", *no_deinterlace_bool)
 		fmt.Println("*denoise_bool:", *denoise_bool)
@@ -486,59 +510,81 @@ func main() {
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_commandline_start...)
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name)
 
-			// Add video and audiomapping options on the commanline
-			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(*audio_stream_number_int))
-
-			if subtitle_number == -1 {
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-sn")
-			}
-
 			ffmpeg_filter_options := ""
 
-			// Add deinterlace commands to ffmpeg commandline
-			if *no_deinterlace_bool == false {
+			//////////////////////////////////////////////////////////////////////////////////////////////
+			// If there is no subtitle to process use the simple video processing chain (-vf) in FFmpeg //
+			// It has only one video input and output.
+			//////////////////////////////////////////////////////////////////////////////////////////////
+
+			if subtitle_number == -1 {
+				// There is no subtitle to process add the "no subtitle" option to FFmpeg commandline.
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-sn")
+
+				// Add deinterlace commands to ffmpeg commandline
 				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(deinterlace_options, "")
-			}
 
-			// Add crop commands to ffmpeg commandline
-			if *autocrop_bool == true {
-				if ffmpeg_filter_options != "" {
-					ffmpeg_filter_options = ffmpeg_filter_options + ","
+				// Add crop commands to ffmpeg commandline
+				if *autocrop_bool == true {
+					if ffmpeg_filter_options != "" {
+						ffmpeg_filter_options = ffmpeg_filter_options + ","
+					}
+					ffmpeg_filter_options = ffmpeg_filter_options + "crop=" + final_crop_string
 				}
-				ffmpeg_filter_options = ffmpeg_filter_options + "crop=" + final_crop_string
-			}
 
-			// Add denoise options to ffmpeg commandline
-			if *denoise_bool == true {
-				if ffmpeg_filter_options != "" {
-					ffmpeg_filter_options = ffmpeg_filter_options + ","
+				// Add denoise options to ffmpeg commandline
+				if *denoise_bool == true {
+					if ffmpeg_filter_options != "" {
+						ffmpeg_filter_options = ffmpeg_filter_options + ","
+					}
+					ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(denoise_options, "")
 				}
-				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(denoise_options, "")
-			}
 
-			// Add grayscale options to ffmpeg commandline
-			if *grayscale_bool == true && subtitle_number == -1 {
-				if ffmpeg_filter_options != "" {
-					ffmpeg_filter_options =  ffmpeg_filter_options + ","
+				// Add grayscale options to ffmpeg commandline
+				if *grayscale_bool == true {
+					if ffmpeg_filter_options != "" {
+						ffmpeg_filter_options =  ffmpeg_filter_options + ","
+					}
+					ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(grayscale_options, "")
 				}
-				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(grayscale_options, "")
-			}
 
-			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex")
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:v:0", "-vf", ffmpeg_filter_options)
 
-			// Add video filter options to ffmpeg commanline
-			if subtitle_number >= 0 { ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "[0:s:" + strconv.Itoa(subtitle_number) +
-			"]copy[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
-			"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=main_w-overlay_w-0:main_h-overlay_h+" +
-			strconv.Itoa(subtitle_number) + "[processed_combined_streams]", "-map", "[processed_combined_streams]")
 			} else {
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_filter_options)
+				/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				// There is a subtitle to process with the video, use the complex video prcessing chain in FFmpeg (-filer_complex) //
+				// It can has several isimultaneous video inputs and outputs.
+				/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+				// Add deinterlace commands to ffmpeg commandline
+				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(deinterlace_options, "")
+
+				// Add crop commands to ffmpeg commandline
+				if *autocrop_bool == true {
+					if ffmpeg_filter_options != "" {
+						ffmpeg_filter_options = ffmpeg_filter_options + ","
+					}
+					ffmpeg_filter_options = ffmpeg_filter_options + "crop=" + final_crop_string
+				}
+
+				// Add denoise options to ffmpeg commandline
+				if *denoise_bool == true {
+					if ffmpeg_filter_options != "" {
+						ffmpeg_filter_options = ffmpeg_filter_options + ","
+					}
+					ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(denoise_options, "")
+				}
+
+				// Add video filter options to ffmpeg commanline
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number) +
+				"]copy[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
+				"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=main_w-overlay_w-0:main_h-overlay_h+" +
+				strconv.Itoa(subtitle_number) + strings.Join(grayscale_options, "") + "[processed_combined_streams]", "-map", "[processed_combined_streams]")
 			}
 
-			// FIXME
-			for _,item := range ffmpeg_pass_2_commandline {
-				fmt.Printf("%q\n", item)
-			}
+			///////////////////////////////////////////////////////////////////
+			// Add video and audio compressing options to FFmpeg commandline //
+			///////////////////////////////////////////////////////////////////
 
 			// If video horizontal resolution is over 700 pixel choose HD video compression settings
 			video_compression_options := video_compression_options_sd
@@ -547,12 +593,15 @@ func main() {
 				video_compression_options = video_compression_options_hd
 			}
 
-			// Add video processing options to ffmpeg commandline
+			// Add video compression options to ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, video_compression_options...)
 
 			// Add audio compression options to ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, audio_compression_options...)
 			
+			// Add audiomapping options on the commanline
+			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(*audio_stream_number_int))
+
 			// Add 2 - pass logfile path to ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-passlogfile")
 			ffmpeg_2_pass_logfile_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, output_filename_extension))
@@ -600,7 +649,10 @@ func main() {
 				fmt.Println(ffmpeg_pass_2_error)
 			}
 
-			// Remove ffmpeg 2 - pass logfiles
+			/////////////////////////////////////
+			// Remove ffmpeg 2 - pass logfiles //
+			/////////////////////////////////////
+
 			if _, err := os.Stat(ffmpeg_2_pass_logfile_path + "-0.log"); err == nil {
 				os.Remove(ffmpeg_2_pass_logfile_path + "-0.log")
 			}
