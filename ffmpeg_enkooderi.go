@@ -17,8 +17,8 @@ type Video_data struct {
 	sample_rate int
 	number_of_channels int
 	video_codec string
-	vertical_resolution int
-	horizontal_resolution int
+	picture_width int
+	picture_height int
 	aspect_ratio string
 }
 
@@ -183,8 +183,8 @@ func get_video_and_audio_stream_information() (Video_data) {
 	input_video_info_struct.sample_rate,_ = strconv.Atoi(audio_stream_info_map["sample_rate"])
 	input_video_info_struct.number_of_channels,_ = strconv.Atoi(audio_stream_info_map["channels"])
 	input_video_info_struct.video_codec = video_stream_info_map["codec_name"]
-	input_video_info_struct.vertical_resolution,_ = strconv.Atoi(video_stream_info_map["width"])
-	input_video_info_struct.horizontal_resolution,_ = strconv.Atoi(video_stream_info_map["height"])
+	input_video_info_struct.picture_width,_ = strconv.Atoi(video_stream_info_map["width"])
+	input_video_info_struct.picture_height,_ = strconv.Atoi(video_stream_info_map["height"])
 	input_video_info_struct.aspect_ratio = video_stream_info_map["display_aspect_ratio"]
 
 	return(input_video_info_struct)
@@ -218,8 +218,9 @@ func main() {
 	// Define and parse commandline options //
 	//////////////////////////////////////////
 	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace")
-	var subtitle_int = flag.Int("s", -1, "Subtitle `number`")
-	var audio_stream_number_int = flag.Int("an", 0, "Audio stream `number`")
+	var subtitle_int = flag.Int("s", -1, "Subtitle `number, -s=1`")
+	var subtitle_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so=55 (move subtitle 55 pixels down), -so=-55 (move subtitle 55 pixels up)")
+	var audio_stream_number_int = flag.Int("an", 0, "Audio stream `number`, -an=1")
 	var grayscale_bool = flag.Bool("gr", false, "Grayscale")
 	var denoise_bool = flag.Bool("dn", false, "Denoise")
 	var force_stereo_bool = flag.Bool("st", false, "Force Audio To Stereo")
@@ -228,6 +229,7 @@ func main() {
 	var scan_mode_only_bool = flag.Bool("scan", false, "Only scan inputfile and print video and audio stream info.")
 	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables.")
 	var input_filenames []string
+	var crop_values_struct Crop_values
 
 	// Parse commandline options
 	flag.Parse()
@@ -272,7 +274,7 @@ func main() {
 		}
 	}
 
-	var crop_options []string
+	var subtitle_processing_options string
 	subtitle_options := ""
 	output_directory_name := "00-valmiit"
 	output_video_format := []string{"-f", "mp4"}
@@ -292,10 +294,10 @@ func main() {
 		fmt.Println("deinterlace_options:",deinterlace_options)
 		fmt.Println("ffmpeg_commandline_start:",ffmpeg_commandline_start)
 		fmt.Println("subtitle_number:",subtitle_number)
+		fmt.Println("subtitle_offset_int:",*subtitle_offset_int)
 		fmt.Println("*grayscale_bool:", *grayscale_bool)
 		fmt.Println("grayscale_options:",grayscale_options)
 		fmt.Println("subtitle_options:",subtitle_options)
-		fmt.Println("crop_options",crop_options)
 		fmt.Println("*autocrop_bool:", *autocrop_bool)
 		fmt.Println("*subtitle_int:", *subtitle_int)
 		fmt.Println("*no_deinterlace_bool:", *no_deinterlace_bool)
@@ -359,8 +361,8 @@ func main() {
 			fmt.Println("input_video_info_struct.sample_rate:", input_video_info_struct.sample_rate)
 			fmt.Println("input_video_info_struct.number_of_channels:", input_video_info_struct.number_of_channels)
 			fmt.Println("input_video_info_struct.video_codec:", input_video_info_struct.video_codec)
-			fmt.Println("input_video_info_struct.vertical_resolution:", input_video_info_struct.vertical_resolution)
-			fmt.Println("input_video_info_struct.horizontal_resolution:", input_video_info_struct.horizontal_resolution)
+			fmt.Println("input_video_info_struct.picture_width:", input_video_info_struct.picture_width)
+			fmt.Println("input_video_info_struct.picture_height:", input_video_info_struct.picture_height)
 			fmt.Println("input_video_info_struct.aspect_ratio:", input_video_info_struct.aspect_ratio)
 			fmt.Println("autocrop_bool:", *autocrop_bool)
 			fmt.Println()
@@ -420,13 +422,7 @@ func main() {
 			command_to_run_str_slice = nil
 			command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg","-t","1800","-i",file_name)
 
-			if subtitle_number == -1 {
-				command_to_run_str_slice = append(command_to_run_str_slice, "-sn")
-			}
-
-			command_to_run_str_slice = append(command_to_run_str_slice, "-f", "matroska", "-an", "-filter_complex", "cropdetect=24:16:0", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
-
-			var crop_values_struct Crop_values
+			command_to_run_str_slice = append(command_to_run_str_slice, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:16:0", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
 
 			crop_value_counter := 0
 			var crop_value_map = make(map[string]int)
@@ -576,10 +572,16 @@ func main() {
 				}
 
 				// Add video filter options to ffmpeg commanline
+				if *autocrop_bool == true {
+					subtitle_processing_options = "crop=" + strconv.Itoa(crop_values_struct.picture_width) + ":" + strconv.Itoa(crop_values_struct.picture_height) + ":in_w-" + strconv.Itoa(crop_values_struct.picture_width) + ":in_h-" + strconv.Itoa(crop_values_struct.picture_height)
+				} else {
+					subtitle_processing_options = "copy"
+				}
+
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number) +
-				"]copy[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
+				"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
 				"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=main_w-overlay_w-0:main_h-overlay_h+" +
-				strconv.Itoa(subtitle_number) + strings.Join(grayscale_options, "") + "[processed_combined_streams]", "-map", "[processed_combined_streams]")
+				strconv.Itoa(*subtitle_offset_int) + strings.Join(grayscale_options, "") + "[processed_combined_streams]", "-map", "[processed_combined_streams]")
 			}
 
 			///////////////////////////////////////////////////////////////////
@@ -589,7 +591,7 @@ func main() {
 			// If video horizontal resolution is over 700 pixel choose HD video compression settings
 			video_compression_options := video_compression_options_sd
 
-			if *force_hd_bool || input_video_info_struct.horizontal_resolution > 700 {
+			if *force_hd_bool || input_video_info_struct.picture_width > 700 {
 				video_compression_options = video_compression_options_hd
 			}
 
@@ -665,3 +667,9 @@ func main() {
 
 	}
 }
+
+// FIXME
+// Tee -ss ja -t optiot, jotka ohjataan sellaisenaan FFmpegille. Näillä voi testata asetuksia osaan tiedostosta.
+// Tee skannaus joka näyttää valitut tiedot lähdetiedostosta: reso, framerate, audioden ja subtitlejen lukumäärä, jne.
+
+
