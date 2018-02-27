@@ -217,14 +217,14 @@ func main() {
 	//////////////////////////////////////////
 	// Define and parse commandline options //
 	//////////////////////////////////////////
-	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace")
-	var subtitle_int = flag.Int("s", -1, "Subtitle `number, -s=1`")
+	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.")
+	var subtitle_int = flag.Int("s", -1, "Subtitle `number, -s=1` (Use subtitle number 1 in the source file)")
 	var subtitle_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so=55 (move subtitle 55 pixels down), -so=-55 (move subtitle 55 pixels up)")
-	var audio_stream_number_int = flag.Int("an", 0, "Audio stream `number`, -an=1")
-	var grayscale_bool = flag.Bool("gr", false, "Grayscale")
-	var denoise_bool = flag.Bool("dn", false, "Denoise")
+	var audio_stream_number_int = flag.Int("an", 0, "Audio stream number, -an=1 (Use audio stream number 1 in the source file)")
+	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale")
+	var denoise_bool = flag.Bool("dn", false, "Denoise. Use HQDN3D - filter to remove noise in the picture. Equal to Hanbrake 'medium' noise reduction settings.")
 	var force_stereo_bool = flag.Bool("st", false, "Force Audio To Stereo")
-	var autocrop_bool = flag.Bool("ac", false, "Autocrop")
+	var autocrop_bool = flag.Bool("ac", false, "Autocrop. Find crop values automatically by scanning the star of the file (1800 seconds)")
 	var force_hd_bool = flag.Bool("hd", false, "Force Video To HD, Profile = High, Level = 4.1, Bitrate = 8000k")
 	var scan_mode_only_bool = flag.Bool("scan", false, "Only scan inputfile and print video and audio stream info.")
 	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables.")
