@@ -220,14 +220,16 @@ func main() {
 	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.")
 	var subtitle_int = flag.Int("s", -1, "Subtitle `number, -s=1` (Use subtitle number 1 in the source file)")
 	var subtitle_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so=55 (move subtitle 55 pixels down), -so=-55 (move subtitle 55 pixels up)")
+	var subtitle_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead for cropping subtitle. This option results in smaller subtitle font.")
 	var audio_stream_number_int = flag.Int("an", 0, "Audio stream number, -an=1 (Use audio stream number 1 in the source file)")
 	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale")
 	var denoise_bool = flag.Bool("dn", false, "Denoise. Use HQDN3D - filter to remove noise in the picture. Equal to Hanbrake 'medium' noise reduction settings.")
-	var force_stereo_bool = flag.Bool("st", false, "Force Audio To Stereo")
 	var autocrop_bool = flag.Bool("ac", false, "Autocrop. Find crop values automatically by scanning the star of the file (1800 seconds)")
 	var force_hd_bool = flag.Bool("hd", false, "Force Video To HD, Profile = High, Level = 4.1, Bitrate = 8000k")
 	var scan_mode_only_bool = flag.Bool("scan", false, "Only scan inputfile and print video and audio stream info.")
 	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables.")
+	var search_start_str = flag.String("ss", "", "Seek to position before starting processing. This option is given to FFmpeg as it is. Example -ss 01:02:10 Seek to 1 hour two min and 10 seconds.")
+	var processing_time_str = flag.String("t", "", "Duration to process. This option is given to FFmpeg as it is. Example -t 01:02 process 1 min 2 secs of the file.")
 	var input_filenames []string
 	var crop_values_struct Crop_values
 
@@ -295,6 +297,7 @@ func main() {
 		fmt.Println("ffmpeg_commandline_start:",ffmpeg_commandline_start)
 		fmt.Println("subtitle_number:",subtitle_number)
 		fmt.Println("subtitle_offset_int:",*subtitle_offset_int)
+		fmt.Println("*subtitle_downscale:",*subtitle_downscale)
 		fmt.Println("*grayscale_bool:", *grayscale_bool)
 		fmt.Println("grayscale_options:",grayscale_options)
 		fmt.Println("subtitle_options:",subtitle_options)
@@ -302,10 +305,11 @@ func main() {
 		fmt.Println("*subtitle_int:", *subtitle_int)
 		fmt.Println("*no_deinterlace_bool:", *no_deinterlace_bool)
 		fmt.Println("*denoise_bool:", *denoise_bool)
-		fmt.Println("*force_stereo_bool:", *force_stereo_bool)
 		fmt.Println("*force_hd_bool:", *force_hd_bool)
 		fmt.Println("*audio_stream_number_int:", *audio_stream_number_int)
 		fmt.Println("*scan_mode_only_bool", *scan_mode_only_bool)
+		fmt.Println("*search_start_str", *search_start_str)
+		fmt.Println("*processing_time_str", *processing_time_str)
 		fmt.Println("*debug_mode_on", *debug_mode_on)
 		fmt.Println()
 		fmt.Println("input_filenames:", input_filenames)
@@ -420,9 +424,22 @@ func main() {
 		if *autocrop_bool == true {
 
 			command_to_run_str_slice = nil
-			command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg","-t","1800","-i",file_name)
+			command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg")
 
-			command_to_run_str_slice = append(command_to_run_str_slice, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:16:0", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
+			if *search_start_str == "" {
+				command_to_run_str_slice = append(command_to_run_str_slice, "-t","1800")
+			}
+
+			if *search_start_str != "" {
+				command_to_run_str_slice = append(command_to_run_str_slice, "-ss", *search_start_str)
+			}
+
+			command_to_run_str_slice = append(command_to_run_str_slice, "-i",file_name)
+
+			if *processing_time_str != "" {
+				command_to_run_str_slice = append(command_to_run_str_slice, "-t", *processing_time_str)
+			}
+			command_to_run_str_slice = append(command_to_run_str_slice, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:16:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
 
 			crop_value_counter := 0
 			var crop_value_map = make(map[string]int)
@@ -500,11 +517,21 @@ func main() {
 		/////////////////////////
 		// Encode video - mode //
 		/////////////////////////
+
 		if *scan_mode_only_bool == false {
 
 			// Create the start of ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_commandline_start...)
+
+			if *search_start_str != "" {
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-ss", *search_start_str)
+			}
+
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name)
+
+			if *processing_time_str != "" {
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-t", *processing_time_str)
+			}
 
 			ffmpeg_filter_options := ""
 
@@ -572,16 +599,26 @@ func main() {
 				}
 
 				// Add video filter options to ffmpeg commanline
-				if *autocrop_bool == true {
-					subtitle_processing_options = "crop=" + strconv.Itoa(crop_values_struct.picture_width) + ":" + strconv.Itoa(crop_values_struct.picture_height) + ":in_w-" + strconv.Itoa(crop_values_struct.picture_width) + ":in_h-" + strconv.Itoa(crop_values_struct.picture_height)
-				} else {
-					subtitle_processing_options = "copy"
+				subtitle_processing_options = "copy"
+
+				// Crop subtitle and video to same dimensions
+				if *autocrop_bool == true && *subtitle_downscale == false {
+
+					subtitle_processing_options = "crop=" + final_crop_string
+				}
+
+				// When cropping video widthwise don't crop subtitle but instead shrink its width to fit on top of the cropped video.
+				// This results in smaller subtitle font.
+				if *autocrop_bool == true && *subtitle_downscale == true {
+					subtitle_processing_options = "scale=" + strconv.Itoa(crop_values_struct.picture_width) + ":" + strconv.Itoa(crop_values_struct.picture_height)
 				}
 
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number) +
 				"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
-				"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=main_w-overlay_w-0:main_h-overlay_h+" +
+				"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=0:main_h-overlay_h+" +
 				strconv.Itoa(*subtitle_offset_int) + strings.Join(grayscale_options, "") + "[processed_combined_streams]", "-map", "[processed_combined_streams]")
+
+				// "[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=main_w-overlay_w-0:main_h-overlay_h+" +
 			}
 
 			///////////////////////////////////////////////////////////////////
@@ -591,7 +628,7 @@ func main() {
 			// If video horizontal resolution is over 700 pixel choose HD video compression settings
 			video_compression_options := video_compression_options_sd
 
-			if *force_hd_bool || input_video_info_struct.picture_width > 700 {
+			if *force_hd_bool || input_video_info_struct.picture_height > 700 {
 				video_compression_options = video_compression_options_hd
 			}
 
@@ -669,7 +706,5 @@ func main() {
 }
 
 // FIXME
-// Tee -ss ja -t optiot, jotka ohjataan sellaisenaan FFmpegille. Näillä voi testata asetuksia osaan tiedostosta.
 // Tee skannaus joka näyttää valitut tiedot lähdetiedostosta: reso, framerate, audioden ja subtitlejen lukumäärä, jne.
-
 
