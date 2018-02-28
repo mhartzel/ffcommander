@@ -430,11 +430,11 @@ func main() {
 				command_to_run_str_slice = append(command_to_run_str_slice, "-t","1800")
 			}
 
+			command_to_run_str_slice = append(command_to_run_str_slice, "-i",file_name)
+
 			if *search_start_str != "" {
 				command_to_run_str_slice = append(command_to_run_str_slice, "-ss", *search_start_str)
 			}
-
-			command_to_run_str_slice = append(command_to_run_str_slice, "-i",file_name)
 
 			if *processing_time_str != "" {
 				command_to_run_str_slice = append(command_to_run_str_slice, "-t", *processing_time_str)
@@ -499,7 +499,7 @@ func main() {
 					
 				}
 				fmt.Println()
-				fmt.Println("Biggest crop value is", final_crop_string)
+				fmt.Println("Most frequent crop value is", final_crop_string)
 				fmt.Println("crop_values_struct.picture_width:", crop_values_struct.picture_width)
 				fmt.Println("crop_values_struct.picture_height:", crop_values_struct.picture_height)
 				fmt.Println("crop_values_struct.width_offset:", crop_values_struct.width_offset)
@@ -523,11 +523,11 @@ func main() {
 			// Create the start of ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_commandline_start...)
 
+			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name)
+
 			if *search_start_str != "" {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-ss", *search_start_str)
 			}
-
-			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name)
 
 			if *processing_time_str != "" {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-t", *processing_time_str)
