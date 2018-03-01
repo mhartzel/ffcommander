@@ -520,6 +520,9 @@ func main() {
 
 		if *scan_mode_only_bool == false {
 
+			ffmpeg_pass_1_commandline = nil
+			ffmpeg_pass_2_commandline = nil
+
 			// Create the start of ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_commandline_start...)
 
@@ -707,4 +710,5 @@ func main() {
 
 // FIXME
 // Tee skannaus joka näyttää valitut tiedot lähdetiedostosta: reso, framerate, audioden ja subtitlejen lukumäärä, jne.
-
+// Laita ohjelma käynnistämään prosesoinnit omiin threadehinsa ja defaulttina kahden tiedoston samanaikainen käsittely. Lisäksi optio jolla voi valita kuinka monta tiedostoa käsitellään samaan aikaan.
+// Tee tsekkaus joka huomaa jos käyttäjä antaa audio- tai subtitlestreamin numeron, joka on isompi kuin lähdestreamissä olevien streamin numerot ja kertoo käyttäjälle käytettävissä olevat numerot.
