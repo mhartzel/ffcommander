@@ -37,8 +37,22 @@ type Crop_values struct {
 var complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
-var wrapper_info_map = make(map[string]string)
+var subtitle_stream_info_map = make(map[string]string)
 
+type audio_stream_info_struct struct {
+	number_of_channels int
+	audio_language string
+	for_visually_impared bool
+}
+
+type subtitle_stream_info_struct struct {
+	subtitle_language string
+	hearing_impaired bool
+}
+
+var video_stream_info_list []string
+var audio_stream_info_struct_list []*audio_stream_info_struct
+var subtitle_stream_info_struct_list []*subtitle_stream_info_struct
 
 func run_external_command(command_to_run_str_slice []string) ([]string,  error) {
 
@@ -64,11 +78,10 @@ func run_external_command(command_to_run_str_slice []string) ([]string,  error) 
 func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []string) {
 
 	// Parse ffprobe output, find wrapper, video- and audiostream information in it,
-	// and store this info in global maps: complete_stream_info_map and wrapper_info_map.
+	// and store this info in global maps: complete_stream_info_map and 
 
 	var stream_info_str_slice []string
 	var text_line_str_slice []string
-	var wrapper_info_str_slice []string
 
 	var stream_number_int int
 	var stream_data_str string
@@ -113,13 +126,6 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 			stream_info_str_slice = append(stream_info_str_slice, stream_data_str)
 			complete_stream_info_map[stream_number_int] = stream_info_str_slice
 		}
-		// Get media file wrapper information and store it in a slice.
-		if strings.HasPrefix(text_line, "format") {
-			wrapper_info_str_slice = strings.Split(strings.Replace(text_line, "format.", "", 1), "=")
-			wrapper_key := strings.TrimSpace(wrapper_info_str_slice[0])
-			wrapper_value := strings.TrimSpace(strings.Replace(wrapper_info_str_slice[1],"\"", "", -1)) // Remove whitespace and " charcters from the data
-			wrapper_info_map[wrapper_key] = wrapper_value
-		}
 	}
 }
 
@@ -129,18 +135,19 @@ func get_video_and_audio_stream_information() (Video_data) {
 	// Discard info about streams that are not audio or video
 	var stream_type_is_video bool = false
 	var stream_type_is_audio bool = false
+	var stream_type_is_subtitle = false
 
 	for _, stream_info_str_slice := range complete_stream_info_map {
 
 		stream_type_is_video = false
 		stream_type_is_audio = false
+		stream_type_is_subtitle = false
 
 		for _, text_line := range stream_info_str_slice {
 
 			if strings.Contains(text_line, "codec_type=video") {
 				stream_type_is_video = true
 			}
-
 		}
 
 		for _, text_line := range stream_info_str_slice {
@@ -148,7 +155,13 @@ func get_video_and_audio_stream_information() (Video_data) {
 			if strings.Contains(text_line, "codec_type=audio") {
 				stream_type_is_audio = true
 			}
+		}
 
+		for _, text_line := range stream_info_str_slice {
+
+			if strings.Contains(text_line, "codec_type=subtitle") {
+				stream_type_is_subtitle = true
+			}
 		}
 
 		if stream_type_is_video == true {
@@ -160,21 +173,75 @@ func get_video_and_audio_stream_information() (Video_data) {
 				video_value := strings.TrimSpace(temp_slice[1])
 				video_stream_info_map[video_key] = video_value
 				}
-
 		}
 
 		if stream_type_is_audio == true {
+
 			for _, text_line := range stream_info_str_slice {
 
 				temp_slice := strings.Split(text_line, "=")
 				audio_key := strings.TrimSpace(temp_slice[0])
 				audio_value := strings.TrimSpace(temp_slice[1])
 				audio_stream_info_map[audio_key] = audio_value
-				}
+			}
 
+			var audio_data_struct audio_stream_info_struct
+			audio_data_struct.number_of_channels,_ = strconv.Atoi(audio_stream_info_map["channels"])
+			audio_data_struct.audio_language = audio_stream_info_map["tags.language"]
+
+			if audio_stream_info_map["disposition.visual_impaired"] == "1" {
+				audio_data_struct.for_visually_impared = true
+			} else {
+				audio_data_struct.for_visually_impared = false
+			}
+
+			audio_stream_info_struct_list = append(audio_stream_info_struct_list, &audio_data_struct)
 		}
 
+		if stream_type_is_subtitle == true {
+
+			for _, text_line := range stream_info_str_slice {
+
+				temp_slice := strings.Split(text_line, "=")
+				subtitle_key := strings.TrimSpace(temp_slice[0])
+				subtitle_value := strings.TrimSpace(temp_slice[1])
+				subtitle_stream_info_map[subtitle_key] = subtitle_value
+
+			}
+
+			var subtitle_data_struct subtitle_stream_info_struct
+			subtitle_data_struct.subtitle_language = subtitle_stream_info_map["tags.language"]
+
+			if subtitle_stream_info_map["disposition.hearing_impaired"] == "1" {
+				subtitle_data_struct.hearing_impaired = true
+			} else {
+				subtitle_data_struct.hearing_impaired = false
+			}
+
+			subtitle_stream_info_struct_list = append(subtitle_stream_info_struct_list, &subtitle_data_struct)
+		}
 	}
+	// FIXME
+	fmt.Println()
+
+	for number, item := range audio_stream_info_struct_list {
+		audio_data_struct := *item
+		fmt.Println("Audio stream number:", number)
+		fmt.Println("Audio language:", audio_data_struct.audio_language)
+		fmt.Println("Number of channels:", audio_data_struct.number_of_channels)
+		fmt.Println("For visually impared:", audio_data_struct.for_visually_impared)
+		fmt.Println()
+	}
+
+	for number, item := range subtitle_stream_info_struct_list {
+		subtitle_data_struct := *item
+		fmt.Println("Subtitle stream number:", number)
+		fmt.Println("Subtitle language:", subtitle_data_struct.subtitle_language)
+		fmt.Println("For visually impared:", subtitle_data_struct.hearing_impaired)
+		fmt.Println()
+	}
+
+
 
 	// Find specific video and audio info we need and store in a struct that we return to the main program.
 	var input_video_info_struct Video_data
@@ -390,13 +457,6 @@ func main() {
 				// fmt.Println(item, " = ", complete_stream_info_map[item], "\n")
 			}
 			fmt.Println("\n")
-			fmt.Println("Wrapper info:")
-			fmt.Println("-------------")
-
-			for item := range wrapper_info_map {
-				fmt.Println(item, "=", wrapper_info_map[item])
-			}
-			fmt.Println()
 
 			fmt.Println("video_stream_info_map:")
 			fmt.Println("-----------------------")
@@ -712,3 +772,27 @@ func main() {
 // Tee skannaus joka näyttää valitut tiedot lähdetiedostosta: reso, framerate, audioden ja subtitlejen lukumäärä, jne.
 // Laita ohjelma käynnistämään prosesoinnit omiin threadehinsa ja defaulttina kahden tiedoston samanaikainen käsittely. Lisäksi optio jolla voi valita kuinka monta tiedostoa käsitellään samaan aikaan.
 // Tee tsekkaus joka huomaa jos käyttäjä antaa audio- tai subtitlestreamin numeron, joka on isompi kuin lähdestreamissä olevien streamin numerot ja kertoo käyttäjälle käytettävissä olevat numerot.
+
+// Suunnitelma
+// Ylimmällä tasolla on map, jossa avaimena tiedoston nimi ja arvona lista. Avaimet kannattaa appendata omaan listaansa, jotta tiedostoja voidaan hakea aakkosjärjestyksessä ?
+// Videostream - struct ja audio- ja subtitlelistat ja subtitle_language on pointereina listassa.
+// Audio ja subtitle stream-structit on kiinni audio- ja subtitlelistoissa, joissa pointerit stream-structeihin, alkion paikka listassa kertoo kuinka mones streami on kyseessä.
+// Alimmalla tasolla on video, audio stream-structeja ja subtitle_language_str. Structeissa jokaisessa on kyseisen streamin tiedot.
+//
+// Mieti vielä mitä infoja oikeesti käytetään, ja kerää ainoastaan ne: 
+
+	// Lista 1 (video_stream_info_list): [tiedoston nimi, videon leveys, videon korkeus, audiostreamien lukumäärä, subtitlejen lukumäärä, pointteri audiostreamien listaan, pointteri subtitlejen listaan]
+
+	// Audiostreamien lista (audio_stream_info_list):
+	// [[äänikanavien lukumäärä, äänen kieli, visually_impaired = true / false],  [äänikanavien lukumäärä, äänen kieli, visually_impaired = true / false],  [äänikanavien lukumäärä, äänen kieli, visually_impaired = true / false]]
+
+	// Subtitlejen lista (subtitle_tream_info_list):
+	// [[subtitle kohtainen tieto: language],  [subtitle kohtainen tieto: language],  [subtitle kohtainen tieto: language]]
+	
+//Muita tietoja tarvitaan scan moodia varten
+// skippaa koko scan moodi ja näytä siinä vain raaka tuloste complete_stream_info_map:istä, sieltä voi ite kaivella tiedot.
+//
+
+
+
+
