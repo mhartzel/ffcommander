@@ -129,7 +129,7 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 	}
 }
 
-func get_video_and_audio_stream_information() (Video_data) {
+func get_video_and_audio_stream_information(file_name string) (Video_data) {
 
 	// Find video and audio stream information and store it as key value pairs in video_stream_info_map and audio_stream_info_map.
 	// Discard info about streams that are not audio or video
@@ -221,27 +221,44 @@ func get_video_and_audio_stream_information() (Video_data) {
 			subtitle_stream_info_struct_list = append(subtitle_stream_info_struct_list, &subtitle_data_struct)
 		}
 	}
+
+	video_stream_info_list = append(video_stream_info_list, file_name, strconv.Atoi(video_stream_info_map["width"]), strconv.Atoi(video_stream_info_map["height"]),&audio_stream_info_struct_list, &subtitle_stream_info_struct_list)
+
 	// FIXME
 	fmt.Println()
+	fmt.Println("Tiedoston nimi:", video_stream_info_list[0])
+	fmt.Println("Videon leveys:", video_stream_info_list[1])
+	fmt.Println("Videon korkeus:", video_stream_info_list[2])
+	audio_stream_info_struct_list := *video_stream_info_list[3]
+	fmt.Println("Audiostreamin lukumäärä:", len(audio_stream_info_struct_list))
 
-	for number, item := range audio_stream_info_struct_list {
-		audio_data_struct := *item
-		fmt.Println("Audio stream number:", number)
+	for stream_number, audio_data_struct := range audio_stream_info_struct_list {
+		fmt.Println("Audio stream number:", stream_number)
 		fmt.Println("Audio language:", audio_data_struct.audio_language)
-		fmt.Println("Number of channels:", audio_data_struct.number_of_channels)
 		fmt.Println("For visually impared:", audio_data_struct.for_visually_impared)
-		fmt.Println()
+		fmt.Println("Number of channels", audio_data_struct.number_of_channels)
 	}
 
-	for number, item := range subtitle_stream_info_struct_list {
-		subtitle_data_struct := *item
-		fmt.Println("Subtitle stream number:", number)
-		fmt.Println("Subtitle language:", subtitle_data_struct.subtitle_language)
-		fmt.Println("For visually impared:", subtitle_data_struct.hearing_impaired)
-		fmt.Println()
-	}
+	fmt.Println()
 
+	
 
+	// for number, item := range audio_stream_info_struct_list {
+	// 	audio_data_struct := *item
+	// 	fmt.Println("Audio stream number:", number)
+	// 	fmt.Println("Audio language:", audio_data_struct.audio_language)
+	// 	fmt.Println("For visually impared:", audio_data_struct.for_visually_impared)
+	// 	fmt.Println("Number of channels:", audio_data_struct.number_of_channels)
+	// 	fmt.Println()
+	// }
+
+	// for number, item := range subtitle_stream_info_struct_list {
+	// 	subtitle_data_struct := *item
+	// 	fmt.Println("Subtitle stream number:", number)
+	// 	fmt.Println("Subtitle language:", subtitle_data_struct.subtitle_language)
+	// 	fmt.Println("For hearing impared:", subtitle_data_struct.hearing_impaired)
+	// 	fmt.Println()
+	// }
 
 	// Find specific video and audio info we need and store in a struct that we return to the main program.
 	var input_video_info_struct Video_data
@@ -422,7 +439,7 @@ func main() {
 		sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice)
 
 		// Get specific video and audio stream information
-		input_video_info_struct := get_video_and_audio_stream_information()
+		input_video_info_struct := get_video_and_audio_stream_information(file_name)
 
 		/////////////////////////////////////////
 		// Print variable values in debug mode //
