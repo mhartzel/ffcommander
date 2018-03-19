@@ -39,20 +39,18 @@ var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
 var subtitle_stream_info_map = make(map[string]string)
 
-type audio_stream_info_struct struct {
-	number_of_channels int
-	audio_language string
-	for_visually_impared bool
-}
+// type audio_stream_info_struct struct {
+// 	number_of_channels int
+// 	audio_language string
+// 	for_visually_impared bool
+// }
+// 
+// type subtitle_stream_info_struct struct {
+// 	subtitle_language string
+// 	hearing_impaired bool
+// }
 
-type subtitle_stream_info_struct struct {
-	subtitle_language string
-	hearing_impaired bool
-}
-
-var video_stream_info_list []string
-var audio_stream_info_struct_list []*audio_stream_info_struct
-var subtitle_stream_info_struct_list []*subtitle_stream_info_struct
+var stream_info_slice [][][]string
 
 func run_external_command(command_to_run_str_slice []string) ([]string,  error) {
 
@@ -133,6 +131,14 @@ func get_video_and_audio_stream_information(file_name string) (Video_data) {
 
 	// Find video and audio stream information and store it as key value pairs in video_stream_info_map and audio_stream_info_map.
 	// Discard info about streams that are not audio or video
+	var single_video_stream_info_slice []string
+	var all_video_streams_info_slice [][]string
+	var single_audio_stream_info_slice []string
+	var all_audio_streams_info_slice [][]string
+	var single_subtitle_stream_info_slice []string
+	var all_subtitle_streams_info_slice [][]string
+	var Complete_file_info_slice [][][][]string
+
 	var stream_type_is_video bool = false
 	var stream_type_is_audio bool = false
 	var stream_type_is_subtitle = false
@@ -173,6 +179,8 @@ func get_video_and_audio_stream_information(file_name string) (Video_data) {
 				video_value := strings.TrimSpace(temp_slice[1])
 				video_stream_info_map[video_key] = video_value
 				}
+			single_video_stream_info_slice = append(single_video_stream_info_slice, file_name, video_stream_info_map["width"], video_stream_info_map["height"])
+			all_video_streams_info_slice = append(all_video_streams_info_slice, single_video_stream_info_slice)
 		}
 
 		if stream_type_is_audio == true {
@@ -185,17 +193,11 @@ func get_video_and_audio_stream_information(file_name string) (Video_data) {
 				audio_stream_info_map[audio_key] = audio_value
 			}
 
-			var audio_data_struct audio_stream_info_struct
-			audio_data_struct.number_of_channels,_ = strconv.Atoi(audio_stream_info_map["channels"])
-			audio_data_struct.audio_language = audio_stream_info_map["tags.language"]
-
-			if audio_stream_info_map["disposition.visual_impaired"] == "1" {
-				audio_data_struct.for_visually_impared = true
-			} else {
-				audio_data_struct.for_visually_impared = false
-			}
-
-			audio_stream_info_struct_list = append(audio_stream_info_struct_list, &audio_data_struct)
+			single_audio_stream_info_slice = nil
+			single_audio_stream_info_slice = append(single_audio_stream_info_slice, audio_stream_info_map["tags.language"])
+			single_audio_stream_info_slice = append(single_audio_stream_info_slice, audio_stream_info_map["disposition.visual_impaired"])
+			single_audio_stream_info_slice = append(single_audio_stream_info_slice, audio_stream_info_map["channels"])
+			all_audio_streams_info_slice = append(all_audio_streams_info_slice, single_audio_stream_info_slice)
 		}
 
 		if stream_type_is_subtitle == true {
@@ -209,35 +211,53 @@ func get_video_and_audio_stream_information(file_name string) (Video_data) {
 
 			}
 
-			var subtitle_data_struct subtitle_stream_info_struct
-			subtitle_data_struct.subtitle_language = subtitle_stream_info_map["tags.language"]
-
-			if subtitle_stream_info_map["disposition.hearing_impaired"] == "1" {
-				subtitle_data_struct.hearing_impaired = true
-			} else {
-				subtitle_data_struct.hearing_impaired = false
-			}
-
-			subtitle_stream_info_struct_list = append(subtitle_stream_info_struct_list, &subtitle_data_struct)
+			single_subtitle_stream_info_slice = nil
+			single_subtitle_stream_info_slice = append(single_subtitle_stream_info_slice, subtitle_stream_info_map["tags.language"])
+			single_subtitle_stream_info_slice = append(single_subtitle_stream_info_slice, subtitle_stream_info_map["disposition.hearing_impaired"])
+			single_subtitle_stream_info_slice = append(single_subtitle_stream_info_slice, subtitle_stream_info_map["codec_name"])
+			all_subtitle_streams_info_slice = append(all_subtitle_streams_info_slice, single_subtitle_stream_info_slice)
 		}
 	}
 
-	video_stream_info_list = append(video_stream_info_list, file_name, strconv.Atoi(video_stream_info_map["width"]), strconv.Atoi(video_stream_info_map["height"]),&audio_stream_info_struct_list, &subtitle_stream_info_struct_list)
+	stream_info_slice = append(stream_info_slice, all_video_streams_info_slice, all_audio_streams_info_slice, all_subtitle_streams_info_slice)
+	Complete_file_info_slice = append(Complete_file_info_slice, stream_info_slice)
 
 	// FIXME
-	fmt.Println()
-	fmt.Println("Tiedoston nimi:", video_stream_info_list[0])
-	fmt.Println("Videon leveys:", video_stream_info_list[1])
-	fmt.Println("Videon korkeus:", video_stream_info_list[2])
-	audio_stream_info_struct_list := *video_stream_info_list[3]
-	fmt.Println("Audiostreamin lukumäärä:", len(audio_stream_info_struct_list))
+	for _,file_info_slice := range Complete_file_info_slice {
+		video_slice_temp := file_info_slice[0]
+		video_slice := video_slice_temp[0]
+		audio_slice := file_info_slice[1]
+		subtitle_slice := file_info_slice[2]
 
-	for stream_number, audio_data_struct := range audio_stream_info_struct_list {
-		fmt.Println("Audio stream number:", stream_number)
-		fmt.Println("Audio language:", audio_data_struct.audio_language)
-		fmt.Println("For visually impared:", audio_data_struct.for_visually_impared)
-		fmt.Println("Number of channels", audio_data_struct.number_of_channels)
+		fmt.Println()
+		fmt.Println("Tiedoston nimi:", video_slice[0])
+		fmt.Println("Videon leveys:",video_slice[1] )
+		fmt.Println("Videon korkeus:",video_slice[2] )
+
+		for number, audio_info := range audio_slice {
+			fmt.Println()
+			fmt.Println("Audio stream number:", number)
+			fmt.Println("Audio language:", audio_info[0])
+			fmt.Println("For visually impared:", audio_info[1])
+			fmt.Println("Number of channels:", audio_info[2])
+		}
+
+		for number, subtitle_info := range subtitle_slice {
+			fmt.Println()
+			fmt.Println("Subtitle stream number:", number)
+			fmt.Println("Subtitle language:", subtitle_info[0])
+			fmt.Println("For hearing impared:", subtitle_info[1])
+			fmt.Println("Codec name:", subtitle_info[2])
+		}
+
 	}
+
+	// for stream_number, audio_data_slice := range audio_stream_info {
+	// 	fmt.Println("Audio stream number:", stream_number)
+	// 	fmt.Println("Audio language:", audio_data_slice[0])
+	// 	fmt.Println("For visually impared:", audio_data_slice[1])
+	// 	fmt.Println("Number of channels", audio_data_slice[2])
+	// }
 
 	fmt.Println()
 
