@@ -51,6 +51,7 @@ var subtitle_stream_info_map = make(map[string]string)
 // }
 
 var stream_info_slice [][][]string
+var Complete_file_info_slice [][][][]string
 
 func run_external_command(command_to_run_str_slice []string) ([]string,  error) {
 
@@ -137,7 +138,6 @@ func get_video_and_audio_stream_information(file_name string) (Video_data) {
 	var all_audio_streams_info_slice [][]string
 	var single_subtitle_stream_info_slice []string
 	var all_subtitle_streams_info_slice [][]string
-	var Complete_file_info_slice [][][][]string
 
 	var stream_type_is_video bool = false
 	var stream_type_is_audio bool = false
@@ -222,64 +222,6 @@ func get_video_and_audio_stream_information(file_name string) (Video_data) {
 	stream_info_slice = append(stream_info_slice, all_video_streams_info_slice, all_audio_streams_info_slice, all_subtitle_streams_info_slice)
 	Complete_file_info_slice = append(Complete_file_info_slice, stream_info_slice)
 
-	// FIXME
-	for _,file_info_slice := range Complete_file_info_slice {
-		video_slice_temp := file_info_slice[0]
-		video_slice := video_slice_temp[0]
-		audio_slice := file_info_slice[1]
-		subtitle_slice := file_info_slice[2]
-
-		fmt.Println()
-		fmt.Println("Tiedoston nimi:", video_slice[0])
-		fmt.Println("Videon leveys:",video_slice[1] )
-		fmt.Println("Videon korkeus:",video_slice[2] )
-
-		for number, audio_info := range audio_slice {
-			fmt.Println()
-			fmt.Println("Audio stream number:", number)
-			fmt.Println("Audio language:", audio_info[0])
-			fmt.Println("For visually impared:", audio_info[1])
-			fmt.Println("Number of channels:", audio_info[2])
-		}
-
-		for number, subtitle_info := range subtitle_slice {
-			fmt.Println()
-			fmt.Println("Subtitle stream number:", number)
-			fmt.Println("Subtitle language:", subtitle_info[0])
-			fmt.Println("For hearing impared:", subtitle_info[1])
-			fmt.Println("Codec name:", subtitle_info[2])
-		}
-
-	}
-
-	// for stream_number, audio_data_slice := range audio_stream_info {
-	// 	fmt.Println("Audio stream number:", stream_number)
-	// 	fmt.Println("Audio language:", audio_data_slice[0])
-	// 	fmt.Println("For visually impared:", audio_data_slice[1])
-	// 	fmt.Println("Number of channels", audio_data_slice[2])
-	// }
-
-	fmt.Println()
-
-	
-
-	// for number, item := range audio_stream_info_struct_list {
-	// 	audio_data_struct := *item
-	// 	fmt.Println("Audio stream number:", number)
-	// 	fmt.Println("Audio language:", audio_data_struct.audio_language)
-	// 	fmt.Println("For visually impared:", audio_data_struct.for_visually_impared)
-	// 	fmt.Println("Number of channels:", audio_data_struct.number_of_channels)
-	// 	fmt.Println()
-	// }
-
-	// for number, item := range subtitle_stream_info_struct_list {
-	// 	subtitle_data_struct := *item
-	// 	fmt.Println("Subtitle stream number:", number)
-	// 	fmt.Println("Subtitle language:", subtitle_data_struct.subtitle_language)
-	// 	fmt.Println("For hearing impared:", subtitle_data_struct.hearing_impaired)
-	// 	fmt.Println()
-	// }
-
 	// Find specific video and audio info we need and store in a struct that we return to the main program.
 	var input_video_info_struct Video_data
 
@@ -296,9 +238,6 @@ func get_video_and_audio_stream_information(file_name string) (Video_data) {
 
 
 func main() {
-
-	// FIXME
-	// wrapper_info_mapin tieto kerätään mutta sitä ei käytetä mitenkään.
 
 	/////////////////////////////////////////////////////
 	// Test if ffmpeg and ffprobe can be found in path //
@@ -481,36 +420,36 @@ func main() {
 		//////////////////////
 		if *scan_mode_only_bool == true {
 
-			fmt.Println(file_name, "complete_stream_info_map:", "\n")
-			// for item, stream_info_str_slice := range complete_stream_info_map {
-			for key, stream_info_str_slice := range complete_stream_info_map {
-				fmt.Println("\n")
-				fmt.Println("key:", key)
-				fmt.Println("-----------------------------------")
-				// fmt.Println("stream_info_str_slice:", stream_info_str_slice)
-				for _,value := range stream_info_str_slice {
-					fmt.Println(value)
+			for _,file_info_slice := range Complete_file_info_slice {
+				video_slice_temp := file_info_slice[0]
+				video_slice := video_slice_temp[0]
+				audio_slice := file_info_slice[1]
+				subtitle_slice := file_info_slice[2]
+
+				fmt.Println()
+				fmt.Println("Tiedoston nimi:", video_slice[0])
+				fmt.Println("Videon leveys:",video_slice[1] )
+				fmt.Println("Videon korkeus:",video_slice[2] )
+
+				for number, audio_info := range audio_slice {
+					fmt.Println()
+					fmt.Println("Audio stream number:", number)
+					fmt.Println("Audio language:", audio_info[0])
+					fmt.Println("For visually impared:", audio_info[1])
+					fmt.Println("Number of channels:", audio_info[2])
 				}
-				// fmt.Println(item, " = ", complete_stream_info_map[item], "\n")
-			}
-			fmt.Println("\n")
 
-			fmt.Println("video_stream_info_map:")
-			fmt.Println("-----------------------")
+				for number, subtitle_info := range subtitle_slice {
+					fmt.Println()
+					fmt.Println("Subtitle stream number:", number)
+					fmt.Println("Subtitle language:", subtitle_info[0])
+					fmt.Println("For hearing impared:", subtitle_info[1])
+					fmt.Println("Codec name:", subtitle_info[2])
+				}
 
-			for item := range video_stream_info_map {
-				fmt.Println(item, "=", video_stream_info_map[item])
 			}
+
 			fmt.Println()
-
-			fmt.Println("audio_stream_info_map:")
-			fmt.Println("-----------------------")
-
-			for item := range audio_stream_info_map {
-				fmt.Println(item, "=", audio_stream_info_map[item])
-			}
-			fmt.Println()
-
 			os.Exit(0)
 		}
 
