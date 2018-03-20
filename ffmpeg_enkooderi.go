@@ -636,13 +636,7 @@ func main() {
 				// Add video filter options to ffmpeg commanline
 				subtitle_processing_options = "copy"
 
-				// Crop subtitle and video to same dimensions
-				if *autocrop_bool == true && *subtitle_downscale == false {
-
-					subtitle_processing_options = "crop=" + final_crop_string
-				}
-
-				// When cropping video widthwise don't crop subtitle but instead shrink its width to fit on top of the cropped video.
+				// When cropping video widthwise shrink it to fit on top of the cropped video.
 				// This results in smaller subtitle font.
 				if *autocrop_bool == true && *subtitle_downscale == true {
 					subtitle_processing_options = "scale=" + strconv.Itoa(crop_values_picture_width) + ":" + strconv.Itoa(crop_values_picture_height)
