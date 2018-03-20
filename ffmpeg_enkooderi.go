@@ -12,18 +12,6 @@ import (
 )
 
 // Global variable definitions
-type Crop_values struct {
-
-	// FFmpeg crop values. Cropping first discards "width_offset" amount of pixels from the left side of the picture.
-	// Then it discards "height_offset" amount of pixels from the top of the picture.
-	// Then cropping takes "picture_width" of pixels to the right and "picture_height" pixels down whats left of the picture.
-
-	picture_width int
-	picture_height int
-	width_offset int
-	height_offset int
-}
-
 var complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -242,7 +230,24 @@ func main() {
 	var search_start_str = flag.String("ss", "", "Seek to position before starting processing. This option is given to FFmpeg as it is. Example -ss 01:02:10 Seek to 1 hour two min and 10 seconds.")
 	var processing_time_str = flag.String("t", "", "Duration to process. This option is given to FFmpeg as it is. Example -t 01:02 process 1 min 2 secs of the file.")
 	var input_filenames []string
-	var crop_values_struct Crop_values
+	var deinterlace_options []string
+	var grayscale_options []string
+	var subtitle_processing_options string
+	var ffmpeg_pass_1_commandline []string
+	var ffmpeg_pass_2_commandline []string
+	var final_crop_string string
+	var command_to_run_str_slice []string
+	var file_to_process, video_width, video_height string
+	var audio_language, for_visually_impared, number_of_audio_channels string
+	var subtitle_language, for_hearing_impared, subtitle_codec_name string
+	var crop_values_picture_width int
+	var crop_values_picture_height int
+	var crop_values_width_offset int
+	var crop_values_height_offset int
+	var unsorted_ffprobe_information_str_slice []string
+	var error_message error
+	var crop_value_map = make(map[string]int)
+
 
 	// Parse commandline options
 	flag.Parse()
@@ -260,8 +265,6 @@ func main() {
 	audio_compression_options := []string{"-acodec", "copy"}
 	denoise_options := []string{"hqdn3d=3.0:3.0:2.0:3.0"}
 
-	var deinterlace_options []string
-
 	if *no_deinterlace_bool == true {
 		deinterlace_options = []string{"copy"}
 	} else {
@@ -269,8 +272,6 @@ func main() {
 	}
 	ffmpeg_commandline_start := []string{"ffmpeg", "-y", "-loglevel", "8", "-threads", "auto"}
 	subtitle_number := *subtitle_int
-
-	var grayscale_options []string
 
 	if *grayscale_bool == false {
 
@@ -287,19 +288,9 @@ func main() {
 		}
 	}
 
-	var subtitle_processing_options string
 	subtitle_options := ""
 	output_directory_name := "00-valmiit"
 	output_video_format := []string{"-f", "mp4"}
-	var ffmpeg_pass_1_commandline []string
-	var ffmpeg_pass_2_commandline []string
-	var final_crop_string string
-	var command_to_run_str_slice []string
-	var file_to_process, video_width, video_height string
-	var audio_language, for_visually_impared, number_of_audio_channels string
-	var subtitle_language, for_hearing_impared, subtitle_codec_name string
-
-
 
 	/////////////////////////////////////////
 	// Print variable values in debug mode //
@@ -335,9 +326,6 @@ func main() {
 	///////////////////////////////
 	// Scan inputfile properties //
 	///////////////////////////////
-
-	var unsorted_ffprobe_information_str_slice []string
-	var error_message error
 
 	for _,file_name := range input_filenames {
 
@@ -487,7 +475,6 @@ func main() {
 			command_to_run_str_slice = append(command_to_run_str_slice, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:16:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
 
 			crop_value_counter := 0
-			var crop_value_map = make(map[string]int)
 
 			if *debug_mode_on == true {
 				fmt.Println()
@@ -526,10 +513,10 @@ func main() {
 					}
 				}
 
-				crop_values_struct.picture_width,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[0])
-				crop_values_struct.picture_height,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[1])
-				crop_values_struct.width_offset,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[2])
-				crop_values_struct.height_offset,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[3])
+				crop_values_picture_width,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[0])
+				crop_values_picture_height,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[1])
+				crop_values_width_offset,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[2])
+				crop_values_height_offset,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[3])
 
 				/////////////////////////////////////////
 				// Print variable values in debug mode //
@@ -545,10 +532,10 @@ func main() {
 				}
 				fmt.Println()
 				fmt.Println("Most frequent crop value is", final_crop_string)
-				fmt.Println("crop_values_struct.picture_width:", crop_values_struct.picture_width)
-				fmt.Println("crop_values_struct.picture_height:", crop_values_struct.picture_height)
-				fmt.Println("crop_values_struct.width_offset:", crop_values_struct.width_offset)
-				fmt.Println("crop_values_struct.height_offset:", crop_values_struct.height_offset)
+				fmt.Println("crop_values_picture_width:", crop_values_picture_width)
+				fmt.Println("crop_values_picture_height:", crop_values_picture_height)
+				fmt.Println("crop_values_width_offset:", crop_values_width_offset)
+				fmt.Println("crop_values_height_offset:", crop_values_height_offset)
 				}
 
 			} else {
@@ -658,7 +645,7 @@ func main() {
 				// When cropping video widthwise don't crop subtitle but instead shrink its width to fit on top of the cropped video.
 				// This results in smaller subtitle font.
 				if *autocrop_bool == true && *subtitle_downscale == true {
-					subtitle_processing_options = "scale=" + strconv.Itoa(crop_values_struct.picture_width) + ":" + strconv.Itoa(crop_values_struct.picture_height)
+					subtitle_processing_options = "scale=" + strconv.Itoa(crop_values_picture_width) + ":" + strconv.Itoa(crop_values_picture_height)
 				}
 
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number) +
@@ -752,32 +739,11 @@ func main() {
 }
 
 // FIXME
-// Tee skannaus joka näyttää valitut tiedot lähdetiedostosta: reso, framerate, audioden ja subtitlejen lukumäärä, jne.
 // Laita ohjelma käynnistämään prosesoinnit omiin threadehinsa ja defaulttina kahden tiedoston samanaikainen käsittely. Lisäksi optio jolla voi valita kuinka monta tiedostoa käsitellään samaan aikaan.
 // Tee tsekkaus joka huomaa jos käyttäjä antaa audio- tai subtitlestreamin numeron, joka on isompi kuin lähdestreamissä olevien streamin numerot ja kertoo käyttäjälle käytettävissä olevat numerot.
-
-// Suunnitelma
-// Ylimmällä tasolla on map, jossa avaimena tiedoston nimi ja arvona lista. Avaimet kannattaa appendata omaan listaansa, jotta tiedostoja voidaan hakea aakkosjärjestyksessä ?
-// Videostream - struct ja audio- ja subtitlelistat ja subtitle_language on pointereina listassa.
-// Audio ja subtitle stream-structit on kiinni audio- ja subtitlelistoissa, joissa pointerit stream-structeihin, alkion paikka listassa kertoo kuinka mones streami on kyseessä.
-// Alimmalla tasolla on video, audio stream-structeja ja subtitle_language_str. Structeissa jokaisessa on kyseisen streamin tiedot.
-//
-// Mieti vielä mitä infoja oikeesti käytetään, ja kerää ainoastaan ne: 
-
-	// Lista 1 (video_stream_info_list): [tiedoston nimi, videon leveys, videon korkeus, audiostreamien lukumäärä, subtitlejen lukumäärä, pointteri audiostreamien listaan, pointteri subtitlejen listaan]
-
-	// Audiostreamien lista (audio_stream_info_list):
-	// [[äänikanavien lukumäärä, äänen kieli, visually_impaired = true / false],  [äänikanavien lukumäärä, äänen kieli, visually_impaired = true / false],  [äänikanavien lukumäärä, äänen kieli, visually_impaired = true / false]]
-
-	// Subtitlejen lista (subtitle_tream_info_list):
-	// [[subtitle kohtainen tieto: language],  [subtitle kohtainen tieto: language],  [subtitle kohtainen tieto: language]]
-	
-//Muita tietoja tarvitaan scan moodia varten
-// skippaa koko scan moodi ja näytä siinä vain raaka tuloste complete_stream_info_map:istä, sieltä voi ite kaivella tiedot.
-//
-
 // barbarella + kroppaus ja subtitle. Teksti leikkautuu alhaalta, pitäis joko siirtää tekstiä ylös 72 pikseliä ennen kroppausta tai cropata ainoastaan tekstiplanssin ylälaidasta.
 // Tee tsekkaus joka käy kaikki komentorivillä olevat videot läpi ja tsekkaa löytyykö niistä komentorivillä annetut audio- ja subtitlestreamit
 // Testaa että kaikista komentorivillä annetuista faileista löytyy videostream 0.
+// Jos kroppausarvot on nolla, poista kroppaysoptiot ffmpegin komentoriviltä ?
 
 
