@@ -12,16 +12,6 @@ import (
 )
 
 // Global variable definitions
-type Video_data struct {
-	audio_codec string
-	sample_rate int
-	number_of_channels int
-	video_codec string
-	picture_width int
-	picture_height int
-	aspect_ratio string
-}
-
 type Crop_values struct {
 
 	// FFmpeg crop values. Cropping first discards "width_offset" amount of pixels from the left side of the picture.
@@ -39,18 +29,6 @@ var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
 var subtitle_stream_info_map = make(map[string]string)
 
-// type audio_stream_info_struct struct {
-// 	number_of_channels int
-// 	audio_language string
-// 	for_visually_impared bool
-// }
-// 
-// type subtitle_stream_info_struct struct {
-// 	subtitle_language string
-// 	hearing_impaired bool
-// }
-
-var stream_info_slice [][][]string
 var Complete_file_info_slice [][][][]string
 
 func run_external_command(command_to_run_str_slice []string) ([]string,  error) {
@@ -128,10 +106,11 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 	}
 }
 
-func get_video_and_audio_stream_information(file_name string) (Video_data) {
+func get_video_and_audio_stream_information(file_name string) {
 
 	// Find video and audio stream information and store it as key value pairs in video_stream_info_map and audio_stream_info_map.
 	// Discard info about streams that are not audio or video
+	var stream_info_slice [][][]string
 	var single_video_stream_info_slice []string
 	var all_video_streams_info_slice [][]string
 	var single_audio_stream_info_slice []string
@@ -148,7 +127,6 @@ func get_video_and_audio_stream_information(file_name string) (Video_data) {
 		stream_type_is_video = false
 		stream_type_is_audio = false
 		stream_type_is_subtitle = false
-
 		for _, text_line := range stream_info_str_slice {
 
 			if strings.Contains(text_line, "codec_type=video") {
@@ -221,19 +199,9 @@ func get_video_and_audio_stream_information(file_name string) (Video_data) {
 
 	stream_info_slice = append(stream_info_slice, all_video_streams_info_slice, all_audio_streams_info_slice, all_subtitle_streams_info_slice)
 	Complete_file_info_slice = append(Complete_file_info_slice, stream_info_slice)
+	complete_stream_info_map = make(map[int][]string) // Clear out stream info map by creating a new one with the same name.
 
-	// Find specific video and audio info we need and store in a struct that we return to the main program.
-	var input_video_info_struct Video_data
-
-	input_video_info_struct.audio_codec = audio_stream_info_map["codec_name"]
-	input_video_info_struct.sample_rate,_ = strconv.Atoi(audio_stream_info_map["sample_rate"])
-	input_video_info_struct.number_of_channels,_ = strconv.Atoi(audio_stream_info_map["channels"])
-	input_video_info_struct.video_codec = video_stream_info_map["codec_name"]
-	input_video_info_struct.picture_width,_ = strconv.Atoi(video_stream_info_map["width"])
-	input_video_info_struct.picture_height,_ = strconv.Atoi(video_stream_info_map["height"])
-	input_video_info_struct.aspect_ratio = video_stream_info_map["display_aspect_ratio"]
-
-	return(input_video_info_struct)
+	return
 }
 
 
@@ -264,7 +232,7 @@ func main() {
 	var subtitle_int = flag.Int("s", -1, "Subtitle `number, -s=1` (Use subtitle number 1 in the source file)")
 	var subtitle_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so=55 (move subtitle 55 pixels down), -so=-55 (move subtitle 55 pixels up)")
 	var subtitle_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead for cropping subtitle. This option results in smaller subtitle font.")
-	var audio_stream_number_int = flag.Int("an", 0, "Audio stream number, -an=1 (Use audio stream number 1 in the source file)")
+	var audio_stream_number_int = flag.Int("a", 0, "Audio stream number, -a=1 (Use audio stream number 1 in the source file)")
 	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale")
 	var denoise_bool = flag.Bool("dn", false, "Denoise. Use HQDN3D - filter to remove noise in the picture. Equal to Hanbrake 'medium' noise reduction settings.")
 	var autocrop_bool = flag.Bool("ac", false, "Autocrop. Find crop values automatically by scanning the star of the file (1800 seconds)")
@@ -326,6 +294,12 @@ func main() {
 	var ffmpeg_pass_1_commandline []string
 	var ffmpeg_pass_2_commandline []string
 	var final_crop_string string
+	var command_to_run_str_slice []string
+	var file_to_process, video_width, video_height string
+	var audio_language, for_visually_impared, number_of_audio_channels string
+	var subtitle_language, for_hearing_impared, subtitle_codec_name string
+
+
 
 	/////////////////////////////////////////
 	// Print variable values in debug mode //
@@ -356,15 +330,117 @@ func main() {
 		fmt.Println("*debug_mode_on", *debug_mode_on)
 		fmt.Println()
 		fmt.Println("input_filenames:", input_filenames)
-		fmt.Println("\n")
 }
+
+	///////////////////////////////
+	// Scan inputfile properties //
+	///////////////////////////////
+
+	var unsorted_ffprobe_information_str_slice []string
+	var error_message error
+
+	for _,file_name := range input_filenames {
+
+		// Get video info with: ffprobe -loglevel 16 -show_entries format:stream -print_format flat -i InputFile
+		command_to_run_str_slice = nil
+
+		command_to_run_str_slice = append(command_to_run_str_slice, "ffprobe","-loglevel","16","-show_entries","format:stream","-print_format","flat","-i")
+
+		if *debug_mode_on == true {
+			fmt.Println()
+			fmt.Println("command_to_run_str_slice:", command_to_run_str_slice, file_name)
+		}
+
+		command_to_run_str_slice = append(command_to_run_str_slice, file_name)
+
+		unsorted_ffprobe_information_str_slice, error_message = run_external_command(command_to_run_str_slice)
+
+		if error_message != nil {
+			log.Fatal(error_message)
+		}
+
+		// Sort info about video and audio streams in the file to a map
+		sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice)
+
+		// Get specific video and audio stream information
+		get_video_and_audio_stream_information(file_name)
+
+	}
+
+	if *debug_mode_on == true {
+
+		fmt.Println()
+		fmt.Println("Complete_file_info_slices:")
+
+		for _, temp_slice := range Complete_file_info_slice {
+			fmt.Println(temp_slice)
+		}
+	}
+
+	//////////////////////
+	// Scan - only mode //
+	//////////////////////
+	if *scan_mode_only_bool == true {
+
+		for _,file_info_slice := range Complete_file_info_slice {
+			video_slice_temp := file_info_slice[0]
+			video_slice := video_slice_temp[0]
+			audio_slice := file_info_slice[1]
+			subtitle_slice := file_info_slice[2]
+
+			file_to_process = video_slice[0]
+			video_width = video_slice[1]
+			video_height = video_slice[2]
+
+			fmt.Println()
+			fmt.Println("Tiedoston nimi:", file_to_process)
+			fmt.Println("Videon leveys:", video_width)
+			fmt.Println("Videon korkeus:", video_height)
+
+			for audio_stream_number, audio_info := range audio_slice {
+
+				audio_language = audio_info[0]
+				for_visually_impared = audio_info[1]
+				number_of_audio_channels = audio_info[2]
+
+				fmt.Println()
+				fmt.Println("Audio stream number:", audio_stream_number)
+				fmt.Println("Audio language:", audio_language)
+				fmt.Println("For visually impared:", for_visually_impared)
+				fmt.Println("Number of channels:", number_of_audio_channels)
+			}
+
+			for subtitle_stream_number, subtitle_info := range subtitle_slice {
+
+				subtitle_language = subtitle_info[0]
+				for_hearing_impared = subtitle_info[1]
+				subtitle_codec_name = subtitle_info[2]
+
+				fmt.Println()
+				fmt.Println("Subtitle stream number:", subtitle_stream_number)
+				fmt.Println("Subtitle language:", subtitle_language)
+				fmt.Println("For hearing impared:", for_hearing_impared)
+				fmt.Println("Codec name:", subtitle_codec_name)
+			}
+
+		}
+
+		fmt.Println()
+		os.Exit(0)
+	}
+
 
 	/////////////////////////////////////////
 	// Main loop that processess all files //
 	/////////////////////////////////////////
-	for _,file_name := range input_filenames {
 
-		var command_to_run_str_slice []string
+	for _,file_info_slice := range Complete_file_info_slice {
+
+		video_slice_temp := file_info_slice[0]
+		video_slice := video_slice_temp[0]
+		file_name := video_slice[0]
+		video_width = video_slice[1]
+		video_height = video_slice[2]
 
 		// Create input + output filenames and paths
 		inputfile_absolute_path,_ := filepath.Abs(file_name)
@@ -377,80 +453,13 @@ func main() {
 			fmt.Println("inputfile_path:", inputfile_path)
 			fmt.Println("inputfile_name:", inputfile_name)
 			fmt.Println("output_file_absolute_path:", output_file_absolute_path)
+			fmt.Println("video_width:", video_width)
+			fmt.Println("video_height:", video_height)
 		}
 
 		// If output directory does not exist in the input path then create it.
 		if _, err := os.Stat(filepath.Join(inputfile_path, output_directory_name)); os.IsNotExist(err) {
 			os.Mkdir(filepath.Join(inputfile_path, output_directory_name), 0777)
-		}
-
-		// Get video info with: ffprobe -loglevel 16 -show_entries format:stream -print_format flat -i InputFile
-		command_to_run_str_slice = append(command_to_run_str_slice, "ffprobe","-loglevel","16","-show_entries","format:stream","-print_format","flat","-i")
-		command_to_run_str_slice = append(command_to_run_str_slice, file_name)
-
-		unsorted_ffprobe_information_str_slice, error_message := run_external_command(command_to_run_str_slice)
-
-		if error_message != nil {
-			log.Fatal(error_message)
-		}
-
-		// Sort info about video and audio streams in the file to a map
-		sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice)
-
-		// Get specific video and audio stream information
-		input_video_info_struct := get_video_and_audio_stream_information(file_name)
-
-		/////////////////////////////////////////
-		// Print variable values in debug mode //
-		/////////////////////////////////////////
-		if *debug_mode_on == true {
-			fmt.Println("input_video_info_struct.audio_codec:", input_video_info_struct.audio_codec)
-			fmt.Println("input_video_info_struct.sample_rate:", input_video_info_struct.sample_rate)
-			fmt.Println("input_video_info_struct.number_of_channels:", input_video_info_struct.number_of_channels)
-			fmt.Println("input_video_info_struct.video_codec:", input_video_info_struct.video_codec)
-			fmt.Println("input_video_info_struct.picture_width:", input_video_info_struct.picture_width)
-			fmt.Println("input_video_info_struct.picture_height:", input_video_info_struct.picture_height)
-			fmt.Println("input_video_info_struct.aspect_ratio:", input_video_info_struct.aspect_ratio)
-			fmt.Println("autocrop_bool:", *autocrop_bool)
-			fmt.Println()
-		}
-
-		//////////////////////
-		// Scan - only mode //
-		//////////////////////
-		if *scan_mode_only_bool == true {
-
-			for _,file_info_slice := range Complete_file_info_slice {
-				video_slice_temp := file_info_slice[0]
-				video_slice := video_slice_temp[0]
-				audio_slice := file_info_slice[1]
-				subtitle_slice := file_info_slice[2]
-
-				fmt.Println()
-				fmt.Println("Tiedoston nimi:", video_slice[0])
-				fmt.Println("Videon leveys:",video_slice[1] )
-				fmt.Println("Videon korkeus:",video_slice[2] )
-
-				for number, audio_info := range audio_slice {
-					fmt.Println()
-					fmt.Println("Audio stream number:", number)
-					fmt.Println("Audio language:", audio_info[0])
-					fmt.Println("For visually impared:", audio_info[1])
-					fmt.Println("Number of channels:", audio_info[2])
-				}
-
-				for number, subtitle_info := range subtitle_slice {
-					fmt.Println()
-					fmt.Println("Subtitle stream number:", number)
-					fmt.Println("Subtitle language:", subtitle_info[0])
-					fmt.Println("For hearing impared:", subtitle_info[1])
-					fmt.Println("Codec name:", subtitle_info[2])
-				}
-
-			}
-
-			fmt.Println()
-			os.Exit(0)
 		}
 
 		/////////////////////////////////////////////////////////////
@@ -531,7 +540,7 @@ func main() {
 				fmt.Println("Crop values are:")
 
 				for crop_value := range crop_value_map {
-					fmt.Println(crop_value_map[crop_value], "=", crop_value)
+					fmt.Println(crop_value_map[crop_value], "instances of crop values:", crop_value)
 					
 				}
 				fmt.Println()
@@ -613,10 +622,10 @@ func main() {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:v:0", "-vf", ffmpeg_filter_options)
 
 			} else {
-				/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-				// There is a subtitle to process with the video, use the complex video prcessing chain in FFmpeg (-filer_complex) //
-				// It can has several isimultaneous video inputs and outputs.
-				/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				// There is a subtitle to process with the video, use the complex video processing chain in FFmpeg (-filer_complex) //
+				// It can have several simultaneous video inputs and outputs.                                                       //
+				//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 				// Add deinterlace commands to ffmpeg commandline
 				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(deinterlace_options, "")
@@ -656,8 +665,6 @@ func main() {
 				"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
 				"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=0:main_h-overlay_h+" +
 				strconv.Itoa(*subtitle_offset_int) + strings.Join(grayscale_options, "") + "[processed_combined_streams]", "-map", "[processed_combined_streams]")
-
-				// "[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=main_w-overlay_w-0:main_h-overlay_h+" +
 			}
 
 			///////////////////////////////////////////////////////////////////
@@ -667,7 +674,7 @@ func main() {
 			// If video horizontal resolution is over 700 pixel choose HD video compression settings
 			video_compression_options := video_compression_options_sd
 
-			if *force_hd_bool || input_video_info_struct.picture_height > 700 {
+			if *force_hd_bool || video_height > "700" {
 				video_compression_options = video_compression_options_hd
 			}
 
@@ -769,6 +776,8 @@ func main() {
 // skippaa koko scan moodi ja näytä siinä vain raaka tuloste complete_stream_info_map:istä, sieltä voi ite kaivella tiedot.
 //
 
-
+// barbarella + kroppaus ja subtitle. Teksti leikkautuu alhaalta, pitäis joko siirtää tekstiä ylös 72 pikseliä ennen kroppausta tai cropata ainoastaan tekstiplanssin ylälaidasta.
+// Tee tsekkaus joka käy kaikki komentorivillä olevat videot läpi ja tsekkaa löytyykö niistä komentorivillä annetut audio- ja subtitlestreamit
+// Testaa että kaikista komentorivillä annetuista faileista löytyy videostream 0.
 
 
