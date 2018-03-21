@@ -47,7 +47,6 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 
 	var stream_info_str_slice []string
 	var text_line_str_slice []string
-
 	var stream_number_int int
 	var stream_data_str string
 	var string_to_remove_str_slice []string
@@ -105,7 +104,6 @@ func get_video_and_audio_stream_information(file_name string) {
 	var all_audio_streams_info_slice [][]string
 	var single_subtitle_stream_info_slice []string
 	var all_subtitle_streams_info_slice [][]string
-
 	var stream_type_is_video bool = false
 	var stream_type_is_audio bool = false
 	var stream_type_is_subtitle = false
@@ -115,6 +113,10 @@ func get_video_and_audio_stream_information(file_name string) {
 		stream_type_is_video = false
 		stream_type_is_audio = false
 		stream_type_is_subtitle = false
+		single_video_stream_info_slice = nil
+		single_audio_stream_info_slice = nil
+		single_subtitle_stream_info_slice = nil
+
 		for _, text_line := range stream_info_str_slice {
 
 			if strings.Contains(text_line, "codec_type=video") {
@@ -145,6 +147,7 @@ func get_video_and_audio_stream_information(file_name string) {
 				video_value := strings.TrimSpace(temp_slice[1])
 				video_stream_info_map[video_key] = video_value
 				}
+
 			single_video_stream_info_slice = append(single_video_stream_info_slice, file_name, video_stream_info_map["width"], video_stream_info_map["height"])
 			all_video_streams_info_slice = append(all_video_streams_info_slice, single_video_stream_info_slice)
 		}
@@ -159,7 +162,6 @@ func get_video_and_audio_stream_information(file_name string) {
 				audio_stream_info_map[audio_key] = audio_value
 			}
 
-			single_audio_stream_info_slice = nil
 			single_audio_stream_info_slice = append(single_audio_stream_info_slice, audio_stream_info_map["tags.language"])
 			single_audio_stream_info_slice = append(single_audio_stream_info_slice, audio_stream_info_map["disposition.visual_impaired"])
 			single_audio_stream_info_slice = append(single_audio_stream_info_slice, audio_stream_info_map["channels"])
@@ -177,12 +179,16 @@ func get_video_and_audio_stream_information(file_name string) {
 
 			}
 
-			single_subtitle_stream_info_slice = nil
 			single_subtitle_stream_info_slice = append(single_subtitle_stream_info_slice, subtitle_stream_info_map["tags.language"])
 			single_subtitle_stream_info_slice = append(single_subtitle_stream_info_slice, subtitle_stream_info_map["disposition.hearing_impaired"])
 			single_subtitle_stream_info_slice = append(single_subtitle_stream_info_slice, subtitle_stream_info_map["codec_name"])
 			all_subtitle_streams_info_slice = append(all_subtitle_streams_info_slice, single_subtitle_stream_info_slice)
 		}
+	}
+
+	if single_video_stream_info_slice == nil {
+		single_video_stream_info_slice = append(single_video_stream_info_slice, file_name, "0", "0")
+		all_video_streams_info_slice = append(all_video_streams_info_slice, single_video_stream_info_slice)
 	}
 
 	stream_info_slice = append(stream_info_slice, all_video_streams_info_slice, all_audio_streams_info_slice, all_subtitle_streams_info_slice)
@@ -247,6 +253,7 @@ func main() {
 	var unsorted_ffprobe_information_str_slice []string
 	var error_message error
 	var crop_value_map = make(map[string]int)
+	var error_messages []string
 
 
 	// Parse commandline options
@@ -254,7 +261,15 @@ func main() {
 
 	// The unparsed options left on the commandline are filenames, store them in a slice.
 	for _,file_name := range flag.Args()  {
-		input_filenames = append(input_filenames, file_name)
+		if _, err := os.Stat(file_name); os.IsNotExist(err) {
+			fmt.Println()
+			fmt.Println("Error !!!!!!!")
+			fmt.Println("File: " + file_name + " does not exist")
+			fmt.Println()
+			os.Exit(1)
+		} else {
+			input_filenames = append(input_filenames, file_name)
+		}
 	}
 
 	//////////////////////////////////////////////////
@@ -365,6 +380,50 @@ func main() {
 		}
 	}
 
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Test that all input files has a video stream and that the audio and subtitle streams the user wants do exist //
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	for _,file_info_slice := range Complete_file_info_slice {
+
+		video_slice_temp := file_info_slice[0]
+		video_slice := video_slice_temp[0]
+
+		audio_slice := file_info_slice[1]
+		subtitle_slice := file_info_slice[2]
+
+		file_name_temp := video_slice[0]
+		file_name := filepath.Base(file_name_temp)
+		video_width := video_slice[1]
+		video_height := video_slice[2]
+
+		if video_width == "0" || video_height == "0" {
+			error_messages = append(error_messages, "File: '" + file_name + "' does not have a video stream.")
+		}
+
+		if len(audio_slice) - 1 < *audio_stream_number_int {
+			error_messages = append(error_messages, "File: '" + file_name + "' does not have an audio stream number: " + strconv.Itoa(*audio_stream_number_int))
+		}
+
+		if len(subtitle_slice) - 1 < subtitle_number {
+			error_messages = append(error_messages, "File: '" + file_name + "' does not have an subtitle stream number: " + strconv.Itoa(subtitle_number))
+		}
+	}
+
+	if len(error_messages) >0 {
+
+		fmt.Println()
+		fmt.Println("Error cannot continue !!!!!!!")
+		fmt.Println()
+
+		for _, item := range error_messages {
+			fmt.Println(item)
+		}
+
+		fmt.Println()
+		os.Exit(1)
+	}
+
 	//////////////////////
 	// Scan - only mode //
 	//////////////////////
@@ -376,14 +435,19 @@ func main() {
 			audio_slice := file_info_slice[1]
 			subtitle_slice := file_info_slice[2]
 
-			file_to_process = video_slice[0]
+			file_to_process_temp := video_slice[0]
+			file_to_process = filepath.Base(file_to_process_temp)
 			video_width = video_slice[1]
 			video_height = video_slice[2]
 
 			fmt.Println()
-			fmt.Println("Tiedoston nimi:", file_to_process)
-			fmt.Println("Videon leveys:", video_width)
-			fmt.Println("Videon korkeus:", video_height)
+			subtitle_text := "File name '" + file_to_process + "'"
+			text_length := len(subtitle_text)
+			fmt.Println(subtitle_text)
+			fmt.Println(strings.Repeat("-", text_length))
+
+			fmt.Println("Video width", video_width, ", Video height", video_height)
+			fmt.Println()
 
 			for audio_stream_number, audio_info := range audio_slice {
 
@@ -391,12 +455,10 @@ func main() {
 				for_visually_impared = audio_info[1]
 				number_of_audio_channels = audio_info[2]
 
-				fmt.Println()
-				fmt.Println("Audio stream number:", audio_stream_number)
-				fmt.Println("Audio language:", audio_language)
-				fmt.Println("For visually impared:", for_visually_impared)
-				fmt.Println("Number of channels:", number_of_audio_channels)
+				fmt.Println("Audio stream number:", audio_stream_number, ", language:", audio_language, ", For visually impared:", for_visually_impared, ", Number of channels:", number_of_audio_channels)
 			}
+
+			fmt.Println()
 
 			for subtitle_stream_number, subtitle_info := range subtitle_slice {
 
@@ -404,19 +466,15 @@ func main() {
 				for_hearing_impared = subtitle_info[1]
 				subtitle_codec_name = subtitle_info[2]
 
-				fmt.Println()
-				fmt.Println("Subtitle stream number:", subtitle_stream_number)
-				fmt.Println("Subtitle language:", subtitle_language)
-				fmt.Println("For hearing impared:", for_hearing_impared)
-				fmt.Println("Codec name:", subtitle_codec_name)
+				fmt.Println("Subtitle stream number:", subtitle_stream_number, ", language:", subtitle_language, ", For hearing impared:", for_hearing_impared, ", Codec name:", subtitle_codec_name)
 			}
 
+			fmt.Println()
 		}
 
 		fmt.Println()
 		os.Exit(0)
 	}
-
 
 	/////////////////////////////////////////
 	// Main loop that processess all files //
@@ -733,11 +791,7 @@ func main() {
 }
 
 // FIXME
-// Laita ohjelma käynnistämään prosesoinnit omiin threadehinsa ja defaulttina kahden tiedoston samanaikainen käsittely. Lisäksi optio jolla voi valita kuinka monta tiedostoa käsitellään samaan aikaan.
-// Tee tsekkaus joka huomaa jos käyttäjä antaa audio- tai subtitlestreamin numeron, joka on isompi kuin lähdestreamissä olevien streamin numerot ja kertoo käyttäjälle käytettävissä olevat numerot.
-// barbarella + kroppaus ja subtitle. Teksti leikkautuu alhaalta, pitäis joko siirtää tekstiä ylös 72 pikseliä ennen kroppausta tai cropata ainoastaan tekstiplanssin ylälaidasta.
-// Tee tsekkaus joka käy kaikki komentorivillä olevat videot läpi ja tsekkaa löytyykö niistä komentorivillä annetut audio- ja subtitlestreamit
-// Testaa että kaikista komentorivillä annetuista faileista löytyy videostream 0.
+// Laita ohjelma käynnistämään prosesoinnit omiin threadehinsa ja defaulttina kahden tiedoston samanaikainen käsittely. Lisäksi optio jolla voi valita kuinka monta tiedostoa käsitellään samaan aikaan ?
 // Jos kroppausarvot on nolla, poista kroppaysoptiot ffmpegin komentoriviltä ?
 
 
