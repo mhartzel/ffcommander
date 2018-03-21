@@ -198,6 +198,7 @@ func get_video_and_audio_stream_information(file_name string) {
 	return
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 func main() {
 
@@ -211,7 +212,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Test if ffprobe can be found in path
 	if _,error := exec.LookPath("ffprobe") ; error != nil {
 		fmt.Println()
 		fmt.Println("Error, cant find FFprobe in path, can't continue.")
@@ -235,6 +235,11 @@ func main() {
 	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables.")
 	var search_start_str = flag.String("ss", "", "Seek to position before starting processing. This option is given to FFmpeg as it is. Example -ss 01:02:10 Seek to 1 hour two min and 10 seconds.")
 	var processing_time_str = flag.String("t", "", "Duration to process. This option is given to FFmpeg as it is. Example -t 01:02 process 1 min 2 secs of the file.")
+
+	//////////////////////
+	// Define variables //
+	//////////////////////
+
 	var input_filenames []string
 	var deinterlace_options []string
 	var grayscale_options []string
@@ -255,19 +260,26 @@ func main() {
 	var crop_value_map = make(map[string]int)
 	var error_messages []string
 
-
-	// Parse commandline options
+	///////////////////////////////
+	// Parse commandline options //
+	///////////////////////////////
 	flag.Parse()
 
 	// The unparsed options left on the commandline are filenames, store them in a slice.
 	for _,file_name := range flag.Args()  {
+
+		// Test if input files exist
 		if _, err := os.Stat(file_name); os.IsNotExist(err) {
+
 			fmt.Println()
 			fmt.Println("Error !!!!!!!")
 			fmt.Println("File: " + file_name + " does not exist")
 			fmt.Println()
+
 			os.Exit(1)
+
 		} else {
+			// Add all existing input file names to a slice
 			input_filenames = append(input_filenames, file_name)
 		}
 	}
@@ -538,6 +550,9 @@ func main() {
 				fmt.Println()
 				fmt.Println("FFmpeg crop command:", command_to_run_str_slice)
 				fmt.Println()
+			} else {
+				fmt.Println()
+				fmt.Println("Finding crop values for: " + inputfile_name)
 			}
 
 			ffmpeg_crop_output, ffmpeg_crop_error := run_external_command(command_to_run_str_slice)
@@ -747,30 +762,56 @@ func main() {
 			// Add outfile path to ffmpeg pass 2 commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, output_file_absolute_path)
 
-			fmt.Println()
-			fmt.Println("ffmpeg_pass_1_commandline:", ffmpeg_pass_1_commandline)
+			if *debug_mode_on == true {
+
+				fmt.Println()
+				fmt.Println("ffmpeg_pass_1_commandline:", ffmpeg_pass_1_commandline)
+
+			} else {
+
+				fmt.Println("Pass 1 encoding: " + inputfile_name)
+			}
+
 			ffmpeg_pass_1_output, ffmpeg_pass_1_error := run_external_command(ffmpeg_pass_1_commandline)
-			fmt.Println()
 
-			if ffmpeg_pass_1_output != nil {
-				fmt.Println(ffmpeg_pass_1_output)
+			if *debug_mode_on == true {
+
+				fmt.Println()
+
+				if ffmpeg_pass_1_output != nil {
+					fmt.Println(ffmpeg_pass_1_output)
+				}
+
+				if ffmpeg_pass_1_error != nil  {
+					fmt.Println(ffmpeg_pass_1_error)
+				}
 			}
 
-			if ffmpeg_pass_1_error != nil {
-				fmt.Println(ffmpeg_pass_1_error)
+			if *debug_mode_on == true {
+
+				fmt.Println()
+				fmt.Println("ffmpeg_pass_2_commandline:", ffmpeg_pass_2_commandline)
+
+			} else {
+
+				fmt.Println("Pass 2 encoding: " + inputfile_name)
 			}
 
-			fmt.Println()
-			fmt.Println("ffmpeg_pass_2_commandline:", ffmpeg_pass_2_commandline)
 			ffmpeg_pass_2_output, ffmpeg_pass_2_error :=  run_external_command(ffmpeg_pass_2_commandline)
-			fmt.Println()
 
-			if ffmpeg_pass_2_output != nil {
-				fmt.Println(ffmpeg_pass_2_output)
-			}
+			if *debug_mode_on == true {
 
-			if ffmpeg_pass_2_error != nil {
-				fmt.Println(ffmpeg_pass_2_error)
+				fmt.Println()
+
+				if ffmpeg_pass_2_output != nil {
+					fmt.Println(ffmpeg_pass_2_output)
+				}
+
+				if ffmpeg_pass_2_error != nil  {
+					fmt.Println(ffmpeg_pass_2_error)
+				}
+
+				fmt.Println()
 			}
 
 			/////////////////////////////////////
@@ -791,7 +832,16 @@ func main() {
 }
 
 // FIXME
+// Tsekkaa kommentit ja kirjoittele niitä lisää.
+// Tsekkaa kannattaisko alun pari - kolme alirutiinia yhdistää yhdeksi.
+// Tee default tuloste järkeväksi: Processing file, Looking for crop values, crop values are: x:x:x:, Pass 1 encoding, Pass 2 encoding, Processing of file xxxxxxx finished.
+// Tulosta kuinka monta failia on vielä jonossa ja ehkä niiden nimet.
+// Tulosta prosessoinnissa yksittäisen failin ja koko käsittelyn kesto, niin jos joutuu ajamaan uudestaan voi vähän arvioidan kauan homma kestää.
+// Vaihda kohdehakemiston nimi: 00-valmiit nimeksi: 00-processed_files
+// Tulosta hakemistoon 00-valmiit failikohtainen tiedosto, jossa ffmpegin käsittelykomennot, käsittelyn kestot ja kroppiarvot ? Optio jolla tän saa päälle tai oletuksena päälle ja optio jolla saa pois ?
+// Ffmpeg - komentorivi näkyviin vain debug - tilassa.
 // Laita ohjelma käynnistämään prosesoinnit omiin threadehinsa ja defaulttina kahden tiedoston samanaikainen käsittely. Lisäksi optio jolla voi valita kuinka monta tiedostoa käsitellään samaan aikaan ?
 // Jos kroppausarvot on nolla, poista kroppaysoptiot ffmpegin komentoriviltä ?
+// 
 
 
