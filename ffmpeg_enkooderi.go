@@ -67,6 +67,7 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 		}
 
 		if strings.HasPrefix(text_line, "streams.stream") {
+
 			text_line_str_slice = strings.Split(strings.Replace(text_line, "streams.stream.","",1),".")
 
 			// Convert stream number from string to int
@@ -186,7 +187,7 @@ func get_video_and_audio_stream_information(file_name string) {
 		}
 	}
 
-	if single_video_stream_info_slice == nil {
+	if len(all_video_streams_info_slice) == 0 {
 		single_video_stream_info_slice = append(single_video_stream_info_slice, file_name, "0", "0")
 		all_video_streams_info_slice = append(all_video_streams_info_slice, single_video_stream_info_slice)
 	}
@@ -194,6 +195,23 @@ func get_video_and_audio_stream_information(file_name string) {
 	stream_info_slice = append(stream_info_slice, all_video_streams_info_slice, all_audio_streams_info_slice, all_subtitle_streams_info_slice)
 	Complete_file_info_slice = append(Complete_file_info_slice, stream_info_slice)
 	complete_stream_info_map = make(map[int][]string) // Clear out stream info map by creating a new one with the same name.
+
+	// FIXME valitse tähän parempi failiesimerkki barbarella.ts
+	// Complete_file_info_slice contains one slice for each input file. This file contains slices woth further stream information.
+	//
+	// Example: [[[/mounttipiste/Sailytettava_Tavara-Digiboxi/00-Yhteinen_Kotidirri/security_now/barbarella.ts 720 576]] [[eng 0 2] [dut 1 2]] [[fin 0 dvb_subtitle] [fin 0 dvb_teletext]]]
+	// The first slice contains input file path (/home/mika/Downloads/sn0652.mp3) and video width and height in pixels (600, 600). This slice is packed inside another redundant slice since all slices stored in Complete_file_info_slice must be slices of slices of strings [][]string.
+	// 
+	// The second slice contains separate slices for all audio streams in the file. The first stream info is stored as slice 0 the next as 1, etc. In this case there is only one audio stream with no languge information (language = ""), the stream is not meant for visually impared (0 = no, 1 = yes), and the audio stream has 1 channels.
+	// 
+	// The third slice contains separate slices for all subtitle streams in the file. The first stream info is stored as slice 0 the next as 1, etc. In this case there is no subtitle streams.
+	// 
+	// Data in Complete_file_info_slice for ONE input file contains the following:
+	// [ [slice for video information], [slice for audio information], [slice for subtitle information] ]
+	// 
+	// [ [filename, video width, video height], [audio language, for visually impared, number of audio channels], [subtitle language, fot hearing impared, codec name] ]
+	// 
+	// 
 
 	return
 }
@@ -392,9 +410,9 @@ func main() {
 		}
 	}
 
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Test that all input files has a video stream and that the audio and subtitle streams the user wants do exist //
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Test that all input files have a video stream and that the audio and subtitle streams the user wants does exist //
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	for _,file_info_slice := range Complete_file_info_slice {
 
@@ -422,6 +440,7 @@ func main() {
 		}
 	}
 
+	// If there were error messages then we can't process all files that the user gave on the commandline, inform the user and exit.
 	if len(error_messages) >0 {
 
 		fmt.Println()
@@ -439,6 +458,8 @@ func main() {
 	//////////////////////
 	// Scan - only mode //
 	//////////////////////
+
+	// Only scan the input files, display their stream properties and exit.
 	if *scan_mode_only_bool == true {
 
 		for _,file_info_slice := range Complete_file_info_slice {
@@ -526,6 +547,7 @@ func main() {
 
 		if *autocrop_bool == true {
 
+			// Create the FFmpeg commandline to scan for blask areas at the borders of the video.
 			command_to_run_str_slice = nil
 			command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg")
 
@@ -546,17 +568,21 @@ func main() {
 
 			crop_value_counter := 0
 
-			if *debug_mode_on == true {
-				fmt.Println()
-				fmt.Println("FFmpeg crop command:", command_to_run_str_slice)
-				fmt.Println()
-			} else {
+			if *debug_mode_on == false {
 				fmt.Println()
 				fmt.Println("Finding crop values for: " + inputfile_name)
 			}
 
+			if *debug_mode_on == true {
+				fmt.Println()
+				fmt.Println("FFmpeg crop command:", command_to_run_str_slice)
+				fmt.Println()
+			}
+
 			ffmpeg_crop_output, ffmpeg_crop_error := run_external_command(command_to_run_str_slice)
 
+			// FFmpeg collects possible crop values across the first 1800 seconds of the file and outputs a list of how many times each possible crop values exists.
+			// Parse the list to find the value that is most frequent, that is the value that can be applied without cropping too musch or too little.
 			if ffmpeg_crop_error == nil {
 
 				for _,slice_item := range ffmpeg_crop_output {
@@ -586,6 +612,7 @@ func main() {
 					}
 				}
 
+				// Store the crop values we will use in variables.
 				crop_values_picture_width,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[0])
 				crop_values_picture_height,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[1])
 				crop_values_width_offset,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[2])
@@ -596,19 +623,16 @@ func main() {
 				/////////////////////////////////////////
 				if *debug_mode_on == true {
 
-				fmt.Println()
-				fmt.Println("Crop values are:")
+					fmt.Println()
+					fmt.Println("Crop values are:")
 
-				for crop_value := range crop_value_map {
-					fmt.Println(crop_value_map[crop_value], "instances of crop values:", crop_value)
-					
-				}
-				fmt.Println()
-				fmt.Println("Most frequent crop value is", final_crop_string)
-				fmt.Println("crop_values_picture_width:", crop_values_picture_width)
-				fmt.Println("crop_values_picture_height:", crop_values_picture_height)
-				fmt.Println("crop_values_width_offset:", crop_values_width_offset)
-				fmt.Println("crop_values_height_offset:", crop_values_height_offset)
+					for crop_value := range crop_value_map {
+						fmt.Println(crop_value_map[crop_value], "instances of crop values:", crop_value)
+						
+					}
+
+					fmt.Println()
+					fmt.Println("Most frequent crop value is", final_crop_string)
 				}
 
 			} else {
@@ -616,7 +640,18 @@ func main() {
 				fmt.Println("Scanning inputfile with FFmpeg resulted in an error:")
 				fmt.Println(ffmpeg_crop_error)
 				fmt.Println()
+				os.Exit(1)
 			}
+
+			video_height_int, _  := strconv.Atoi(video_height)
+			cropped_height := video_height_int - crop_values_picture_height - crop_values_height_offset
+
+			fmt.Println("Crop", crop_values_height_offset, "pixels from the top and", strconv.Itoa(cropped_height), "from the bottom")
+
+			video_width_int, _  := strconv.Atoi(video_width)
+			cropped_width := video_width_int - crop_values_picture_width - crop_values_width_offset
+
+			fmt.Println("Crop", crop_values_width_offset, "pixels from the left and", strconv.Itoa(cropped_width), "from the right")
 		}
 
 		/////////////////////////
@@ -645,7 +680,7 @@ func main() {
 
 			//////////////////////////////////////////////////////////////////////////////////////////////
 			// If there is no subtitle to process use the simple video processing chain (-vf) in FFmpeg //
-			// It has only one video input and output.
+			// It has a processing pipleine with only one video input and output                        //
 			//////////////////////////////////////////////////////////////////////////////////////////////
 
 			if subtitle_number == -1 {
@@ -772,13 +807,17 @@ func main() {
 				fmt.Println("Pass 1 encoding: " + inputfile_name)
 			}
 
-			ffmpeg_pass_1_output, ffmpeg_pass_1_error := run_external_command(ffmpeg_pass_1_commandline)
+			// Run Pass 1 encoding with FFmpeg.
+			ffmpeg_pass_1_output_temp, ffmpeg_pass_1_error := run_external_command(ffmpeg_pass_1_commandline)
 
 			if *debug_mode_on == true {
 
 				fmt.Println()
 
-				if ffmpeg_pass_1_output != nil {
+				ffmpeg_pass_1_output := strings.TrimSpace(strings.Join(ffmpeg_pass_1_output_temp, ""))
+
+				if len(ffmpeg_pass_1_output) > 0 {
+					fmt.Println(len(ffmpeg_pass_1_output))
 					fmt.Println(ffmpeg_pass_1_output)
 				}
 
@@ -790,6 +829,7 @@ func main() {
 			if *debug_mode_on == true {
 
 				fmt.Println()
+
 				fmt.Println("ffmpeg_pass_2_commandline:", ffmpeg_pass_2_commandline)
 
 			} else {
@@ -797,13 +837,16 @@ func main() {
 				fmt.Println("Pass 2 encoding: " + inputfile_name)
 			}
 
-			ffmpeg_pass_2_output, ffmpeg_pass_2_error :=  run_external_command(ffmpeg_pass_2_commandline)
+			// Run Pass 2 encoding with FFmpeg.
+			ffmpeg_pass_2_output_temp, ffmpeg_pass_2_error :=  run_external_command(ffmpeg_pass_2_commandline)
 
 			if *debug_mode_on == true {
 
 				fmt.Println()
 
-				if ffmpeg_pass_2_output != nil {
+				ffmpeg_pass_2_output := strings.TrimSpace(strings.Join(ffmpeg_pass_2_output_temp, ""))
+
+				if len(ffmpeg_pass_2_output) > 0 {
 					fmt.Println(ffmpeg_pass_2_output)
 				}
 
@@ -839,7 +882,6 @@ func main() {
 // Tulosta prosessoinnissa yksittäisen failin ja koko käsittelyn kesto, niin jos joutuu ajamaan uudestaan voi vähän arvioidan kauan homma kestää.
 // Vaihda kohdehakemiston nimi: 00-valmiit nimeksi: 00-processed_files
 // Tulosta hakemistoon 00-valmiit failikohtainen tiedosto, jossa ffmpegin käsittelykomennot, käsittelyn kestot ja kroppiarvot ? Optio jolla tän saa päälle tai oletuksena päälle ja optio jolla saa pois ?
-// Ffmpeg - komentorivi näkyviin vain debug - tilassa.
 // Laita ohjelma käynnistämään prosesoinnit omiin threadehinsa ja defaulttina kahden tiedoston samanaikainen käsittely. Lisäksi optio jolla voi valita kuinka monta tiedostoa käsitellään samaan aikaan ?
 // Jos kroppausarvot on nolla, poista kroppaysoptiot ffmpegin komentoriviltä ?
 // 
