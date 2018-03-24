@@ -293,6 +293,10 @@ func main() {
 	var file_counter_str string
 	var files_to_process_str string
 	start_time := time.Now()
+	pass_1_start_time := time.Now()
+	pass_1_elapsed_time := time.Since(start_time)
+	pass_2_start_time := time.Now()
+	pass_2_elapsed_time := time.Since(start_time)
 
 	///////////////////////////////
 	// Parse commandline options //
@@ -830,11 +834,17 @@ func main() {
 
 			} else {
 
-				fmt.Println("Pass 1 encoding: " + inputfile_name)
+				fmt.Printf("Pass 1 encoding: " + inputfile_name + " ")
 			}
 
 			// Run Pass 1 encoding with FFmpeg.
+			pass_1_start_time = time.Now()
+
 			ffmpeg_pass_1_output_temp, ffmpeg_pass_1_error := run_external_command(ffmpeg_pass_1_commandline)
+
+			pass_1_elapsed_time = time.Since(pass_1_start_time)
+			fmt.Printf("took %s", pass_1_elapsed_time.Round(time.Millisecond))
+			fmt.Println()
 
 			if *debug_mode_on == true {
 
@@ -860,11 +870,18 @@ func main() {
 
 			} else {
 
-				fmt.Println("Pass 2 encoding: " + inputfile_name)
+				pass_2_elapsed_time = time.Since(start_time)
+				fmt.Printf("Pass 2 encoding: " + inputfile_name + " ")
 			}
 
 			// Run Pass 2 encoding with FFmpeg.
+			pass_2_start_time = time.Now()
+
 			ffmpeg_pass_2_output_temp, ffmpeg_pass_2_error :=  run_external_command(ffmpeg_pass_2_commandline)
+
+			pass_2_elapsed_time = time.Since(pass_2_start_time)
+			fmt.Printf("took %s", pass_2_elapsed_time.Round(time.Millisecond))
+			fmt.Println()
 
 			if *debug_mode_on == true {
 
