@@ -9,6 +9,7 @@ import (
 	"log"
 	"strconv"
 	"path/filepath"
+	"time"
 )
 
 // Global variable definitions
@@ -291,6 +292,7 @@ func main() {
 	var file_counter int
 	var file_counter_str string
 	var files_to_process_str string
+	start_time := time.Now()
 
 	///////////////////////////////
 	// Parse commandline options //
@@ -891,6 +893,10 @@ func main() {
 			if _, err := os.Stat(ffmpeg_2_pass_logfile_path + "-0.log.mbtree"); err == nil {
 				os.Remove(ffmpeg_2_pass_logfile_path + "-0.log.mbtree")
 			}
+
+			elapsed_time := time.Since(start_time)
+			fmt.Printf("Processing took %s", elapsed_time.Round(time.Millisecond))
+			fmt.Println()
 		}
 
 
