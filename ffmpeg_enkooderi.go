@@ -12,11 +12,13 @@ import (
 )
 
 // Global variable definitions
-var complete_stream_info_map = make(map[int][]string)
+var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
 var subtitle_stream_info_map = make(map[string]string)
 
+// Create a slice for storing all video, audio and subtitle stream infos for each input file.
+// There can be many audio and subtitle streams in a file.
 var Complete_file_info_slice [][][][]string
 
 func run_external_command(command_to_run_str_slice []string) ([]string,  error) {
@@ -42,8 +44,8 @@ func run_external_command(command_to_run_str_slice []string) ([]string,  error) 
 
 func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []string) {
 
-	// Parse ffprobe output, find wrapper, video- and audiostream information in it,
-	// and store this info in global maps: complete_stream_info_map and 
+	// Parse ffprobe output, find video- and audiostream information in it,
+	// and store this info in the global map: Complete_stream_info_map
 
 	var stream_info_str_slice []string
 	var text_line_str_slice []string
@@ -53,7 +55,7 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 	var error error // a variable named error of type error
 
 	// Collect information about all streams in the media file.
-        // The info is collected to stream specific slices and stored in map: complete_stream_info_map
+        // The info is collected to stream specific slices and stored in map: Complete_stream_info_map
         // The stream number is used as the map key when saving info slice to map
 
 	for _,text_line := range unsorted_ffprobe_information_str_slice {
@@ -78,18 +80,19 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 				continue
 			}
 
-			string_to_remove_str_slice = string_to_remove_str_slice[:0] // Empty the slice so that allocated slice ram space remains and is not garbage collected.
+			// Remove the text "streams.stream." from the beginning of each text line
+			string_to_remove_str_slice = string_to_remove_str_slice[:0] // Clear the slice so that allocated slice ram space remains and is not garbage collected.
 			string_to_remove_str_slice = append(string_to_remove_str_slice, "streams.stream.",strconv.Itoa(stream_number_int),".")
 			stream_data_str = strings.Replace(text_line, strings.Join(string_to_remove_str_slice,""),"",1) // Remove the unwanted string in front of the text line.
 			stream_data_str = strings.Replace(stream_data_str, "\"", "", -1) // Remove " characters from the data.
 
-			// Add found stream info line to a slice of previously stored info
+			// Add found stream info line to a slice with previously stored info
 			// and store it in a map. The stream number acts as the map key.
-			if _, item_found := complete_stream_info_map[stream_number_int] ; item_found == true {
-				stream_info_str_slice = complete_stream_info_map[stream_number_int]
+			if _, item_found := Complete_stream_info_map[stream_number_int] ; item_found == true {
+				stream_info_str_slice = Complete_stream_info_map[stream_number_int]
 			}
 			stream_info_str_slice = append(stream_info_str_slice, stream_data_str)
-			complete_stream_info_map[stream_number_int] = stream_info_str_slice
+			Complete_stream_info_map[stream_number_int] = stream_info_str_slice
 		}
 	}
 }
@@ -109,7 +112,9 @@ func get_video_and_audio_stream_information(file_name string) {
 	var stream_type_is_audio bool = false
 	var stream_type_is_subtitle = false
 
-	for _, stream_info_str_slice := range complete_stream_info_map {
+	// Find text lines in FFprobe info that indicates if this stream is: video, audio or subtitle
+	// and store each stream info in a type specific (video, audio and subtitle) slice that in turn gets stored in a slice containing all video, audio or subtitle specific info.
+	for _, stream_info_str_slice := range Complete_stream_info_map {
 
 		stream_type_is_video = false
 		stream_type_is_audio = false
@@ -118,6 +123,7 @@ func get_video_and_audio_stream_information(file_name string) {
 		single_audio_stream_info_slice = nil
 		single_subtitle_stream_info_slice = nil
 
+		// Find a line in FFprobe output that indicates this is a video stream
 		for _, text_line := range stream_info_str_slice {
 
 			if strings.Contains(text_line, "codec_type=video") {
@@ -125,6 +131,7 @@ func get_video_and_audio_stream_information(file_name string) {
 			}
 		}
 
+		// Find a line in FFprobe output that indicates this is a audio stream
 		for _, text_line := range stream_info_str_slice {
 
 			if strings.Contains(text_line, "codec_type=audio") {
@@ -132,6 +139,7 @@ func get_video_and_audio_stream_information(file_name string) {
 			}
 		}
 
+		// Find a line in FFprobe output that indicates this is a subtitle stream
 		for _, text_line := range stream_info_str_slice {
 
 			if strings.Contains(text_line, "codec_type=subtitle") {
@@ -139,6 +147,7 @@ func get_video_and_audio_stream_information(file_name string) {
 			}
 		}
 
+		// Store each video stream info text line in a slice and these slices in a slice that collects info for every video stream in the file.
 		if stream_type_is_video == true {
 
 			for _, text_line := range stream_info_str_slice {
@@ -153,6 +162,7 @@ func get_video_and_audio_stream_information(file_name string) {
 			all_video_streams_info_slice = append(all_video_streams_info_slice, single_video_stream_info_slice)
 		}
 
+		// Store each audio stream info text line in a slice and these slices in a slice that collects info for every audio stream in the file.
 		if stream_type_is_audio == true {
 
 			for _, text_line := range stream_info_str_slice {
@@ -169,6 +179,7 @@ func get_video_and_audio_stream_information(file_name string) {
 			all_audio_streams_info_slice = append(all_audio_streams_info_slice, single_audio_stream_info_slice)
 		}
 
+		// Store each subtitle stream info text line in a slice and these slices in a slice that collects info for every subtitle stream in the file.
 		if stream_type_is_subtitle == true {
 
 			for _, text_line := range stream_info_str_slice {
@@ -187,6 +198,8 @@ func get_video_and_audio_stream_information(file_name string) {
 		}
 	}
 
+	// If the input file does not have any video streams in it, store dummy information about a video stream with with and height set to 0 pixels.
+	// This will trigger an error message about the file in the main routine (we can't process a file without video)
 	if len(all_video_streams_info_slice) == 0 {
 		single_video_stream_info_slice = append(single_video_stream_info_slice, file_name, "0", "0")
 		all_video_streams_info_slice = append(all_video_streams_info_slice, single_video_stream_info_slice)
@@ -194,23 +207,21 @@ func get_video_and_audio_stream_information(file_name string) {
 
 	stream_info_slice = append(stream_info_slice, all_video_streams_info_slice, all_audio_streams_info_slice, all_subtitle_streams_info_slice)
 	Complete_file_info_slice = append(Complete_file_info_slice, stream_info_slice)
-	complete_stream_info_map = make(map[int][]string) // Clear out stream info map by creating a new one with the same name.
+	Complete_stream_info_map = make(map[int][]string) // Clear out stream info map by creating a new one with the same name. We collect information to this map for one input file and need to clear it between processing files.
 
-	// FIXME valitse tähän parempi failiesimerkki barbarella.ts
-	// Complete_file_info_slice contains one slice for each input file. This file contains slices woth further stream information.
+	// Complete_file_info_slice contains one slice for each input file.
 	//
-	// Example: [[[/mounttipiste/Sailytettava_Tavara-Digiboxi/00-Yhteinen_Kotidirri/security_now/barbarella.ts 720 576]] [[eng 0 2] [dut 1 2]] [[fin 0 dvb_subtitle] [fin 0 dvb_teletext]]]
-	// The first slice contains input file path (/home/mika/Downloads/sn0652.mp3) and video width and height in pixels (600, 600). This slice is packed inside another redundant slice since all slices stored in Complete_file_info_slice must be slices of slices of strings [][]string.
-	// 
-	// The second slice contains separate slices for all audio streams in the file. The first stream info is stored as slice 0 the next as 1, etc. In this case there is only one audio stream with no languge information (language = ""), the stream is not meant for visually impared (0 = no, 1 = yes), and the audio stream has 1 channels.
-	// 
-	// The third slice contains separate slices for all subtitle streams in the file. The first stream info is stored as slice 0 the next as 1, etc. In this case there is no subtitle streams.
-	// 
-	// Data in Complete_file_info_slice for ONE input file contains the following:
-	// [ [slice for video information], [slice for audio information], [slice for subtitle information] ]
-	// 
-	// [ [filename, video width, video height], [audio language, for visually impared, number of audio channels], [subtitle language, fot hearing impared, codec name] ]
-	// 
+	// The contents is when info for one file is stored: [ [ [/home/mika/Downloads/dvb_stream.ts 720 576]]  [[eng 0 2]  [dut 1 2]]  [[fin 0 dvb_subtitle]  [fin 0 dvb_teletext] ] ]
+	//
+	// The file path is: /home/mika/Downloads/dvb_stream.ts
+	// Video width is: 720 pixels
+	// Video height is: 576 pixels
+	// The input file has two audio streams
+	// Audio stream 0: language is: english, audio is for for visually impared = 0 (false), there are 2 audio channels in the stream.
+	// Audio stream 1: language is: dutch, audio is for visually impared = 1 (true), there are 2 audio channels in the stream.
+	// The input file has two subtitle streams
+	// Subtitle stream 0: language is: finnish, subtitle is for hearing impared = 0 (false), the subtitle codec is: dvb (bitmap)
+	// Subtitle stream 1: language is: finnish, subtitle is for hearing impared = 0 (false), the subtitle codec is: teletext
 	// 
 
 	return
@@ -277,6 +288,9 @@ func main() {
 	var error_message error
 	var crop_value_map = make(map[string]int)
 	var error_messages []string
+	var file_counter int
+	var file_counter_str string
+	var files_to_process_str string
 
 	///////////////////////////////
 	// Parse commandline options //
@@ -334,7 +348,7 @@ func main() {
 	}
 
 	subtitle_options := ""
-	output_directory_name := "00-valmiit"
+	output_directory_name := "00-processed_files"
 	output_video_format := []string{"-f", "mp4"}
 
 	/////////////////////////////////////////
@@ -513,6 +527,8 @@ func main() {
 	// Main loop that processess all files //
 	/////////////////////////////////////////
 
+	files_to_process_str = strconv.Itoa(len(Complete_file_info_slice))
+
 	for _,file_info_slice := range Complete_file_info_slice {
 
 		video_slice_temp := file_info_slice[0]
@@ -540,6 +556,16 @@ func main() {
 		if _, err := os.Stat(filepath.Join(inputfile_path, output_directory_name)); os.IsNotExist(err) {
 			os.Mkdir(filepath.Join(inputfile_path, output_directory_name), 0777)
 		}
+
+		// Print information about processing
+		file_counter = file_counter + 1
+		file_counter_str = strconv.Itoa(file_counter)
+
+		fmt.Println("")
+		fmt.Println(strings.Repeat("#", 80))
+		fmt.Println("")
+		fmt.Println("Processing file " + file_counter_str + "/" + files_to_process_str + "  '" + inputfile_name + "'")
+		fmt.Println("")
 
 		/////////////////////////////////////////////////////////////
 		// Find out autocrop parameters by scanning the input file //
@@ -569,8 +595,7 @@ func main() {
 			crop_value_counter := 0
 
 			if *debug_mode_on == false {
-				fmt.Println()
-				fmt.Println("Finding crop values for: " + inputfile_name)
+				fmt.Printf("Finding crop values for: " + inputfile_name + "   ")
 			}
 
 			if *debug_mode_on == true {
@@ -646,12 +671,10 @@ func main() {
 			video_height_int, _  := strconv.Atoi(video_height)
 			cropped_height := video_height_int - crop_values_picture_height - crop_values_height_offset
 
-			fmt.Println("Crop", crop_values_height_offset, "pixels from the top and", strconv.Itoa(cropped_height), "from the bottom")
-
 			video_width_int, _  := strconv.Atoi(video_width)
 			cropped_width := video_width_int - crop_values_picture_width - crop_values_width_offset
 
-			fmt.Println("Crop", crop_values_width_offset, "pixels from the left and", strconv.Itoa(cropped_width), "from the right")
+			fmt.Println("Top:", crop_values_height_offset, ", Bottom:", strconv.Itoa(cropped_height), ", Left:", crop_values_width_offset, ", Right:", strconv.Itoa(cropped_width))
 		}
 
 		/////////////////////////
@@ -875,13 +898,10 @@ func main() {
 }
 
 // FIXME
-// Tsekkaa kommentit ja kirjoittele niitä lisää.
-// Tsekkaa kannattaisko alun pari - kolme alirutiinia yhdistää yhdeksi.
 // Tee default tuloste järkeväksi: Processing file, Looking for crop values, crop values are: x:x:x:, Pass 1 encoding, Pass 2 encoding, Processing of file xxxxxxx finished.
 // Tulosta kuinka monta failia on vielä jonossa ja ehkä niiden nimet.
 // Tulosta prosessoinnissa yksittäisen failin ja koko käsittelyn kesto, niin jos joutuu ajamaan uudestaan voi vähän arvioidan kauan homma kestää.
-// Vaihda kohdehakemiston nimi: 00-valmiit nimeksi: 00-processed_files
-// Tulosta hakemistoon 00-valmiit failikohtainen tiedosto, jossa ffmpegin käsittelykomennot, käsittelyn kestot ja kroppiarvot ? Optio jolla tän saa päälle tai oletuksena päälle ja optio jolla saa pois ?
+// Tulosta hakemistoon 00-processed_files failikohtainen tiedosto, jossa ffmpegin käsittelykomennot, käsittelyn kestot ja kroppiarvot ? Optio jolla tän saa päälle tai oletuksena päälle ja optio jolla saa pois ?
 // Laita ohjelma käynnistämään prosesoinnit omiin threadehinsa ja defaulttina kahden tiedoston samanaikainen käsittely. Lisäksi optio jolla voi valita kuinka monta tiedostoa käsitellään samaan aikaan ?
 // Jos kroppausarvot on nolla, poista kroppaysoptiot ffmpegin komentoriviltä ?
 // 
