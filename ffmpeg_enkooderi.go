@@ -533,6 +533,7 @@ func main() {
 
 	for _,file_info_slice := range Complete_file_info_slice {
 
+		start_time = time.Now()
 		video_slice_temp := file_info_slice[0]
 		video_slice := video_slice_temp[0]
 		file_name := video_slice[0]
@@ -904,9 +905,6 @@ func main() {
 }
 
 // FIXME
-// Tee default tuloste järkeväksi: Processing file, Looking for crop values, crop values are: x:x:x:, Pass 1 encoding, Pass 2 encoding, Processing of file xxxxxxx finished.
-// Tulosta kuinka monta failia on vielä jonossa ja ehkä niiden nimet.
-// Tulosta prosessoinnissa yksittäisen failin ja koko käsittelyn kesto, niin jos joutuu ajamaan uudestaan voi vähän arvioidan kauan homma kestää.
 // Tulosta hakemistoon 00-processed_files failikohtainen tiedosto, jossa ffmpegin käsittelykomennot, käsittelyn kestot ja kroppiarvot ? Optio jolla tän saa päälle tai oletuksena päälle ja optio jolla saa pois ?
 // Laita ohjelma käynnistämään prosesoinnit omiin threadehinsa ja defaulttina kahden tiedoston samanaikainen käsittely. Lisäksi optio jolla voi valita kuinka monta tiedostoa käsitellään samaan aikaan ?
 // Jos kroppausarvot on nolla, poista kroppaysoptiot ffmpegin komentoriviltä ?
