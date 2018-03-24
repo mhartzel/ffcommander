@@ -279,6 +279,8 @@ func main() {
 	var final_crop_string string
 	var command_to_run_str_slice []string
 	var file_to_process, video_width, video_height string
+	var video_height_int int
+	var video_bitrate string
 	var audio_language, for_visually_impared, number_of_audio_channels string
 	var subtitle_language, for_hearing_impared, subtitle_codec_name string
 	var crop_values_picture_width int
@@ -793,8 +795,12 @@ func main() {
 			// If video horizontal resolution is over 700 pixel choose HD video compression settings
 			video_compression_options := video_compression_options_sd
 
-			if *force_hd_bool || video_height > "700" {
+			video_height_int,_ = strconv.Atoi(video_height)
+			video_bitrate = "1600k"
+
+			if *force_hd_bool || video_height_int > 700 {
 				video_compression_options = video_compression_options_hd
+				video_bitrate = "8000k"
 			}
 
 			// Add video compression options to ffmpeg commandline
@@ -833,7 +839,8 @@ func main() {
 				fmt.Println("ffmpeg_pass_1_commandline:", ffmpeg_pass_1_commandline)
 
 			} else {
-
+				fmt.Println()
+				fmt.Println("Encoding with video bitrate:", video_bitrate)
 				fmt.Printf("Pass 1 encoding: " + inputfile_name + " ")
 			}
 
@@ -865,7 +872,6 @@ func main() {
 			if *debug_mode_on == true {
 
 				fmt.Println()
-
 				fmt.Println("ffmpeg_pass_2_commandline:", ffmpeg_pass_2_commandline)
 
 			} else {
