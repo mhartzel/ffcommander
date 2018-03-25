@@ -510,7 +510,7 @@ func main() {
 				for_visually_impared = audio_info[1]
 				number_of_audio_channels = audio_info[2]
 
-				fmt.Println("Audio stream number:", audio_stream_number, ", language:", audio_language, ", For visually impared:", for_visually_impared, ", Number of channels:", number_of_audio_channels)
+				fmt.Printf("Audio stream number: %d, language: %s, for visually impared: %s, number of channels: %s\n", audio_stream_number, audio_language, for_visually_impared, number_of_audio_channels)
 			}
 
 			fmt.Println()
@@ -521,7 +521,7 @@ func main() {
 				for_hearing_impared = subtitle_info[1]
 				subtitle_codec_name = subtitle_info[2]
 
-				fmt.Println("Subtitle stream number:", subtitle_stream_number, ", language:", subtitle_language, ", For hearing impared:", for_hearing_impared, ", Codec name:", subtitle_codec_name)
+				fmt.Printf("Subtitle stream number: %d, language: %s, for hearing impared: %s, codec name: %s\n", subtitle_stream_number, subtitle_language, for_hearing_impared, subtitle_codec_name)
 			}
 
 			fmt.Println()
@@ -574,7 +574,6 @@ func main() {
 		fmt.Println(strings.Repeat("#", 80))
 		fmt.Println("")
 		fmt.Println("Processing file " + file_counter_str + "/" + files_to_process_str + "  '" + inputfile_name + "'")
-		fmt.Println("")
 
 		/////////////////////////////////////////////////////////////
 		// Find out autocrop parameters by scanning the input file //
@@ -929,8 +928,8 @@ func main() {
 
 // FIXME
 // Tulosta hakemistoon 00-processed_files failikohtainen tiedosto, jossa ffmpegin käsittelykomennot, käsittelyn kestot ja kroppiarvot ? Optio jolla tän saa päälle tai oletuksena päälle ja optio jolla saa pois ?
-// Laita ohjelma käynnistämään prosesoinnit omiin threadehinsa ja defaulttina kahden tiedoston samanaikainen käsittely. Lisäksi optio jolla voi valita kuinka monta tiedostoa käsitellään samaan aikaan ?
 // Jos kroppausarvot on nolla, poista kroppaysoptiot ffmpegin komentoriviltä ?
+// Tee enkoodauksen aikainen FFmpegin tulosteen tsekkaus, joka laskee koodauksen aika-arvion ja prosentit siitä kuinka paljon failia on jo käsitelty (fps ?) Tästä on esimerkkiohjelma muistiinpanoissa, mutta se jumittaa n. 90 sekuntia FFmpeg - enkoodauksen alkamisesta.
 // 
 
 
