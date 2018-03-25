@@ -13,6 +13,7 @@ import (
 )
 
 // Global variable definitions
+var version_number string = "1.00" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -265,6 +266,7 @@ func main() {
 	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables.")
 	var search_start_str = flag.String("ss", "", "Seek to position before starting processing. This option is given to FFmpeg as it is. Example -ss 01:02:10 Seek to 1 hour two min and 10 seconds.")
 	var processing_time_str = flag.String("t", "", "Duration to process. This option is given to FFmpeg as it is. Example -t 01:02 process 1 min 2 secs of the file.")
+	var show_program_version = flag.Bool("v", false,"Show the version of this program")
 
 	//////////////////////
 	// Define variables //
@@ -322,6 +324,28 @@ func main() {
 			// Add all existing input file names to a slice
 			input_filenames = append(input_filenames, file_name)
 		}
+	}
+
+	if *show_program_version == true {
+		fmt.Println()
+		fmt.Println("Version:", version_number)
+		fmt.Println()
+		fmt.Println("(C) Mikael Hartzell 2018.")
+		fmt.Println()
+		fmt.Println("FFmpeg version 3 or higher is required to use this program.")
+		fmt.Println()
+		fmt.Println("This program is distributed under the GNU General Public License, version 3 (GPLv3)")
+		fmt.Println("Check the license here: http://www.gnu.org/licenses/gpl.txt")
+		fmt.Println("Basically this license gives you full freedom to do what ever you want with this program.")
+		fmt.Println("You are free to use, modify, distribute it any way you like.")
+		fmt.Println("The only restriction is that if you make derivate works of this program AND distribute those,")
+		fmt.Println("the derivate works must also be licensed under GPL 3.")
+		fmt.Println()
+		fmt.Println("This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;")
+		fmt.Println("without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.")
+		fmt.Println("See the GNU General Public License for more details")
+		fmt.Println()
+		os.Exit(0)
 	}
 
 	//////////////////////////////////////////////////
