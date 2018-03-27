@@ -10,10 +10,11 @@ import (
 	"strconv"
 	"path/filepath"
 	"time"
+	"sort"
 )
 
 // Global variable definitions
-var version_number string = "1.00" // This is the version of this program
+var version_number string = "1.01" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -113,10 +114,22 @@ func get_video_and_audio_stream_information(file_name string) {
 	var stream_type_is_video bool = false
 	var stream_type_is_audio bool = false
 	var stream_type_is_subtitle = false
+	var stream_info_str_slice []string
 
 	// Find text lines in FFprobe info that indicates if this stream is: video, audio or subtitle
 	// and store each stream info in a type specific (video, audio and subtitle) slice that in turn gets stored in a slice containing all video, audio or subtitle specific info.
-	for _, stream_info_str_slice := range Complete_stream_info_map {
+
+	// First get dictionary keys and sort them
+	var dictionary_keys []int
+
+	for key:= range Complete_stream_info_map {
+		dictionary_keys = append(dictionary_keys, key)
+	}
+
+	sort.Ints(dictionary_keys)
+
+	for _, dictionary_key := range dictionary_keys {
+		stream_info_str_slice = Complete_stream_info_map[dictionary_key]
 
 		stream_type_is_video = false
 		stream_type_is_audio = false
@@ -266,7 +279,8 @@ func main() {
 	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables.")
 	var search_start_str = flag.String("ss", "", "Seek to position before starting processing. This option is given to FFmpeg as it is. Example -ss 01:02:10 Seek to 1 hour two min and 10 seconds.")
 	var processing_time_str = flag.String("t", "", "Duration to process. This option is given to FFmpeg as it is. Example -t 01:02 process 1 min 2 secs of the file.")
-	var show_program_version = flag.Bool("v", false,"Show the version of this program")
+	var show_program_version_short = flag.Bool("v", false,"Show the version of this program")
+	var show_program_version_long = flag.Bool("version", false,"Show the version of this program")
 
 	//////////////////////
 	// Define variables //
@@ -326,7 +340,7 @@ func main() {
 		}
 	}
 
-	if *show_program_version == true {
+	if *show_program_version_short == true || *show_program_version_long == true {
 		fmt.Println()
 		fmt.Println("Version:", version_number)
 		fmt.Println()
