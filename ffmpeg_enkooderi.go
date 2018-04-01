@@ -19,6 +19,7 @@ var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
 var subtitle_stream_info_map = make(map[string]string)
+var wrapper_info_map = make(map[string]string)
 
 // Create a slice for storing all video, audio and subtitle stream infos for each input file.
 // There can be many audio and subtitle streams in a file.
@@ -52,6 +53,8 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 
 	var stream_info_str_slice []string
 	var text_line_str_slice []string
+	var wrapper_info_str_slice []string
+
 	var stream_number_int int
 	var stream_data_str string
 	var string_to_remove_str_slice []string
@@ -96,6 +99,14 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 			}
 			stream_info_str_slice = append(stream_info_str_slice, stream_data_str)
 			Complete_stream_info_map[stream_number_int] = stream_info_str_slice
+		}
+
+		// Get media file wrapper information and store it in a slice.
+                if strings.HasPrefix(text_line, "format") {
+                        wrapper_info_str_slice = strings.Split(strings.Replace(text_line, "format.", "", 1), "=")
+                        wrapper_key := strings.TrimSpace(wrapper_info_str_slice[0])
+                        wrapper_value := strings.TrimSpace(strings.Replace(wrapper_info_str_slice[1],"\"", "", -1)) // Remove whitespace and " charcters from the data
+                        wrapper_info_map[wrapper_key] = wrapper_value
 		}
 	}
 }
@@ -173,7 +184,8 @@ func get_video_and_audio_stream_information(file_name string) {
 				video_stream_info_map[video_key] = video_value
 				}
 
-			single_video_stream_info_slice = append(single_video_stream_info_slice, file_name, video_stream_info_map["width"], video_stream_info_map["height"])
+			// Add also duration from wrapper information to the video info.
+			single_video_stream_info_slice = append(single_video_stream_info_slice, file_name, video_stream_info_map["width"], video_stream_info_map["height"], wrapper_info_map["duration"])
 			all_video_streams_info_slice = append(all_video_streams_info_slice, single_video_stream_info_slice)
 		}
 
@@ -191,6 +203,7 @@ func get_video_and_audio_stream_information(file_name string) {
 			single_audio_stream_info_slice = append(single_audio_stream_info_slice, audio_stream_info_map["tags.language"])
 			single_audio_stream_info_slice = append(single_audio_stream_info_slice, audio_stream_info_map["disposition.visual_impaired"])
 			single_audio_stream_info_slice = append(single_audio_stream_info_slice, audio_stream_info_map["channels"])
+			single_audio_stream_info_slice = append(single_audio_stream_info_slice, audio_stream_info_map["sample_rate"])
 			all_audio_streams_info_slice = append(all_audio_streams_info_slice, single_audio_stream_info_slice)
 		}
 
@@ -226,14 +239,13 @@ func get_video_and_audio_stream_information(file_name string) {
 
 	// Complete_file_info_slice contains one slice for each input file.
 	//
-	// The contents is when info for one file is stored: [ [ [/home/mika/Downloads/dvb_stream.ts 720 576]]  [[eng 0 2]  [dut 1 2]]  [[fin 0 dvb_subtitle]  [fin 0 dvb_teletext] ] ]
+	// The contents is when info for one file is stored: [ [ [/home/mika/Downloads/dvb_stream.ts 720 576 64.123411]]  [[eng 0 2 48000]  [dut 1 2 48000]]  [[fin 0 dvb_subtitle]  [fin 0 dvb_teletext] ] ]
 	//
 	// The file path is: /home/mika/Downloads/dvb_stream.ts
-	// Video width is: 720 pixels
-	// Video height is: 576 pixels
-	// The input file has two audio streams
-	// Audio stream 0: language is: english, audio is for for visually impared = 0 (false), there are 2 audio channels in the stream.
-	// Audio stream 1: language is: dutch, audio is for visually impared = 1 (true), there are 2 audio channels in the stream.
+	// Video width is: 720 pixels and height is: 576 pixels and the duration is: 64.123411 seconds.
+	// The input file has two audio streams (languages: eng and dut)
+	// Audio stream 0: language is: english, audio is for for visually impared = 0 (false), there are 2 audio channels in the stream and sample rate is 48000.
+	// Audio stream 1: language is: dutch, audio is for visually impared = 1 (true), there are 2 audio channels in the stream and sample rate is 48000.
 	// The input file has two subtitle streams
 	// Subtitle stream 0: language is: finnish, subtitle is for hearing impared = 0 (false), the subtitle codec is: dvb (bitmap)
 	// Subtitle stream 1: language is: finnish, subtitle is for hearing impared = 0 (false), the subtitle codec is: teletext
@@ -294,7 +306,7 @@ func main() {
 	var ffmpeg_pass_2_commandline []string
 	var final_crop_string string
 	var command_to_run_str_slice []string
-	var file_to_process, video_width, video_height string
+	var file_to_process, video_width, video_height, video_duration string
 	var video_height_int int
 	var video_bitrate string
 	var audio_language, for_visually_impared, number_of_audio_channels string
@@ -583,6 +595,7 @@ func main() {
 		file_name := video_slice[0]
 		video_width = video_slice[1]
 		video_height = video_slice[2]
+		video_duration = video_slice[3]
 
 		// Create input + output filenames and paths
 		inputfile_absolute_path,_ := filepath.Abs(file_name)
@@ -619,99 +632,151 @@ func main() {
 
 		if *autocrop_bool == true {
 
-			// Create the FFmpeg commandline to scan for blask areas at the borders of the video.
+			// Create the FFmpeg commandline to scan for black areas at the borders of the video.
 			command_to_run_str_slice = nil
-			command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg")
+			quick_scan_failed := false
 
-			if *search_start_str == "" {
-				command_to_run_str_slice = append(command_to_run_str_slice, "-t","1800")
-			}
+			video_duration_int,_ := strconv.Atoi(strings.Split(video_duration, ".")[0])
 
-			command_to_run_str_slice = append(command_to_run_str_slice, "-i",file_name)
+			// For long videos take short snapshots of crop values spanning the whole file. This is "quick scan mode".
+			if video_duration_int > 300 {
 
-			if *search_start_str != "" {
-				command_to_run_str_slice = append(command_to_run_str_slice, "-ss", *search_start_str)
-			}
+				spotcheck_interval := video_duration_int / 10 // How many spots checks will be made across the duration of the video (default = 10)
+				scan_duration_str := "10" // How many seconds of video to scan for each spot (default = 10 seconds)
+				scan_duration_int,_ := strconv.Atoi(scan_duration_str)
 
-			if *processing_time_str != "" {
-				command_to_run_str_slice = append(command_to_run_str_slice, "-t", *processing_time_str)
-			}
-			command_to_run_str_slice = append(command_to_run_str_slice, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:16:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
+				if *debug_mode_on == false {
+					fmt.Printf("Finding crop values for: " + inputfile_name + "   ")
+				}
 
-			crop_value_counter := 0
+				// Repeat spot checks
+				for time_to_jump_to := scan_duration_int ; time_to_jump_to + scan_duration_int < video_duration_int ; time_to_jump_to = time_to_jump_to + spotcheck_interval {
 
-			if *debug_mode_on == false {
-				fmt.Printf("Finding crop values for: " + inputfile_name + "   ")
-			}
+					// Create the ffmpeg command to scan for crop values
+					command_to_run_str_slice = nil
+					command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-ss", strconv.Itoa(time_to_jump_to), "-t", scan_duration_str, "-i", file_name, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:16:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
 
-			if *debug_mode_on == true {
-				fmt.Println()
-				fmt.Println("FFmpeg crop command:", command_to_run_str_slice)
-				fmt.Println()
-			}
+					if *debug_mode_on == true {
+						fmt.Println()
+						fmt.Println("FFmpeg crop command:", command_to_run_str_slice)
+						fmt.Println()
+					}
 
-			ffmpeg_crop_output, ffmpeg_crop_error := run_external_command(command_to_run_str_slice)
+					ffmpeg_crop_output, ffmpeg_crop_error := run_external_command(command_to_run_str_slice)
 
-			// FFmpeg collects possible crop values across the first 1800 seconds of the file and outputs a list of how many times each possible crop values exists.
-			// Parse the list to find the value that is most frequent, that is the value that can be applied without cropping too musch or too little.
-			if ffmpeg_crop_error == nil {
+					// FFmpeg collects possible crop values across the first 1800 seconds of the file and outputs a list of how many times each possible crop values exists.
+					// Parse the list to find the value that is most frequent, that is the value that can be applied without cropping too musch or too little.
+					if ffmpeg_crop_error == nil {
 
-				for _,slice_item := range ffmpeg_crop_output {
+						crop_value_counter := 0
 
-					for _,item := range strings.Split(slice_item, "\n") {
+						for _,slice_item := range ffmpeg_crop_output {
 
-						if strings.Contains(item, "crop="){
+							for _,item := range strings.Split(slice_item, "\n") {
 
-							crop_value := strings.Split(item, "crop=")[1]
+								if strings.Contains(item, "crop="){
 
-							if _,item_found := crop_value_map[crop_value] ; item_found == true {
-								crop_value_counter = crop_value_map[crop_value]
+									crop_value := strings.Split(item, "crop=")[1]
+
+									if _,item_found := crop_value_map[crop_value] ; item_found == true {
+										crop_value_counter = crop_value_map[crop_value]
+									}
+									crop_value_counter = crop_value_counter + 1
+									crop_value_map[crop_value] = crop_value_counter
+									crop_value_counter = 0
+								}
 							}
-							crop_value_counter = crop_value_counter + 1
-							crop_value_map[crop_value] = crop_value_counter
-							crop_value_counter = 0
+						}
+					} else {
+						fmt.Println()
+						fmt.Println("Quick scan for crop failed, switching to the slow method")
+						fmt.Println()
+						break
+					}
+				}
+			}
+
+			// Perform slow scan for crop values.
+			if video_duration_int < 300 || quick_scan_failed == true || len(crop_value_map) == 0 {
+
+				command_to_run_str_slice = nil
+				command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-t", "1800", "-i", file_name, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:16:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
+
+				if *debug_mode_on == false {
+					fmt.Printf("Finding crop values for: " + inputfile_name + "   ")
+				}
+
+				if *debug_mode_on == true {
+					fmt.Println()
+					fmt.Println("FFmpeg crop command:", command_to_run_str_slice)
+					fmt.Println()
+				}
+
+				ffmpeg_crop_output, ffmpeg_crop_error := run_external_command(command_to_run_str_slice)
+
+				// FFmpeg collects possible crop values across the first 1800 seconds of the file and outputs a list of how many times each possible crop values exists.
+				// Parse the list to find the value that is most frequent, that is the value that can be applied without cropping too musch or too little.
+				if ffmpeg_crop_error == nil {
+
+					crop_value_counter := 0
+
+					for _,slice_item := range ffmpeg_crop_output {
+
+						for _,item := range strings.Split(slice_item, "\n") {
+
+							if strings.Contains(item, "crop="){
+
+								crop_value := strings.Split(item, "crop=")[1]
+
+								if _,item_found := crop_value_map[crop_value] ; item_found == true {
+									crop_value_counter = crop_value_map[crop_value]
+								}
+								crop_value_counter = crop_value_counter + 1
+								crop_value_map[crop_value] = crop_value_counter
+								crop_value_counter = 0
+							}
 						}
 					}
+				} else {
+					fmt.Println()
+					fmt.Println("Scanning inputfile with FFmpeg resulted in an error:")
+					fmt.Println(ffmpeg_crop_error)
+					os.Exit(1)
 				}
-				last_crop_value := 0
+			}
+
+			// Find the most frequent crop value
+			last_crop_value := 0
+
+			for crop_value := range crop_value_map {
+
+				if crop_value_map[crop_value] > last_crop_value {
+					last_crop_value = crop_value_map[crop_value]
+					final_crop_string = crop_value
+				}
+			}
+
+			// Store the crop values we will use in variables.
+			crop_values_picture_width,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[0])
+			crop_values_picture_height,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[1])
+			crop_values_width_offset,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[2])
+			crop_values_height_offset,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[3])
+
+			/////////////////////////////////////////
+			// Print variable values in debug mode //
+			/////////////////////////////////////////
+			if *debug_mode_on == true {
+
+				fmt.Println()
+				fmt.Println("Crop values are:")
 
 				for crop_value := range crop_value_map {
-
-					if crop_value_map[crop_value] > last_crop_value {
-						last_crop_value = crop_value_map[crop_value]
-						final_crop_string = crop_value
-					}
+					fmt.Println(crop_value_map[crop_value], "instances of crop values:", crop_value)
+					
 				}
 
-				// Store the crop values we will use in variables.
-				crop_values_picture_width,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[0])
-				crop_values_picture_height,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[1])
-				crop_values_width_offset,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[2])
-				crop_values_height_offset,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[3])
-
-				/////////////////////////////////////////
-				// Print variable values in debug mode //
-				/////////////////////////////////////////
-				if *debug_mode_on == true {
-
-					fmt.Println()
-					fmt.Println("Crop values are:")
-
-					for crop_value := range crop_value_map {
-						fmt.Println(crop_value_map[crop_value], "instances of crop values:", crop_value)
-						
-					}
-
-					fmt.Println()
-					fmt.Println("Most frequent crop value is", final_crop_string)
-				}
-
-			} else {
 				fmt.Println()
-				fmt.Println("Scanning inputfile with FFmpeg resulted in an error:")
-				fmt.Println(ffmpeg_crop_error)
-				fmt.Println()
-				os.Exit(1)
+				fmt.Println("Most frequent crop value is", final_crop_string)
 			}
 
 			video_height_int, _  := strconv.Atoi(video_height)
@@ -721,6 +786,7 @@ func main() {
 			cropped_width := video_width_int - crop_values_picture_width - crop_values_width_offset
 
 			fmt.Println("Top:", crop_values_height_offset, ", Bottom:", strconv.Itoa(cropped_height), ", Left:", crop_values_width_offset, ", Right:", strconv.Itoa(cropped_width))
+
 		}
 
 		/////////////////////////
@@ -965,9 +1031,15 @@ func main() {
 }
 
 // FIXME
+// Jos ohjelmalle annetusta tiedostojoukosta puuttuu yksi failia, ohjelma exitoi eikä käsittele yhtään tiedostoa.
 // Tulosta hakemistoon 00-processed_files failikohtainen tiedosto, jossa ffmpegin käsittelykomennot, käsittelyn kestot ja kroppiarvot ? Optio jolla tän saa päälle tai oletuksena päälle ja optio jolla saa pois ?
 // Jos kroppausarvot on nolla, poista kroppaysoptiot ffmpegin komentoriviltä ?
 // Tee enkoodauksen aikainen FFmpegin tulosteen tsekkaus, joka laskee koodauksen aika-arvion ja prosentit siitä kuinka paljon failia on jo käsitelty (fps ?) Tästä on esimerkkiohjelma muistiinpanoissa, mutta se jumittaa n. 90 sekuntia FFmpeg - enkoodauksen alkamisesta.
-// 
+// Nimeä ffmpeg_enkooderi uudella nimellä ja poista hakemisto: 00-vanhat jotta git repon voi julkaista
+// Tee erillinen skripti audion synkkaamista varten
+// Tsekkaa pitäiskö aina --filter_complexin kanssa käyttää audiossaoletusdelaytä (ehkä 80 ms).
+// Tsekkaa saisko ohjelman kohtuullisella vaivalla modattu niin, että subtitlen ja audion numeron sijaan vois antaa kielikoodin. Ei tarttis koskaan sit skannailla faileja. Tukeeko FFmpeg kielikoodeja ?
+// Pitäiskö laittaa option, jolla vois rajoittaa käytettävien prosessorien lukumäärän ?
+//
 
 
