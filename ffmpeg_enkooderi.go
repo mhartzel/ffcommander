@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.02" // This is the version of this program
+var version_number string = "1.03" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -280,7 +280,7 @@ func main() {
 	//////////////////////////////////////////
 	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.")
 	var subtitle_int = flag.Int("s", -1, "Subtitle `number, -s=1` (Use subtitle number 1 in the source file)")
-	var subtitle_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so=55 (move subtitle 55 pixels down), -so=-55 (move subtitle 55 pixels up)")
+	var subtitle_vertical_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so=55 (move subtitle 55 pixels down), -so=-55 (move subtitle 55 pixels up)")
 	var subtitle_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead for cropping subtitle. This option results in smaller subtitle font.")
 	var audio_stream_number_int = flag.Int("a", 0, "Audio stream number, -a=1 (Use audio stream number 1 in the source file)")
 	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale")
@@ -322,6 +322,8 @@ func main() {
 	var file_counter int
 	var file_counter_str string
 	var files_to_process_str string
+	var subtitle_horizontal_offset_int int
+	var subtitle_horizontal_offset_str string
 	start_time := time.Now()
 	pass_1_start_time := time.Now()
 	pass_1_elapsed_time := time.Since(start_time)
@@ -421,7 +423,7 @@ func main() {
 		fmt.Println("deinterlace_options:",deinterlace_options)
 		fmt.Println("ffmpeg_commandline_start:",ffmpeg_commandline_start)
 		fmt.Println("subtitle_number:",subtitle_number)
-		fmt.Println("subtitle_offset_int:",*subtitle_offset_int)
+		fmt.Println("subtitle_vertical_offset_int:",*subtitle_vertical_offset_int)
 		fmt.Println("*subtitle_downscale:",*subtitle_downscale)
 		fmt.Println("*grayscale_bool:", *grayscale_bool)
 		fmt.Println("grayscale_options:",grayscale_options)
@@ -589,6 +591,8 @@ func main() {
 
 	for _,file_info_slice := range Complete_file_info_slice {
 
+		subtitle_horizontal_offset_int = 0
+		subtitle_horizontal_offset_str = "0"
 		start_time = time.Now()
 		video_slice_temp := file_info_slice[0]
 		video_slice := video_slice_temp[0]
@@ -785,6 +789,12 @@ func main() {
 			video_width_int, _  := strconv.Atoi(video_width)
 			cropped_width := video_width_int - crop_values_picture_width - crop_values_width_offset
 
+			// Prepare offset for possible subtitle burn in
+			// Subtitle placement is always relative to the left side of the picture,
+			// if left is cropped then the subtitle needs to be moved left the same amount of pixels
+			subtitle_horizontal_offset_int = crop_values_width_offset * -1
+			subtitle_horizontal_offset_str = strconv.Itoa(subtitle_horizontal_offset_int)
+
 			fmt.Println("Top:", crop_values_height_offset, ", Bottom:", strconv.Itoa(cropped_height), ", Left:", crop_values_width_offset, ", Right:", strconv.Itoa(cropped_width))
 
 		}
@@ -887,8 +897,8 @@ func main() {
 
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number) +
 				"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
-				"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=0:main_h-overlay_h+" +
-				strconv.Itoa(*subtitle_offset_int) + strings.Join(grayscale_options, "") + "[processed_combined_streams]", "-map", "[processed_combined_streams]")
+				"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=" + subtitle_horizontal_offset_str + ":main_h-overlay_h+" +
+				strconv.Itoa(*subtitle_vertical_offset_int) + strings.Join(grayscale_options, "") + "[processed_combined_streams]", "-map", "[processed_combined_streams]")
 			}
 
 			///////////////////////////////////////////////////////////////////
