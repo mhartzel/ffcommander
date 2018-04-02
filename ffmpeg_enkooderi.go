@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.04" // This is the version of this program
+var version_number string = "1.05" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -634,6 +634,26 @@ func main() {
 		// Find out autocrop parameters by scanning the input file //
 		/////////////////////////////////////////////////////////////
 
+		// FFmpeg cropdetect scans the file and tries to guess where the black bars are.
+		// The command: cropdetect=24:16:250  means:
+		//
+		// Threshold for black is 24.
+		// The values returned by cropdetect must be divisible by 16.
+		// Reset detected border values to zero after 250 frames and try to detect borders again.
+		//
+		// FFmpeg returns a bunch of measurements like this: crop=1472:1080:224:0
+		// Lets see what this means and replace the values by variables: crop=A:B:C:D
+		// The line tells us what part of the picture will be left over after cropping. The line means:
+		//
+		// The detected left border is at C pixels from the left of the picture.
+		// Take A pixels starting from C to the right and where we end at is the detected right border of the picture.
+		// Pixels on the right of this point will be cropped.
+		//
+		// The detected upper border is at D pixels from the top of the picture
+		// Take B pixels starting from D down and where we end at is the detected bottom border of the picture.
+		// Pixels below this point will be cropped.
+		// 
+
 		if *autocrop_bool == true {
 
 			// Create the FFmpeg commandline to scan for black areas at the borders of the video.
@@ -658,7 +678,7 @@ func main() {
 
 					// Create the ffmpeg command to scan for crop values
 					command_to_run_str_slice = nil
-					command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-ss", strconv.Itoa(time_to_jump_to), "-t", scan_duration_str, "-i", file_name, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:8:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
+					command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-ss", strconv.Itoa(time_to_jump_to), "-t", scan_duration_str, "-i", file_name, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:16:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
 
 					if *debug_mode_on == true {
 						fmt.Println()
@@ -704,7 +724,7 @@ func main() {
 			if video_duration_int < 300 || quick_scan_failed == true || len(crop_value_map) == 0 {
 
 				command_to_run_str_slice = nil
-				command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-t", "1800", "-i", file_name, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:8:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
+				command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-t", "1800", "-i", file_name, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:16:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
 
 				if *debug_mode_on == false {
 					fmt.Printf("Finding crop values for: " + inputfile_name + "   ")
