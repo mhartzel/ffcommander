@@ -639,6 +639,7 @@ func main() {
 		//
 		// Threshold for black is 24.
 		// The values returned by cropdetect must be divisible by 16.
+		// FFmpeg recommends using video sizes divisible by 16 for most video codecs also for H.264.
 		// Reset detected border values to zero after 250 frames and try to detect borders again.
 		//
 		// FFmpeg returns a bunch of measurements like this: crop=1472:1080:224:0
