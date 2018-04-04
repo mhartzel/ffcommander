@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.05" // This is the version of this program
+var version_number string = "1.07" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -317,7 +317,6 @@ func main() {
 	var crop_values_height_offset int
 	var unsorted_ffprobe_information_str_slice []string
 	var error_message error
-	var crop_value_map = make(map[string]int)
 	var error_messages []string
 	var file_counter int
 	var file_counter_str string
@@ -635,11 +634,12 @@ func main() {
 		/////////////////////////////////////////////////////////////
 
 		// FFmpeg cropdetect scans the file and tries to guess where the black bars are.
-		// The command: cropdetect=24:16:250  means:
+		// The command: cropdetect=24:8:250  means:
 		//
 		// Threshold for black is 24.
-		// The values returned by cropdetect must be divisible by 16.
-		// FFmpeg recommends using video sizes divisible by 16 for most video codecs also for H.264.
+		// The values returned by cropdetect must be divisible by 8.
+		// FFmpeg recommends using video sizes divisible by 16 for most video codecs.
+		// We use 8 here since in 1920x1080 the 1080 is not divisible by 16 still 1920x1080 is a stardard H.264 resolution, so the codec handles that resolution ok.
 		// Reset detected border values to zero after 250 frames and try to detect borders again.
 		//
 		// FFmpeg returns a bunch of measurements like this: crop=1472:1080:224:0
@@ -661,6 +661,9 @@ func main() {
 			command_to_run_str_slice = nil
 			quick_scan_failed := false
 
+			// Clear crop value storage map by creating a new map with the same name.
+			var crop_value_map = make(map[string]int)
+
 			video_duration_int,_ := strconv.Atoi(strings.Split(video_duration, ".")[0])
 
 			// For long videos take short snapshots of crop values spanning the whole file. This is "quick scan mode".
@@ -679,7 +682,7 @@ func main() {
 
 					// Create the ffmpeg command to scan for crop values
 					command_to_run_str_slice = nil
-					command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-ss", strconv.Itoa(time_to_jump_to), "-t", scan_duration_str, "-i", file_name, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:16:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
+					command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-ss", strconv.Itoa(time_to_jump_to), "-t", scan_duration_str, "-i", file_name, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:8:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
 
 					if *debug_mode_on == true {
 						fmt.Println()
@@ -689,8 +692,7 @@ func main() {
 
 					ffmpeg_crop_output, ffmpeg_crop_error := run_external_command(command_to_run_str_slice)
 
-					// FFmpeg collects possible crop values across the first 1800 seconds of the file and outputs a list of how many times each possible crop values exists.
-					// Parse the list to find the value that is most frequent, that is the value that can be applied without cropping too musch or too little.
+					// Parse the crop value list to find the value that is most frequent, that is the value that can be applied without cropping too much or too little.
 					if ffmpeg_crop_error == nil {
 
 						crop_value_counter := 0
@@ -725,7 +727,7 @@ func main() {
 			if video_duration_int < 300 || quick_scan_failed == true || len(crop_value_map) == 0 {
 
 				command_to_run_str_slice = nil
-				command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-t", "1800", "-i", file_name, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:16:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
+				command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-t", "1800", "-i", file_name, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:8:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
 
 				if *debug_mode_on == false {
 					fmt.Printf("Finding crop values for: " + inputfile_name + "   ")
