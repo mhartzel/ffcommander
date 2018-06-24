@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.07" // This is the version of this program
+var version_number string = "1.08" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -279,18 +279,21 @@ func main() {
 	// Define and parse commandline options //
 	//////////////////////////////////////////
 	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.")
-	var subtitle_int = flag.Int("s", -1, "Subtitle `number, -s=1` (Use subtitle number 1 in the source file)")
-	var subtitle_vertical_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so=55 (move subtitle 55 pixels down), -so=-55 (move subtitle 55 pixels up)")
-	var subtitle_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead for cropping subtitle. This option results in smaller subtitle font.")
-	var audio_stream_number_int = flag.Int("a", 0, "Audio stream number, -a=1 (Use audio stream number 1 in the source file)")
-	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale")
-	var denoise_bool = flag.Bool("dn", false, "Denoise. Use HQDN3D - filter to remove noise in the picture. Equal to Hanbrake 'medium' noise reduction settings.")
-	var autocrop_bool = flag.Bool("ac", false, "Autocrop. Find crop values automatically by scanning the star of the file (1800 seconds)")
-	var force_hd_bool = flag.Bool("hd", false, "Force Video To HD, Profile = High, Level = 4.1, Bitrate = 8000k")
-	var scan_mode_only_bool = flag.Bool("scan", false, "Only scan inputfile and print video and audio stream info.")
-	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables.")
-	var search_start_str = flag.String("ss", "", "Seek to position before starting processing. This option is given to FFmpeg as it is. Example -ss 01:02:10 Seek to 1 hour two min and 10 seconds.")
-	var processing_time_str = flag.String("t", "", "Duration to process. This option is given to FFmpeg as it is. Example -t 01:02 process 1 min 2 secs of the file.")
+	var subtitle_int = flag.Int("s", -1, "Subtitle `number, -s=1` (Use subtitle number 1 from the source file).")
+	var subtitle_vertical_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so=55 (move subtitle 55 pixels down), -so=-55 (move subtitle 55 pixels up).")
+	var subtitle_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font.")
+	var audio_stream_number_int = flag.Int("a", 0, "Audio stream number, -a=1 (Use audio stream number 1 from the source file)")
+	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.")
+	var denoise_bool = flag.Bool("dn", false, "Denoise. Use HQDN3D - filter to remove noise from the picture. This option is equal to Hanbrakes 'medium' noise reduction settings.")
+	var autocrop_bool = flag.Bool("ac", false, "Autocrop. Find crop values automatically by doing 10 second spot checks in 10 places for the duration of the file.")
+	var fast_search_bool = flag.Bool("fs", false, "Fast seek mode. When using the -fs option with -ss do not decode video before the point we are trying to locate, but instead try to jump directly to it. This search method might or might not be accurate depending on the file format.")
+	var fast_encode_bool = flag.Bool("fe", false, "Fast encoding mode. Encode video using 1-pass encoding.")
+	var fast_bool = flag.Bool("f", false, "This is the same as using options -fs and -fe at the same time.")
+	var force_hd_bool = flag.Bool("hd", false, "Force video encoding to use HD bitrate and profile (Profile = High, Level = 4.1, Bitrate = 8000k) By default this program decides video encoding profile and bitrate automatically depending on the vertical resolution of the picture.")
+	var scan_mode_only_bool = flag.Bool("scan", false, "Only scan input file and print video and audio stream info.")
+	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables and the FFmpeg commandlines used.")
+	var search_start_str = flag.String("ss", "", "Seek to time position before starting processing. This option is given to FFmpeg as it is. Example -ss 01:02:10 Seeks to 1 hour two minutes and 10 seconds.")
+	var processing_time_str = flag.String("t", "", "Duration of video to process. This option is given to FFmpeg as it is. Example -t 01:02 process 1 minuntes and 2 seconds of the file.")
 	var show_program_version_short = flag.Bool("v", false,"Show the version of this program")
 	var show_program_version_long = flag.Bool("version", false,"Show the version of this program")
 
@@ -410,6 +413,11 @@ func main() {
 	output_directory_name := "00-processed_files"
 	output_video_format := []string{"-f", "mp4"}
 
+	if *fast_bool == true {
+		*fast_search_bool = true
+		*fast_encode_bool = true
+	}
+
 	/////////////////////////////////////////
 	// Print variable values in debug mode //
 	/////////////////////////////////////////
@@ -436,6 +444,9 @@ func main() {
 		fmt.Println("*scan_mode_only_bool", *scan_mode_only_bool)
 		fmt.Println("*search_start_str", *search_start_str)
 		fmt.Println("*processing_time_str", *processing_time_str)
+		fmt.Println("*fast_bool", *fast_bool)
+		fmt.Println("*fast_search_bool", *fast_search_bool)
+		fmt.Println("*fast_encode_bool", *fast_encode_bool)
 		fmt.Println("*debug_mode_on", *debug_mode_on)
 		fmt.Println()
 		fmt.Println("input_filenames:", input_filenames)
@@ -723,7 +734,7 @@ func main() {
 				}
 			}
 
-			// Perform slow scan for crop values.
+			// Scan the file for crop values.
 			if video_duration_int < 300 || quick_scan_failed == true || len(crop_value_map) == 0 {
 
 				command_to_run_str_slice = nil
@@ -834,9 +845,15 @@ func main() {
 			// Create the start of ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_commandline_start...)
 
+			// If the user wants to use the fast and inaccurate search, place the -ss option before the first -i on ffmpeg commandline.
+			if *search_start_str != "" && *fast_search_bool == true {
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-ss", *search_start_str)
+			}
+
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name)
 
-			if *search_start_str != "" {
+			// The user wants to use the slow and accurate search, place the -ss option after the first -i on ffmpeg commandline.
+			if *search_start_str != "" && *fast_search_bool == false {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-ss", *search_start_str)
 			}
 
@@ -960,15 +977,27 @@ func main() {
 			ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, ffmpeg_pass_2_commandline...)
 
 			// Add pass 1/2 info on ffmpeg commandline
-			ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, "-pass", "1")
-			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-pass", "2")
+			if *fast_encode_bool == false {
 
-			// Add /dev/null output option to ffmpeg pass 1 commandline
-			ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, "/dev/null")
+				ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, "-pass", "1")
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-pass", "2")
+
+				// Add /dev/null output option to ffmpeg pass 1 commandline
+				ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, "/dev/null")
+			}
 
 			// Add outfile path to ffmpeg pass 2 commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, output_file_absolute_path)
 
+			// If we have "fast" mode on then we will only do 1-pass encoding and the pass 1 commanline is the same as pass 2.
+			// In this case we won't do pass 2 at all.
+			if *fast_encode_bool == true {
+				ffmpeg_pass_1_commandline = ffmpeg_pass_2_commandline
+			}
+
+			/////////////////////////////////////
+			// Run Pass 1 encoding with FFmpeg //
+			/////////////////////////////////////
 			if *debug_mode_on == true {
 
 				fmt.Println()
@@ -980,7 +1009,6 @@ func main() {
 				fmt.Printf("Pass 1 encoding: " + inputfile_name + " ")
 			}
 
-			// Run Pass 1 encoding with FFmpeg.
 			pass_1_start_time = time.Now()
 
 			ffmpeg_pass_1_output_temp, ffmpeg_pass_1_error := run_external_command(ffmpeg_pass_1_commandline)
@@ -1005,41 +1033,46 @@ func main() {
 				}
 			}
 
-			if *debug_mode_on == true {
+			/////////////////////////////////////
+			// Run Pass 2 encoding with FFmpeg //
+			/////////////////////////////////////
+			if *fast_encode_bool == false {
 
-				fmt.Println()
-				fmt.Println("ffmpeg_pass_2_commandline:", ffmpeg_pass_2_commandline)
+				if *debug_mode_on == true {
 
-			} else {
+					fmt.Println()
+					fmt.Println("ffmpeg_pass_2_commandline:", ffmpeg_pass_2_commandline)
 
-				pass_2_elapsed_time = time.Since(start_time)
-				fmt.Printf("Pass 2 encoding: " + inputfile_name + " ")
-			}
+				} else {
 
-			// Run Pass 2 encoding with FFmpeg.
-			pass_2_start_time = time.Now()
-
-			ffmpeg_pass_2_output_temp, ffmpeg_pass_2_error :=  run_external_command(ffmpeg_pass_2_commandline)
-
-			pass_2_elapsed_time = time.Since(pass_2_start_time)
-			fmt.Printf("took %s", pass_2_elapsed_time.Round(time.Millisecond))
-			fmt.Println()
-
-			if *debug_mode_on == true {
-
-				fmt.Println()
-
-				ffmpeg_pass_2_output := strings.TrimSpace(strings.Join(ffmpeg_pass_2_output_temp, ""))
-
-				if len(ffmpeg_pass_2_output) > 0 {
-					fmt.Println(ffmpeg_pass_2_output)
+					pass_2_elapsed_time = time.Since(start_time)
+					fmt.Printf("Pass 2 encoding: " + inputfile_name + " ")
 				}
 
-				if ffmpeg_pass_2_error != nil  {
-					fmt.Println(ffmpeg_pass_2_error)
-				}
+				pass_2_start_time = time.Now()
 
+				ffmpeg_pass_2_output_temp, ffmpeg_pass_2_error :=  run_external_command(ffmpeg_pass_2_commandline)
+
+				pass_2_elapsed_time = time.Since(pass_2_start_time)
+				fmt.Printf("took %s", pass_2_elapsed_time.Round(time.Millisecond))
 				fmt.Println()
+
+				if *debug_mode_on == true {
+
+					fmt.Println()
+
+					ffmpeg_pass_2_output := strings.TrimSpace(strings.Join(ffmpeg_pass_2_output_temp, ""))
+
+					if len(ffmpeg_pass_2_output) > 0 {
+						fmt.Println(ffmpeg_pass_2_output)
+					}
+
+					if ffmpeg_pass_2_error != nil  {
+						fmt.Println(ffmpeg_pass_2_error)
+					}
+
+					fmt.Println()
+				}
 			}
 
 			/////////////////////////////////////
@@ -1070,8 +1103,8 @@ func main() {
 // Tee enkoodauksen aikainen FFmpegin tulosteen tsekkaus, joka laskee koodauksen aika-arvion ja prosentit siitä kuinka paljon failia on jo käsitelty (fps ?) Tästä on esimerkkiohjelma muistiinpanoissa, mutta se jumittaa n. 90 sekuntia FFmpeg - enkoodauksen alkamisesta.
 // Nimeä ffmpeg_enkooderi uudella nimellä ja poista hakemisto: 00-vanhat jotta git repon voi julkaista
 // Tee erillinen skripti audion synkkaamista varten
-// Tsekkaa pitäiskö aina --filter_complexin kanssa käyttää audiossaoletusdelaytä (ehkä 80 ms).
-// Tsekkaa saisko ohjelman kohtuullisella vaivalla modattu niin, että subtitlen ja audion numeron sijaan vois antaa kielikoodin. Ei tarttis koskaan sit skannailla faileja. Tukeeko FFmpeg kielikoodeja ?
+// Tsekkaa pitäiskö aina --filter_complexin kanssa käyttää audiossa oletus-delaytä (ehkä 80 ms).
+// Tsekkaa saisko ohjelman kohtuullisella vaivalla modattua niin, että subtitlen ja audion numeron sijaan vois antaa kielikoodin. Ei tarttis koskaan sit skannailla faileja. Tukeeko FFmpeg kielikoodeja ?
 // Pitäiskö laittaa option, jolla vois rajoittaa käytettävien prosessorien lukumäärän ?
 //
 
