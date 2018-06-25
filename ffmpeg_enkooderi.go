@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.08" // This is the version of this program
+var version_number string = "1.09" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -279,10 +279,12 @@ func main() {
 	// Define and parse commandline options //
 	//////////////////////////////////////////
 	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.")
-	var subtitle_int = flag.Int("s", -1, "Subtitle `number, -s=1` (Use subtitle number 1 from the source file).")
-	var subtitle_vertical_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so=55 (move subtitle 55 pixels down), -so=-55 (move subtitle 55 pixels up).")
+	var subtitle_int = flag.Int("sn", -1, "Subtitle stream `number, -sn 1` Use subtitle number 1 from the source file. Only use option -sn or -s not both.")
+	var subtitle_language_str = flag.String("s", "", "Subtitle language: -s fin or -s eng -s ita  Only use option -sn or -s not both.")
+	var subtitle_vertical_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up).")
 	var subtitle_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font.")
-	var audio_stream_number_int = flag.Int("a", 0, "Audio stream number, -a=1 (Use audio stream number 1 from the source file)")
+	var audio_stream_number_int = flag.Int("an", 0, "Audio stream number, -a 1 (Use audio stream number 1 from the source file).")
+	var audio_language_str = flag.String("a", "", "Audio language: -a fin or -a eng or -a ita  Only use option -an or -a not both.")
 	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.")
 	var denoise_bool = flag.Bool("dn", false, "Denoise. Use HQDN3D - filter to remove noise from the picture. This option is equal to Hanbrakes 'medium' noise reduction settings.")
 	var autocrop_bool = flag.Bool("ac", false, "Autocrop. Find crop values automatically by doing 10 second spot checks in 10 places for the duration of the file.")
@@ -294,8 +296,8 @@ func main() {
 	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables and the FFmpeg commandlines used.")
 	var search_start_str = flag.String("ss", "", "Seek to time position before starting processing. This option is given to FFmpeg as it is. Example -ss 01:02:10 Seeks to 1 hour two minutes and 10 seconds.")
 	var processing_time_str = flag.String("t", "", "Duration of video to process. This option is given to FFmpeg as it is. Example -t 01:02 process 1 minuntes and 2 seconds of the file.")
-	var show_program_version_short = flag.Bool("v", false,"Show the version of this program")
-	var show_program_version_long = flag.Bool("version", false,"Show the version of this program")
+	var show_program_version_short = flag.Bool("v", false,"Show the version of this program.")
+	var show_program_version_long = flag.Bool("version", false,"Show the version of this program.")
 
 	//////////////////////
 	// Define variables //
@@ -430,6 +432,7 @@ func main() {
 		fmt.Println("deinterlace_options:",deinterlace_options)
 		fmt.Println("ffmpeg_commandline_start:",ffmpeg_commandline_start)
 		fmt.Println("subtitle_number:",subtitle_number)
+		fmt.Println("subtitle_language_str:",subtitle_language_str)
 		fmt.Println("subtitle_vertical_offset_int:",*subtitle_vertical_offset_int)
 		fmt.Println("*subtitle_downscale:",*subtitle_downscale)
 		fmt.Println("*grayscale_bool:", *grayscale_bool)
@@ -515,10 +518,12 @@ func main() {
 			error_messages = append(error_messages, "File: '" + file_name + "' does not have a video stream.")
 		}
 
+		// If user gave audio stream number, check that we have at least that much audio streams in the source file.
 		if len(audio_slice) - 1 < *audio_stream_number_int {
 			error_messages = append(error_messages, "File: '" + file_name + "' does not have an audio stream number: " + strconv.Itoa(*audio_stream_number_int))
 		}
 
+		// If user gave subtitle stream number, check that we have at least that much subtitle streams in the source file.
 		if len(subtitle_slice) - 1 < subtitle_number {
 			error_messages = append(error_messages, "File: '" + file_name + "' does not have an subtitle stream number: " + strconv.Itoa(subtitle_number))
 		}
@@ -591,6 +596,80 @@ func main() {
 
 		fmt.Println()
 		os.Exit(0)
+	}
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////
+	// If user gave us the audio language (fin, eng, ita), find the corresponding audio stream number //
+	////////////////////////////////////////////////////////////////////////////////////////////////////
+	if *audio_language_str != "" {
+
+		audio_stream_found := false
+
+		for _,file_info_slice := range Complete_file_info_slice {
+			audio_slice := file_info_slice[1]
+
+			for audio_stream_number, audio_info := range audio_slice {
+
+				audio_language = audio_info[0]
+
+				if *audio_language_str == audio_language {
+					*audio_stream_number_int = audio_stream_number
+					audio_stream_found = true
+					break // Stop searching when the first matching audio has been found.
+				}
+
+			}
+		}
+
+		if audio_stream_found == false {
+			fmt.Println()
+			fmt.Printf("Error, could not find audio language: %s\n", *subtitle_language_str)
+			fmt.Println("Scan the file for possible audio languages with the -scan option.")
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		if *debug_mode_on == true {
+			fmt.Println()
+			fmt.Printf("Audio: %s was found in audio stream number: %d\n", *audio_language_str, *audio_stream_number_int)
+			fmt.Println()
+		}
+	}
+
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// If user gave us the subtitle language (fin, eng, ita), find the corresponding subtitle stream number //
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////
+	if *subtitle_language_str != "" {
+
+		for _,file_info_slice := range Complete_file_info_slice {
+			subtitle_slice := file_info_slice[2]
+
+			for subtitle_stream_number, subtitle_info := range subtitle_slice {
+
+				subtitle_language = subtitle_info[0]
+
+				if *subtitle_language_str == subtitle_language {
+					subtitle_number = subtitle_stream_number
+					break // Stop searching when the first matching subtitle has been found.
+				}
+
+			}
+		}
+
+		if subtitle_number == -1 {
+			fmt.Println()
+			fmt.Printf("Error, could not find subtitle language: %s\n", *subtitle_language_str)
+			fmt.Println("Scan the file for possible subtitle languages with the -scan option.")
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		if *debug_mode_on == true {
+			fmt.Println()
+			fmt.Printf("Subtitle: %s was found in subtitle stream number: %d\n", *subtitle_language_str, subtitle_number)
+			fmt.Println()
+		}
 	}
 
 	/////////////////////////////////////////
@@ -680,7 +759,7 @@ func main() {
 			// For long videos take short snapshots of crop values spanning the whole file. This is "quick scan mode".
 			if video_duration_int > 300 {
 
-				spotcheck_interval := video_duration_int / 10 // How many spots checks will be made across the duration of the video (default = 10)
+				spotcheck_interval := video_duration_int / 10 // How many spot checks will be made across the duration of the video (default = 10)
 				scan_duration_str := "10" // How many seconds of video to scan for each spot (default = 10 seconds)
 				scan_duration_int,_ := strconv.Atoi(scan_duration_str)
 
@@ -729,6 +808,7 @@ func main() {
 						fmt.Println()
 						fmt.Println("Quick scan for crop failed, switching to the slow method")
 						fmt.Println()
+						quick_scan_failed = true
 						break
 					}
 				}
@@ -951,7 +1031,7 @@ func main() {
 			video_height_int,_ = strconv.Atoi(video_height)
 			video_bitrate = "1600k"
 
-			if *force_hd_bool || video_height_int > 700 {
+			if *force_hd_bool == true || video_height_int > 700 {
 				video_compression_options = video_compression_options_hd
 				video_bitrate = "8000k"
 			}
