@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.09" // This is the version of this program
+var version_number string = "1.10" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -328,6 +328,10 @@ func main() {
 	var files_to_process_str string
 	var subtitle_horizontal_offset_int int
 	var subtitle_horizontal_offset_str string
+	var log_messages_str_slice []string
+	log_messages_str_slice = append(log_messages_str_slice, "\n")
+	log_messages_str_slice = append(log_messages_str_slice, strings.Join(os.Args, " "))
+
 	start_time := time.Now()
 	pass_1_start_time := time.Now()
 	pass_1_elapsed_time := time.Since(start_time)
@@ -356,6 +360,21 @@ func main() {
 			// Add all existing input file names to a slice
 			input_filenames = append(input_filenames, file_name)
 		}
+	}
+
+	// Test that user gave a string not a number for options -a and -s
+	if _, err := strconv.Atoi(*audio_language_str); err == nil {
+		fmt.Println()
+		fmt.Println("The option -a requires a language code like: eng, fin, ita not a number.")
+		fmt.Println()
+		os.Exit(0)
+	}
+
+	if _, err := strconv.Atoi(*subtitle_language_str); err == nil {
+		fmt.Println()
+		fmt.Println("The option -s requires a language code like: eng, fin, ita not a number.")
+		fmt.Println()
+		os.Exit(0)
 	}
 
 	if *show_program_version_short == true || *show_program_version_long == true {
@@ -497,9 +516,9 @@ func main() {
 		}
 	}
 
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Test that all input files have a video stream and that the audio and subtitle streams the user wants does exist //
-	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Test that all input files have a video stream and that the audio and subtitle streams the user wants do exist //
+	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	for _,file_info_slice := range Complete_file_info_slice {
 
@@ -600,76 +619,83 @@ func main() {
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////
 	// If user gave us the audio language (fin, eng, ita), find the corresponding audio stream number //
+	// If no matching audio is found stop the program.                                                //
 	////////////////////////////////////////////////////////////////////////////////////////////////////
 	if *audio_language_str != "" {
 
-		audio_stream_found := false
-
 		for _,file_info_slice := range Complete_file_info_slice {
+
+			video_slice_temp := file_info_slice[0]
+			video_slice := video_slice_temp[0]
+			file_name := video_slice[0]
 			audio_slice := file_info_slice[1]
+			audio_stream_found := false
 
-			for audio_stream_number, audio_info := range audio_slice {
-
+			for _, audio_info := range audio_slice {
 				audio_language = audio_info[0]
 
 				if *audio_language_str == audio_language {
-					*audio_stream_number_int = audio_stream_number
 					audio_stream_found = true
-					break // Stop searching when the first matching audio has been found.
+					break // Continue searching the next file when the first matching subtitle has been found.
 				}
 
 			}
+			if audio_stream_found == false {
+				fmt.Println()
+				fmt.Printf("Error, could not find audio language: %s in file: %s\n", *audio_language_str, file_name)
+				fmt.Println("Scan the file for possible audio languages with the -scan option.")
+				fmt.Println()
+				os.Exit(0)
+			}
+
+			if *debug_mode_on == true {
+				fmt.Println()
+				fmt.Printf("Audio: %s was found in file %s\n", *audio_language_str, file_name)
+				fmt.Println()
+			}
 		}
 
-		if audio_stream_found == false {
-			fmt.Println()
-			fmt.Printf("Error, could not find audio language: %s\n", *subtitle_language_str)
-			fmt.Println("Scan the file for possible audio languages with the -scan option.")
-			fmt.Println()
-			os.Exit(0)
-		}
-
-		if *debug_mode_on == true {
-			fmt.Println()
-			fmt.Printf("Audio: %s was found in audio stream number: %d\n", *audio_language_str, *audio_stream_number_int)
-			fmt.Println()
-		}
 	}
-
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// If user gave us the subtitle language (fin, eng, ita), find the corresponding subtitle stream number //
+	// If no matching subtitle is found stop the program.                                                   //
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////
 	if *subtitle_language_str != "" {
 
 		for _,file_info_slice := range Complete_file_info_slice {
+
+			video_slice_temp := file_info_slice[0]
+			video_slice := video_slice_temp[0]
+			file_name := video_slice[0]
 			subtitle_slice := file_info_slice[2]
+			subtitle_found := false
 
-			for subtitle_stream_number, subtitle_info := range subtitle_slice {
-
+			for _, subtitle_info := range subtitle_slice {
 				subtitle_language = subtitle_info[0]
 
 				if *subtitle_language_str == subtitle_language {
-					subtitle_number = subtitle_stream_number
-					break // Stop searching when the first matching subtitle has been found.
+					subtitle_found = true
+					break // Continue searching the next file when the first matching subtitle has been found.
 				}
 
 			}
+
+			if subtitle_found == false {
+				fmt.Println()
+				fmt.Printf("Error, could not find subtitle language: '%s' in file: %s\n", *subtitle_language_str, file_name)
+				fmt.Println("Scan the file for possible subtitle languages with the -scan option.")
+				fmt.Println()
+				os.Exit(0)
+			}
+
+			if *debug_mode_on == true {
+				fmt.Println()
+				fmt.Printf("Subtitle: %s was found in file %s\n", *subtitle_language_str, file_name)
+				fmt.Println()
+			}
 		}
 
-		if subtitle_number == -1 {
-			fmt.Println()
-			fmt.Printf("Error, could not find subtitle language: %s\n", *subtitle_language_str)
-			fmt.Println("Scan the file for possible subtitle languages with the -scan option.")
-			fmt.Println()
-			os.Exit(0)
-		}
-
-		if *debug_mode_on == true {
-			fmt.Println()
-			fmt.Printf("Subtitle: %s was found in subtitle stream number: %d\n", *subtitle_language_str, subtitle_number)
-			fmt.Println()
-		}
 	}
 
 	/////////////////////////////////////////
@@ -718,6 +744,74 @@ func main() {
 		fmt.Println(strings.Repeat("#", 80))
 		fmt.Println("")
 		fmt.Println("Processing file " + file_counter_str + "/" + files_to_process_str + "  '" + inputfile_name + "'")
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Find audio number corresponding to the audio language name (eng, fin, ita) user possibly gave us //
+	//////////////////////////////////////////////////////////////////////////////////////////////////////
+	if *audio_language_str != "" {
+
+		audio_slice := file_info_slice[1]
+		audio_stream_found := false
+
+		for audio_stream_number, audio_info := range audio_slice {
+			audio_language = audio_info[0]
+
+			if *audio_language_str == audio_language {
+				*audio_stream_number_int = audio_stream_number
+				audio_stream_found = true
+				break // Continue searching the next file when the first matching subtitle has been found.
+			}
+
+		}
+
+		if audio_stream_found == false {
+			fmt.Println()
+			fmt.Printf("Error, could not find audio language: %s in file: %s\n", *audio_language_str, file_name)
+			fmt.Println("Scan the file for possible audio languages with the -scan option.")
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		if *debug_mode_on == true {
+			fmt.Println()
+			fmt.Printf("Audio: %s was found in audio stream number: %d\n", *audio_language_str, *audio_stream_number_int)
+			fmt.Println()
+		}
+	}
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Find subtitle number corresponding to the subtitle language name (eng, fin, ita) user possibly gave us //
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	if *subtitle_language_str != "" {
+
+		subtitle_slice := file_info_slice[2]
+		subtitle_found := false
+
+		for subtitle_stream_number, subtitle_info := range subtitle_slice {
+			subtitle_language = subtitle_info[0]
+
+			if *subtitle_language_str == subtitle_language {
+				subtitle_number = subtitle_stream_number
+				subtitle_found = true
+				break // Stop searching when the first matching subtitle has been found.
+			}
+
+		}
+
+		if subtitle_found == false {
+			fmt.Println()
+			fmt.Printf("Error, could not find subtitle language: '%s' in file: %s\n", *subtitle_language_str, file_name)
+			fmt.Println("Scan the file for possible subtitle languages with the -scan option.")
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		if *debug_mode_on == true {
+			fmt.Println()
+			fmt.Printf("Subtitle: %s was found in subtitle stream number: %d\n", *subtitle_language_str, subtitle_number)
+			fmt.Println()
+		}
+	}
 
 		/////////////////////////////////////////////////////////////
 		// Find out autocrop parameters by scanning the input file //
@@ -1090,6 +1184,8 @@ func main() {
 			}
 
 			pass_1_start_time = time.Now()
+			log_messages_str_slice = append(log_messages_str_slice, "\n")
+			log_messages_str_slice = append(log_messages_str_slice, strings.Join(ffmpeg_pass_1_commandline, " "))
 
 			ffmpeg_pass_1_output_temp, ffmpeg_pass_1_error := run_external_command(ffmpeg_pass_1_commandline)
 
@@ -1130,6 +1226,8 @@ func main() {
 				}
 
 				pass_2_start_time = time.Now()
+				log_messages_str_slice = append(log_messages_str_slice, "\n")
+				log_messages_str_slice = append(log_messages_str_slice, strings.Join(ffmpeg_pass_2_commandline, " "))
 
 				ffmpeg_pass_2_output_temp, ffmpeg_pass_2_error :=  run_external_command(ffmpeg_pass_2_commandline)
 
@@ -1184,8 +1282,6 @@ func main() {
 // Nimeä ffmpeg_enkooderi uudella nimellä ja poista hakemisto: 00-vanhat jotta git repon voi julkaista
 // Tee erillinen skripti audion synkkaamista varten
 // Tsekkaa pitäiskö aina --filter_complexin kanssa käyttää audiossa oletus-delaytä (ehkä 80 ms).
-// Tsekkaa saisko ohjelman kohtuullisella vaivalla modattua niin, että subtitlen ja audion numeron sijaan vois antaa kielikoodin. Ei tarttis koskaan sit skannailla faileja. Tukeeko FFmpeg kielikoodeja ?
 // Pitäiskö laittaa option, jolla vois rajoittaa käytettävien prosessorien lukumäärän ?
-//
 
 
