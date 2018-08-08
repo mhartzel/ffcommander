@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.10" // This is the version of this program
+var version_number string = "1.11" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -283,6 +283,7 @@ func main() {
 	var subtitle_language_str = flag.String("s", "", "Subtitle language: -s fin or -s eng -s ita  Only use option -sn or -s not both.")
 	var subtitle_vertical_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up).")
 	var subtitle_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font.")
+	var subtitle_grayscale = flag.Bool("sgr", false, "Convert subtitle to grayscale. This removes color from subtitles.")
 	var audio_stream_number_int = flag.Int("an", 0, "Audio stream number, -a 1 (Use audio stream number 1 from the source file).")
 	var audio_language_str = flag.String("a", "", "Audio language: -a fin or -a eng or -a ita  Only use option -an or -a not both.")
 	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.")
@@ -430,7 +431,6 @@ func main() {
 		}
 	}
 
-	subtitle_options := ""
 	output_directory_name := "00-processed_files"
 	output_video_format := []string{"-f", "mp4"}
 
@@ -456,7 +456,6 @@ func main() {
 		fmt.Println("*subtitle_downscale:",*subtitle_downscale)
 		fmt.Println("*grayscale_bool:", *grayscale_bool)
 		fmt.Println("grayscale_options:",grayscale_options)
-		fmt.Println("subtitle_options:",subtitle_options)
 		fmt.Println("*autocrop_bool:", *autocrop_bool)
 		fmt.Println("*subtitle_int:", *subtitle_int)
 		fmt.Println("*no_deinterlace_bool:", *no_deinterlace_bool)
@@ -1104,9 +1103,22 @@ func main() {
 				subtitle_processing_options = "copy"
 
 				// When cropping video widthwise shrink it to fit on top of the cropped video.
-				// This results in smaller subtitle font.
+				// This results in smaller subtitle font. Scaling might blur subtitles slightly.
 				if *autocrop_bool == true && *subtitle_downscale == true {
 					subtitle_processing_options = "scale=" + strconv.Itoa(crop_values_picture_width) + ":" + strconv.Itoa(crop_values_picture_height)
+				}
+				
+				// Remove color from subtitle graphics.
+				if *subtitle_grayscale == true {
+
+					if subtitle_processing_options == "copy" {
+
+						subtitle_processing_options = "lut=u=128:v=128"
+
+					} else {
+
+						subtitle_processing_options = subtitle_processing_options + ",lut=u=128:v=128"
+					}
 				}
 
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number) +
