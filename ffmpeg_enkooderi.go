@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.11" // This is the version of this program
+var version_number string = "1.12" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -283,7 +283,7 @@ func main() {
 	var subtitle_language_str = flag.String("s", "", "Subtitle language: -s fin or -s eng -s ita  Only use option -sn or -s not both.")
 	var subtitle_vertical_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up).")
 	var subtitle_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font.")
-	var subtitle_grayscale = flag.Bool("sgr", false, "Convert subtitle to grayscale. This removes color from subtitles.")
+	var subtitle_palette = flag.String("palette", "", "Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: -palette f,0,f")
 	var audio_stream_number_int = flag.Int("an", 0, "Audio stream number, -a 1 (Use audio stream number 1 from the source file).")
 	var audio_language_str = flag.String("a", "", "Audio language: -a fin or -a eng or -a ita  Only use option -an or -a not both.")
 	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.")
@@ -378,6 +378,80 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Check dvd palette hacking option string correctness.
+	if *subtitle_palette != "" {
+		temp_slice := strings.Split(*subtitle_palette, ",")
+		*subtitle_palette = ""
+		hex_characters := [17]string{ "0","1","2","3","4","5","6","7","8","9","a","b","c","d","e","f" }
+
+		// Test that all characters are valid hex
+		for _,character := range temp_slice {
+
+			hex_match_found := false
+
+			if character == "" {
+				fmt.Println("")
+				fmt.Println("Illegal character: 'empty' in -palette option string. Values must be hex ranging from 0 to f.")
+				fmt.Println("")
+				os.Exit(0)
+			}
+			for _,hex_value := range hex_characters {
+
+				if strings.ToLower(character) == hex_value {
+					hex_match_found = true
+					break
+				}
+			}
+
+			if hex_match_found == false {
+				fmt.Println("")
+				fmt.Println("Illegal character:",character ,"in -palette option string. Values must be hex ranging from 0 to f.")
+				fmt.Println("")
+				os.Exit(0)
+			}
+		}
+
+		// Test that user gave between 1 to 16 characters
+		if len(temp_slice) < 1 {
+			fmt.Println("")
+			fmt.Println("Too few (",len(temp_slice) , ") hex characters in -palette option string. Please give 1 to 16 characters.")
+			fmt.Println("")
+			os.Exit(0)
+		}
+
+		if len(temp_slice) > 16 {
+			fmt.Println("")
+			fmt.Println("Too many (",len(temp_slice) , ") hex characters in -palette option string. Please give 1 to 16 characters.")
+			fmt.Println("")
+			os.Exit(0)
+		}
+
+		// Prepare -palette option string for FFmpeg. It requires 16 hex strings where each consists of 6 hex numbers. Of these every 2 numbers control RBG color.
+		// The user is limited here to use only shades between black -> gray -> white.
+		for counter,character := range temp_slice {
+
+			*subtitle_palette = *subtitle_palette + strings.Repeat(strings.ToLower(character), 6)
+
+			if counter < len(temp_slice) - 1 {
+				*subtitle_palette = *subtitle_palette + ","
+			}
+
+		}
+
+		if len(temp_slice) < 16 {
+
+			*subtitle_palette = *subtitle_palette + ","
+
+			for counter:= len(temp_slice); counter < 16; counter++ {
+				*subtitle_palette = *subtitle_palette + "ffffff"
+
+				if counter < 15 {
+					*subtitle_palette = *subtitle_palette + ","
+				}
+			}
+		}
+	}
+
 	if *show_program_version_short == true || *show_program_version_long == true {
 		fmt.Println()
 		fmt.Println("Version:", version_number)
@@ -454,6 +528,7 @@ func main() {
 		fmt.Println("subtitle_language_str:",subtitle_language_str)
 		fmt.Println("subtitle_vertical_offset_int:",*subtitle_vertical_offset_int)
 		fmt.Println("*subtitle_downscale:",*subtitle_downscale)
+		fmt.Println("*subtitle_palette:",*subtitle_palette)
 		fmt.Println("*grayscale_bool:", *grayscale_bool)
 		fmt.Println("grayscale_options:",grayscale_options)
 		fmt.Println("*autocrop_bool:", *autocrop_bool)
@@ -1023,6 +1098,12 @@ func main() {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-ss", *search_start_str)
 			}
 
+			// Add possible dvd subtitle color palette hacking option to the FFmpeg commandline.
+			// It must be before the first input file to take effect for that file.
+			if *subtitle_palette != "" {
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-palette", *subtitle_palette)
+			}
+
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name)
 
 			// The user wants to use the slow and accurate search, place the -ss option after the first -i on ffmpeg commandline.
@@ -1038,7 +1119,7 @@ func main() {
 
 			//////////////////////////////////////////////////////////////////////////////////////////////
 			// If there is no subtitle to process use the simple video processing chain (-vf) in FFmpeg //
-			// It has a processing pipleine with only one video input and output                        //
+			// It has a processing pipeline with only one video input and output                        //
 			//////////////////////////////////////////////////////////////////////////////////////////////
 
 			if subtitle_number == -1 {
@@ -1106,19 +1187,6 @@ func main() {
 				// This results in smaller subtitle font. Scaling might blur subtitles slightly.
 				if *autocrop_bool == true && *subtitle_downscale == true {
 					subtitle_processing_options = "scale=" + strconv.Itoa(crop_values_picture_width) + ":" + strconv.Itoa(crop_values_picture_height)
-				}
-				
-				// Remove color from subtitle graphics.
-				if *subtitle_grayscale == true {
-
-					if subtitle_processing_options == "copy" {
-
-						subtitle_processing_options = "lut=u=128:v=128"
-
-					} else {
-
-						subtitle_processing_options = subtitle_processing_options + ",lut=u=128:v=128"
-					}
 				}
 
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number) +
@@ -1291,9 +1359,11 @@ func main() {
 // Tulosta hakemistoon 00-processed_files failikohtainen tiedosto, jossa ffmpegin käsittelykomennot, käsittelyn kestot ja kroppiarvot ? Optio jolla tän saa päälle tai oletuksena päälle ja optio jolla saa pois ?
 // Jos kroppausarvot on nolla, poista kroppaysoptiot ffmpegin komentoriviltä ?
 // Tee enkoodauksen aikainen FFmpegin tulosteen tsekkaus, joka laskee koodauksen aika-arvion ja prosentit siitä kuinka paljon failia on jo käsitelty (fps ?) Tästä on esimerkkiohjelma muistiinpanoissa, mutta se jumittaa n. 90 sekuntia FFmpeg - enkoodauksen alkamisesta.
-// Nimeä ffmpeg_enkooderi uudella nimellä ja poista hakemisto: 00-vanhat jotta git repon voi julkaista
+// Nimeä ffmpeg_enkooderi uudella nimellä (sl_encoder = starlight encoder) ja poista hakemisto: 00-vanhat jotta git repon voi julkaista
 // Tee erillinen skripti audion synkkaamista varten
 // Tsekkaa pitäiskö aina --filter_complexin kanssa käyttää audiossa oletus-delaytä (ehkä 80 ms).
 // Pitäiskö laittaa option, jolla vois rajoittaa käytettävien prosessorien lukumäärän ?
+//
+//
 
 
