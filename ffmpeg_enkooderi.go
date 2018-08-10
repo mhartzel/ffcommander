@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.12" // This is the version of this program
+var version_number string = "1.14" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -329,9 +329,6 @@ func main() {
 	var files_to_process_str string
 	var subtitle_horizontal_offset_int int
 	var subtitle_horizontal_offset_str string
-	var log_messages_str_slice []string
-	log_messages_str_slice = append(log_messages_str_slice, "\n")
-	log_messages_str_slice = append(log_messages_str_slice, strings.Join(os.Args, " "))
 
 	start_time := time.Now()
 	pass_1_start_time := time.Now()
@@ -805,6 +802,17 @@ func main() {
 			fmt.Println("video_height:", video_height)
 		}
 
+		// Add messages to processing log.
+		var log_messages_str_slice []string
+		log_messages_str_slice = append(log_messages_str_slice, "")
+		log_messages_str_slice = append(log_messages_str_slice, "Filename: " + file_name)
+		underline_length := len(file_name) + len ("Filename: ") + 1
+		log_messages_str_slice = append(log_messages_str_slice, strings.Repeat("-", underline_length))
+		log_messages_str_slice = append(log_messages_str_slice, "")
+		log_messages_str_slice = append(log_messages_str_slice, "Commandline options:")
+		log_messages_str_slice = append(log_messages_str_slice, "---------------------")
+		log_messages_str_slice = append(log_messages_str_slice, strings.Join(os.Args, " "))
+
 		// If output directory does not exist in the input path then create it.
 		if _, err := os.Stat(filepath.Join(inputfile_path, output_directory_name)); os.IsNotExist(err) {
 			os.Mkdir(filepath.Join(inputfile_path, output_directory_name), 0777)
@@ -819,73 +827,73 @@ func main() {
 		fmt.Println("")
 		fmt.Println("Processing file " + file_counter_str + "/" + files_to_process_str + "  '" + inputfile_name + "'")
 
-	//////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Find audio number corresponding to the audio language name (eng, fin, ita) user possibly gave us //
-	//////////////////////////////////////////////////////////////////////////////////////////////////////
-	if *audio_language_str != "" {
+		//////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Find audio number corresponding to the audio language name (eng, fin, ita) user possibly gave us //
+		//////////////////////////////////////////////////////////////////////////////////////////////////////
+		if *audio_language_str != "" {
 
-		audio_slice := file_info_slice[1]
-		audio_stream_found := false
+			audio_slice := file_info_slice[1]
+			audio_stream_found := false
 
-		for audio_stream_number, audio_info := range audio_slice {
-			audio_language = audio_info[0]
+			for audio_stream_number, audio_info := range audio_slice {
+				audio_language = audio_info[0]
 
-			if *audio_language_str == audio_language {
-				*audio_stream_number_int = audio_stream_number
-				audio_stream_found = true
-				break // Continue searching the next file when the first matching subtitle has been found.
+				if *audio_language_str == audio_language {
+					*audio_stream_number_int = audio_stream_number
+					audio_stream_found = true
+					break // Continue searching the next file when the first matching subtitle has been found.
+				}
+
 			}
 
-		}
-
-		if audio_stream_found == false {
-			fmt.Println()
-			fmt.Printf("Error, could not find audio language: %s in file: %s\n", *audio_language_str, file_name)
-			fmt.Println("Scan the file for possible audio languages with the -scan option.")
-			fmt.Println()
-			os.Exit(0)
-		}
-
-		if *debug_mode_on == true {
-			fmt.Println()
-			fmt.Printf("Audio: %s was found in audio stream number: %d\n", *audio_language_str, *audio_stream_number_int)
-			fmt.Println()
-		}
-	}
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Find subtitle number corresponding to the subtitle language name (eng, fin, ita) user possibly gave us //
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	if *subtitle_language_str != "" {
-
-		subtitle_slice := file_info_slice[2]
-		subtitle_found := false
-
-		for subtitle_stream_number, subtitle_info := range subtitle_slice {
-			subtitle_language = subtitle_info[0]
-
-			if *subtitle_language_str == subtitle_language {
-				subtitle_number = subtitle_stream_number
-				subtitle_found = true
-				break // Stop searching when the first matching subtitle has been found.
+			if audio_stream_found == false {
+				fmt.Println()
+				fmt.Printf("Error, could not find audio language: %s in file: %s\n", *audio_language_str, file_name)
+				fmt.Println("Scan the file for possible audio languages with the -scan option.")
+				fmt.Println()
+				os.Exit(0)
 			}
 
+			if *debug_mode_on == true {
+				fmt.Println()
+				fmt.Printf("Audio: %s was found in audio stream number: %d\n", *audio_language_str, *audio_stream_number_int)
+				fmt.Println()
+			}
 		}
 
-		if subtitle_found == false {
-			fmt.Println()
-			fmt.Printf("Error, could not find subtitle language: '%s' in file: %s\n", *subtitle_language_str, file_name)
-			fmt.Println("Scan the file for possible subtitle languages with the -scan option.")
-			fmt.Println()
-			os.Exit(0)
-		}
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Find subtitle number corresponding to the subtitle language name (eng, fin, ita) user possibly gave us //
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		if *subtitle_language_str != "" {
 
-		if *debug_mode_on == true {
-			fmt.Println()
-			fmt.Printf("Subtitle: %s was found in subtitle stream number: %d\n", *subtitle_language_str, subtitle_number)
-			fmt.Println()
+			subtitle_slice := file_info_slice[2]
+			subtitle_found := false
+
+			for subtitle_stream_number, subtitle_info := range subtitle_slice {
+				subtitle_language = subtitle_info[0]
+
+				if *subtitle_language_str == subtitle_language {
+					subtitle_number = subtitle_stream_number
+					subtitle_found = true
+					break // Stop searching when the first matching subtitle has been found.
+				}
+
+			}
+
+			if subtitle_found == false {
+				fmt.Println()
+				fmt.Printf("Error, could not find subtitle language: '%s' in file: %s\n", *subtitle_language_str, file_name)
+				fmt.Println("Scan the file for possible subtitle languages with the -scan option.")
+				fmt.Println()
+				os.Exit(0)
+			}
+
+			if *debug_mode_on == true {
+				fmt.Println()
+				fmt.Printf("Subtitle: %s was found in subtitle stream number: %d\n", *subtitle_language_str, subtitle_number)
+				fmt.Println()
+			}
 		}
-	}
 
 		/////////////////////////////////////////////////////////////
 		// Find out autocrop parameters by scanning the input file //
@@ -1078,6 +1086,8 @@ func main() {
 			subtitle_horizontal_offset_str = strconv.Itoa(subtitle_horizontal_offset_int)
 
 			fmt.Println("Top:", crop_values_height_offset, ", Bottom:", strconv.Itoa(cropped_height), ", Left:", crop_values_width_offset, ", Right:", strconv.Itoa(cropped_width))
+			log_messages_str_slice = append(log_messages_str_slice, "")
+			log_messages_str_slice = append(log_messages_str_slice, "Crop values are, Top: " + strconv.Itoa(crop_values_height_offset) + ", Bottom: " + strconv.Itoa(cropped_height) + ", Left: " + strconv.Itoa(crop_values_width_offset) + ", Right: " + strconv.Itoa(cropped_width))
 
 		}
 
@@ -1184,7 +1194,7 @@ func main() {
 				subtitle_processing_options = "copy"
 
 				// When cropping video widthwise shrink it to fit on top of the cropped video.
-				// This results in smaller subtitle font. Scaling might blur subtitles slightly.
+				// This results in smaller subtitle font.
 				if *autocrop_bool == true && *subtitle_downscale == true {
 					subtitle_processing_options = "scale=" + strconv.Itoa(crop_values_picture_width) + ":" + strconv.Itoa(crop_values_picture_height)
 				}
@@ -1264,14 +1274,21 @@ func main() {
 			}
 
 			pass_1_start_time = time.Now()
-			log_messages_str_slice = append(log_messages_str_slice, "\n")
-			log_messages_str_slice = append(log_messages_str_slice, strings.Join(ffmpeg_pass_1_commandline, " "))
 
 			ffmpeg_pass_1_output_temp, ffmpeg_pass_1_error := run_external_command(ffmpeg_pass_1_commandline)
 
 			pass_1_elapsed_time = time.Since(pass_1_start_time)
 			fmt.Printf("took %s", pass_1_elapsed_time.Round(time.Millisecond))
 			fmt.Println()
+
+			// Add messages to processing log.
+			pass_1_commandline_for_logfile := strings.Join(ffmpeg_pass_1_commandline, " ")
+			pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, "[0:s:0]", "'[0:s:0]", 1)
+			pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, "[processed_combined_streams] -map", "[processed_combined_streams]' -map", 1)
+			log_messages_str_slice = append(log_messages_str_slice, "")
+			log_messages_str_slice = append(log_messages_str_slice, "FFmpeg Pass 1 Options:")
+			log_messages_str_slice = append(log_messages_str_slice, "-----------------------")
+			log_messages_str_slice = append(log_messages_str_slice, pass_1_commandline_for_logfile)
 
 			if *debug_mode_on == true {
 
@@ -1306,14 +1323,21 @@ func main() {
 				}
 
 				pass_2_start_time = time.Now()
-				log_messages_str_slice = append(log_messages_str_slice, "\n")
-				log_messages_str_slice = append(log_messages_str_slice, strings.Join(ffmpeg_pass_2_commandline, " "))
 
 				ffmpeg_pass_2_output_temp, ffmpeg_pass_2_error :=  run_external_command(ffmpeg_pass_2_commandline)
 
 				pass_2_elapsed_time = time.Since(pass_2_start_time)
 				fmt.Printf("took %s", pass_2_elapsed_time.Round(time.Millisecond))
 				fmt.Println()
+
+				// Add messages to processing log.
+				pass_2_commandline_for_logfile := strings.Join(ffmpeg_pass_2_commandline, " ")
+				pass_2_commandline_for_logfile = strings.Replace(pass_2_commandline_for_logfile, "[0:s:0]", "'[0:s:0]", 1)
+				pass_2_commandline_for_logfile = strings.Replace(pass_2_commandline_for_logfile, "[processed_combined_streams] -map", "[processed_combined_streams]' -map", 1)
+				log_messages_str_slice = append(log_messages_str_slice, "")
+				log_messages_str_slice = append(log_messages_str_slice, "FFmpeg Pass 2 Options:")
+				log_messages_str_slice = append(log_messages_str_slice, "-----------------------")
+				log_messages_str_slice = append(log_messages_str_slice, pass_2_commandline_for_logfile)
 
 				if *debug_mode_on == true {
 
@@ -1348,15 +1372,47 @@ func main() {
 			elapsed_time := time.Since(start_time)
 			fmt.Printf("Processing took %s", elapsed_time.Round(time.Millisecond))
 			fmt.Println()
+
+			// Add messages to processing log.
+			log_messages_str_slice = append(log_messages_str_slice, "")
+			pass_1_elapsed_time := pass_1_elapsed_time.Round(time.Millisecond)
+			pass_2_elapsed_time := pass_2_elapsed_time.Round(time.Millisecond)
+			total_elapsed_time := elapsed_time.Round(time.Millisecond)
+			log_messages_str_slice = append(log_messages_str_slice, "Pass 1 took: " + pass_1_elapsed_time.String())
+			log_messages_str_slice = append(log_messages_str_slice, "Pass 2 took: " + pass_2_elapsed_time.String())
+			log_messages_str_slice = append(log_messages_str_slice, "Processing took: " + total_elapsed_time.String())
+			log_messages_str_slice = append(log_messages_str_slice, "")
+			log_messages_str_slice = append(log_messages_str_slice, "########################################################################################################################")
+			log_messages_str_slice = append(log_messages_str_slice, "")
 		}
 
+		// Open logfile for appending info about file processing to it.
+		log_file_name := "00-processing.log"
+		log_file_absolute_path := filepath.Join(inputfile_path, output_directory_name, log_file_name)
 
+		// Append to the logfile or if it does not exist create a new one.
+		logfile_pointer, err := os.OpenFile(log_file_absolute_path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0755)
+		defer logfile_pointer.Close()
+
+		if err != nil {
+			fmt.Println("")
+			fmt.Println("Error, could not open logfile:", log_file_name, "for writing.")
+			log.Fatal(err)
+			os.Exit(0)
+		}
+
+		// Write processing info to the file
+		if _, err = logfile_pointer.WriteString(strings.Join(log_messages_str_slice, "\n")); err != nil {
+			fmt.Println("")
+			fmt.Println("Error, could not write to logfile:", log_file_name)
+			log.Fatal(err)
+			os.Exit(0)
+		}
 	}
 }
 
 // FIXME
 // Jos ohjelmalle annetusta tiedostojoukosta puuttuu yksi failia, ohjelma exitoi eikä käsittele yhtään tiedostoa.
-// Tulosta hakemistoon 00-processed_files failikohtainen tiedosto, jossa ffmpegin käsittelykomennot, käsittelyn kestot ja kroppiarvot ? Optio jolla tän saa päälle tai oletuksena päälle ja optio jolla saa pois ?
 // Jos kroppausarvot on nolla, poista kroppaysoptiot ffmpegin komentoriviltä ?
 // Tee enkoodauksen aikainen FFmpegin tulosteen tsekkaus, joka laskee koodauksen aika-arvion ja prosentit siitä kuinka paljon failia on jo käsitelty (fps ?) Tästä on esimerkkiohjelma muistiinpanoissa, mutta se jumittaa n. 90 sekuntia FFmpeg - enkoodauksen alkamisesta.
 // Nimeä ffmpeg_enkooderi uudella nimellä (sl_encoder = starlight encoder) ja poista hakemisto: 00-vanhat jotta git repon voi julkaista
