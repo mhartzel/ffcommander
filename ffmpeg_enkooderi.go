@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.14" // This is the version of this program
+var version_number string = "1.15" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -293,6 +293,7 @@ func main() {
 	var fast_encode_bool = flag.Bool("fe", false, "Fast encoding mode. Encode video using 1-pass encoding.")
 	var fast_bool = flag.Bool("f", false, "This is the same as using options -fs and -fe at the same time.")
 	var force_hd_bool = flag.Bool("hd", false, "Force video encoding to use HD bitrate and profile (Profile = High, Level = 4.1, Bitrate = 8000k) By default this program decides video encoding profile and bitrate automatically depending on the vertical resolution of the picture.")
+	var force_lossless_bool = flag.Bool("ls", false, "Force video encoding to use lossless 'utvideo' compression. This also turns on -fe")
 	var scan_mode_only_bool = flag.Bool("scan", false, "Only scan input file and print video and audio stream info.")
 	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables and the FFmpeg commandlines used.")
 	var search_start_str = flag.String("ss", "", "Seek to time position before starting processing. This option is given to FFmpeg as it is. Example -ss 01:02:10 Seeks to 1 hour two minutes and 10 seconds.")
@@ -336,6 +337,9 @@ func main() {
 	pass_2_start_time := time.Now()
 	pass_2_elapsed_time := time.Since(start_time)
 
+	output_directory_name := "00-processed_files"
+
+
 	///////////////////////////////
 	// Parse commandline options //
 	///////////////////////////////
@@ -373,6 +377,17 @@ func main() {
 		fmt.Println("The option -s requires a language code like: eng, fin, ita not a number.")
 		fmt.Println()
 		os.Exit(0)
+	}
+
+	// -f option turns on both options -fs and -fe
+	if *fast_bool == true {
+		*fast_search_bool = true
+		*fast_encode_bool = true
+	}
+
+	// Always use 1-pass encoding with lossless encoding. Turn on option -fe.
+	if *force_lossless_bool == true {
+		*fast_encode_bool = true
 	}
 
 	// Check dvd palette hacking option string correctness.
@@ -449,6 +464,7 @@ func main() {
 		}
 	}
 
+	// Print program version and license info.
 	if *show_program_version_short == true || *show_program_version_long == true {
 		fmt.Println()
 		fmt.Println("Version:", version_number)
@@ -476,8 +492,17 @@ func main() {
 	//////////////////////////////////////////////////
 	video_compression_options_sd := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "main", "-level", "4.0", "-b:v", "1600k"}
 	video_compression_options_hd := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "4.1", "-b:v", "8000k"}
+	video_compression_options_lossless := []string{"-c:v", "utvideo"}
 	audio_compression_options := []string{"-acodec", "copy"}
 	denoise_options := []string{"hqdn3d=3.0:3.0:2.0:3.0"}
+	output_video_format := []string{"-f", "mp4"}
+	output_filename_extension := ".mp4"
+
+	if *force_lossless_bool == true {
+		output_video_format = nil
+		output_video_format = append(output_video_format, "-f", "matroska")
+		output_filename_extension = ".mkv"
+	}
 
 	if *no_deinterlace_bool == true {
 		deinterlace_options = []string{"copy"}
@@ -487,6 +512,7 @@ func main() {
 	ffmpeg_commandline_start := []string{"ffmpeg", "-y", "-loglevel", "8", "-threads", "auto"}
 	subtitle_number := *subtitle_int
 
+	// Create grayscale FFmpeg - options
 	if *grayscale_bool == false {
 
 		grayscale_options = []string{""}
@@ -500,14 +526,6 @@ func main() {
 		if subtitle_number >= 0 {
 			grayscale_options = []string{",lut=u=128:v=128"}
 		}
-	}
-
-	output_directory_name := "00-processed_files"
-	output_video_format := []string{"-f", "mp4"}
-
-	if *fast_bool == true {
-		*fast_search_bool = true
-		*fast_encode_bool = true
 	}
 
 	/////////////////////////////////////////
@@ -791,8 +809,8 @@ func main() {
 		inputfile_absolute_path,_ := filepath.Abs(file_name)
 		inputfile_path := filepath.Dir(inputfile_absolute_path)
 		inputfile_name := filepath.Base(file_name)
-		output_filename_extension := filepath.Ext(inputfile_name)
-		output_file_absolute_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, output_filename_extension) + ".mp4")
+		input_filename_extension := filepath.Ext(inputfile_name)
+		output_file_absolute_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension) + output_filename_extension)
 
 		if *debug_mode_on == true {
 			fmt.Println("inputfile_path:", inputfile_path)
@@ -1209,7 +1227,7 @@ func main() {
 			// Add video and audio compressing options to FFmpeg commandline //
 			///////////////////////////////////////////////////////////////////
 
-			// If video horizontal resolution is over 700 pixel choose HD video compression settings
+			// If video vertical resolution is over 700 pixel choose HD video compression settings
 			video_compression_options := video_compression_options_sd
 
 			video_height_int,_ = strconv.Atoi(video_height)
@@ -1218,6 +1236,11 @@ func main() {
 			if *force_hd_bool == true || video_height_int > 700 {
 				video_compression_options = video_compression_options_hd
 				video_bitrate = "8000k"
+			}
+
+			if *force_lossless_bool == true {
+				video_compression_options = video_compression_options_lossless
+				video_bitrate = "Lossless"
 			}
 
 			// Add video compression options to ffmpeg commandline
@@ -1231,7 +1254,7 @@ func main() {
 
 			// Add 2 - pass logfile path to ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-passlogfile")
-			ffmpeg_2_pass_logfile_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, output_filename_extension))
+			ffmpeg_2_pass_logfile_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension))
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_2_pass_logfile_path)
 		
 			// Add video output format to ffmpeg commandline
@@ -1283,8 +1306,19 @@ func main() {
 
 			// Add messages to processing log.
 			pass_1_commandline_for_logfile := strings.Join(ffmpeg_pass_1_commandline, " ")
-			pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, "[0:s:0]", "'[0:s:0]", 1)
-			pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, "[processed_combined_streams] -map", "[processed_combined_streams]' -map", 1)
+
+			// Make a copy of the FFmpeg commandline for writing in the logfile.
+			// Modify commandline so that it works if the user wants to copy and paste it from the logfile and run it.
+			if subtitle_number == -1 {
+				// Simple processing chain with -vf.
+				pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, "-vf ", "-vf '", 1)
+				pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, " -c:v", "' -c:v", 1)
+			} else {
+				// Complex processing chain with -filter_complex
+				pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, "[0:s:0]", "'[0:s:0]", 1)
+				pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, "[processed_combined_streams] -map", "[processed_combined_streams]' -map", 1)
+			}
+
 			log_messages_str_slice = append(log_messages_str_slice, "")
 			log_messages_str_slice = append(log_messages_str_slice, "FFmpeg Pass 1 Options:")
 			log_messages_str_slice = append(log_messages_str_slice, "-----------------------")
@@ -1419,6 +1453,11 @@ func main() {
 // Tee erillinen skripti audion synkkaamista varten
 // Tsekkaa pitäiskö aina --filter_complexin kanssa käyttää audiossa oletus-delaytä (ehkä 80 ms).
 // Pitäiskö laittaa option, jolla vois rajoittaa käytettävien prosessorien lukumäärän ?
+//
+// ffmpeg -y -i testi-1.mkv -vcodec rawvideo -pix_fmt yuv420p -c:v libx264 -preset ultrafast -qp 0 -acodec copy -scodec copy -map 0  h264_lossless.mkv
+// ffmpeg -y -i testi-1.mkv -vcodec utvideo -pred median -acodec copy -scodec copy -map 0  utvideo.mkv
+//
+// Copy 1 minute starting from 10 minutes of a mkv to a new container: ffmpeg -i InputFile.mkv -ss 10:00 -t 01:00 -vcodec copy -acodec copy -scodec copy -map 0 OutputFile.mkv
 //
 //
 
