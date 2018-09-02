@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.15" // This is the version of this program
+var version_number string = "1.17" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -278,26 +278,38 @@ func main() {
 	//////////////////////////////////////////
 	// Define and parse commandline options //
 	//////////////////////////////////////////
-	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.")
-	var subtitle_int = flag.Int("sn", -1, "Subtitle stream `number, -sn 1` Use subtitle number 1 from the source file. Only use option -sn or -s not both.")
-	var subtitle_language_str = flag.String("s", "", "Subtitle language: -s fin or -s eng -s ita  Only use option -sn or -s not both.")
-	var subtitle_vertical_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up).")
-	var subtitle_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font.")
-	var subtitle_palette = flag.String("palette", "", "Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: -palette f,0,f")
-	var audio_stream_number_int = flag.Int("an", 0, "Audio stream number, -a 1 (Use audio stream number 1 from the source file).")
+	// Audio options
 	var audio_language_str = flag.String("a", "", "Audio language: -a fin or -a eng or -a ita  Only use option -an or -a not both.")
-	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.")
-	var denoise_bool = flag.Bool("dn", false, "Denoise. Use HQDN3D - filter to remove noise from the picture. This option is equal to Hanbrakes 'medium' noise reduction settings.")
+	var audio_stream_number_int = flag.Int("an", 0, "Audio stream number, -a 1 (Use audio stream number 1 from the source file).")
+	var audio_compression_ac3 = flag.Bool("ac3", false, "Compress audio as ac3. Channel count adjusts compression bitrate automatically. Stereo uses 192k and 3 - 6 channels uses 640k bitrate.")
+
+	// Video options
 	var autocrop_bool = flag.Bool("ac", false, "Autocrop. Find crop values automatically by doing 10 second spot checks in 10 places for the duration of the file.")
-	var fast_search_bool = flag.Bool("fs", false, "Fast seek mode. When using the -fs option with -ss do not decode video before the point we are trying to locate, but instead try to jump directly to it. This search method might or might not be accurate depending on the file format.")
-	var fast_encode_bool = flag.Bool("fe", false, "Fast encoding mode. Encode video using 1-pass encoding.")
-	var fast_bool = flag.Bool("f", false, "This is the same as using options -fs and -fe at the same time.")
+	var denoise_bool = flag.Bool("dn", false, "Denoise. Use HQDN3D - filter to remove noise from the picture. This option is equal to Hanbrakes 'medium' noise reduction settings.")
+	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.")
 	var force_hd_bool = flag.Bool("hd", false, "Force video encoding to use HD bitrate and profile (Profile = High, Level = 4.1, Bitrate = 8000k) By default this program decides video encoding profile and bitrate automatically depending on the vertical resolution of the picture.")
-	var force_lossless_bool = flag.Bool("ls", false, "Force video encoding to use lossless 'utvideo' compression. This also turns on -fe")
+	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.")
+
+	// Options that affect both video and audio
+	var force_lossless_bool = flag.Bool("ls", false, "Force encoding to use lossless 'utvideo' compression for video and 'flac' compression for audio. This also turns on -fe")
+
+	// Subtitle options
+	var subtitle_language_str = flag.String("s", "", "Subtitle language: -s fin or -s eng -s ita  Only use option -sn or -s not both.")
+	var subtitle_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font.")
+	var subtitle_int = flag.Int("sn", -1, "Subtitle stream `number, -sn 1` Use subtitle number 1 from the source file. Only use option -sn or -s not both.")
+	var subtitle_vertical_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up).")
+	var subtitle_palette = flag.String("palette", "", "Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: -palette f,0,f")
+
+	// Scan options
+	var fast_bool = flag.Bool("f", false, "This is the same as using options -fs and -fe at the same time.")
+	var fast_encode_bool = flag.Bool("fe", false, "Fast encoding mode. Encode video using 1-pass encoding.")
+	var fast_search_bool = flag.Bool("fs", false, "Fast seek mode. When using the -fs option with -ss do not decode video before the point we are trying to locate, but instead try to jump directly to it. This search method might or might not be accurate depending on the file format.")
 	var scan_mode_only_bool = flag.Bool("scan", false, "Only scan input file and print video and audio stream info.")
-	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables and the FFmpeg commandlines used.")
 	var search_start_str = flag.String("ss", "", "Seek to time position before starting processing. This option is given to FFmpeg as it is. Example -ss 01:02:10 Seeks to 1 hour two minutes and 10 seconds.")
 	var processing_time_str = flag.String("t", "", "Duration of video to process. This option is given to FFmpeg as it is. Example -t 01:02 process 1 minuntes and 2 seconds of the file.")
+
+	// Misc options
+	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables and the FFmpeg commandlines used.")
 	var show_program_version_short = flag.Bool("v", false,"Show the version of this program.")
 	var show_program_version_long = flag.Bool("version", false,"Show the version of this program.")
 
@@ -494,11 +506,17 @@ func main() {
 	video_compression_options_hd := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "4.1", "-b:v", "8000k"}
 	video_compression_options_lossless := []string{"-c:v", "utvideo"}
 	audio_compression_options := []string{"-acodec", "copy"}
+	audio_compression_options_2_channels_ac3 := []string{"-c:a","ac3","-b:a","192k"}
+	audio_compression_options_6_channels_ac3 := []string{"-c:a","ac3","-b:a","640k"}
+	audio_compression_options_lossless_flac := []string{"-acodec", "flac"}
 	denoise_options := []string{"hqdn3d=3.0:3.0:2.0:3.0"}
+
+	// Determine output file container
 	output_video_format := []string{"-f", "mp4"}
 	output_filename_extension := ".mp4"
 
 	if *force_lossless_bool == true {
+		// Lossless output file wrapper options
 		output_video_format = nil
 		output_video_format = append(output_video_format, "-f", "matroska")
 		output_filename_extension = ".mkv"
@@ -507,7 +525,11 @@ func main() {
 	if *no_deinterlace_bool == true {
 		deinterlace_options = []string{"copy"}
 	} else {
-		deinterlace_options = []string{"idet,yadif=0:deint=interlaced"}
+		// Deinterlacing options used to be: "idet,yadif=0:deint=interlaced"  which tries to detect
+		// if a frame is interlaced and deinterlaces only those that are.
+		// If there was a cut where there was lots of movement in the picture then some interlace
+		// remained in a couple of frames after the cut.
+		deinterlace_options = []string{"idet,yadif=0:deint=all"}
 	}
 	ffmpeg_commandline_start := []string{"ffmpeg", "-y", "-loglevel", "8", "-threads", "auto"}
 	subtitle_number := *subtitle_int
@@ -858,8 +880,9 @@ func main() {
 
 				if *audio_language_str == audio_language {
 					*audio_stream_number_int = audio_stream_number
+					number_of_audio_channels = audio_info[2]
 					audio_stream_found = true
-					break // Continue searching the next file when the first matching subtitle has been found.
+					break // Break out of the loop when the first matching subtitle has been found.
 				}
 
 			}
@@ -877,6 +900,11 @@ func main() {
 				fmt.Printf("Audio: %s was found in audio stream number: %d\n", *audio_language_str, *audio_stream_number_int)
 				fmt.Println()
 			}
+
+		} else {
+			audio_slice := file_info_slice[1]
+			audio_info := audio_slice[*audio_stream_number_int]
+			number_of_audio_channels = audio_info[2]
 		}
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1104,8 +1132,10 @@ func main() {
 			subtitle_horizontal_offset_str = strconv.Itoa(subtitle_horizontal_offset_int)
 
 			fmt.Println("Top:", crop_values_height_offset, ", Bottom:", strconv.Itoa(cropped_height), ", Left:", crop_values_width_offset, ", Right:", strconv.Itoa(cropped_width))
+
 			log_messages_str_slice = append(log_messages_str_slice, "")
 			log_messages_str_slice = append(log_messages_str_slice, "Crop values are, Top: " + strconv.Itoa(crop_values_height_offset) + ", Bottom: " + strconv.Itoa(cropped_height) + ", Left: " + strconv.Itoa(crop_values_width_offset) + ", Right: " + strconv.Itoa(cropped_width))
+			log_messages_str_slice = append(log_messages_str_slice, "After cropping video width is: " + strconv.Itoa(crop_values_picture_width) + ", and height is: " + strconv.Itoa(crop_values_picture_height))
 
 		}
 
@@ -1231,6 +1261,12 @@ func main() {
 			video_compression_options := video_compression_options_sd
 
 			video_height_int,_ = strconv.Atoi(video_height)
+
+			// If video has been cropped, decide video compression bitrate  by the cropped hight of the video.
+			if *autocrop_bool == true {
+				video_height_int = crop_values_picture_height
+			}
+
 			video_bitrate = "1600k"
 
 			if *force_hd_bool == true || video_height_int > 700 {
@@ -1239,8 +1275,26 @@ func main() {
 			}
 
 			if *force_lossless_bool == true {
+				// Lossless audio compression options
+				audio_compression_options = nil
+				audio_compression_options = audio_compression_options_lossless_flac
+
+				// Lossless video compression options
 				video_compression_options = video_compression_options_lossless
 				video_bitrate = "Lossless"
+			}
+
+			if *audio_compression_ac3 == true {
+
+				number_of_audio_channels_int,_ := strconv.Atoi(number_of_audio_channels)
+
+				if number_of_audio_channels_int <= 2 {
+					audio_compression_options = nil
+					audio_compression_options = audio_compression_options_2_channels_ac3
+				} else {
+					audio_compression_options = nil
+					audio_compression_options = audio_compression_options_6_channels_ac3
+				}
 			}
 
 			// Add video compression options to ffmpeg commandline
@@ -1451,7 +1505,7 @@ func main() {
 // Tee enkoodauksen aikainen FFmpegin tulosteen tsekkaus, joka laskee koodauksen aika-arvion ja prosentit siitä kuinka paljon failia on jo käsitelty (fps ?) Tästä on esimerkkiohjelma muistiinpanoissa, mutta se jumittaa n. 90 sekuntia FFmpeg - enkoodauksen alkamisesta.
 // Nimeä ffmpeg_enkooderi uudella nimellä (sl_encoder = starlight encoder) ja poista hakemisto: 00-vanhat jotta git repon voi julkaista
 // Tee erillinen skripti audion synkkaamista varten
-// Tsekkaa pitäiskö aina --filter_complexin kanssa käyttää audiossa oletus-delaytä (ehkä 80 ms).
+// Tsekkaa pitäiskö aina --filter_complexin kanssa käyttää audiossa oletus-delaytä (ehkä 40 ms).
 // Pitäiskö laittaa option, jolla vois rajoittaa käytettävien prosessorien lukumäärän ?
 //
 // ffmpeg -y -i testi-1.mkv -vcodec rawvideo -pix_fmt yuv420p -c:v libx264 -preset ultrafast -qp 0 -acodec copy -scodec copy -map 0  h264_lossless.mkv
@@ -1459,6 +1513,15 @@ func main() {
 //
 // Copy 1 minute starting from 10 minutes of a mkv to a new container: ffmpeg -i InputFile.mkv -ss 10:00 -t 01:00 -vcodec copy -acodec copy -scodec copy -map 0 OutputFile.mkv
 //
+// Deinterlace päästää välillä skarvin jälkeen seuraavassa feimissä interlacea läpi. Deinterlace - komento on nyt:
+//		deinterlace_options = []string{"idet,yadif=0:deint=interlaced"}
+// pitäistkö se muuttaa komennoksi:
+//		deinterlace_options = []string{"idet,yadif=0:deint=all"}
 //
+// ffmpeg -y -loglevel 8 -threads auto -i Frasier-S01-E05-Heres_Looking_At_You.mkv -t 01:00 -sn -map 0:v:0 -vf idet,yadif=0:deint=all,crop=704:568:10:4 -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -acodec copy -map 0:a:0 -scodec copy -map 0:s:1  -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Frasier/00-processed_files/Frasier-S01-E05-Heres_Looking_At_You -f mp4 -pass 2 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Frasier/00-processed_files/Frasier-S01-E05-Heres_Looking_At_You.mp4
+// 
+// ffmpeg -y -loglevel 8 -threads auto -i Frasier-S01-E05-Heres_Looking_At_You.mkv -t 01:00 -map 0:v:0 -vf 'idet,yadif=0:deint=all,crop=704:568:10:4' -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -acodec copy -map 0:a:0 -scodec copy -map 0:s:1 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Frasier/00-processed_files/Frasier-S01-E05-Heres_Looking_At_You -f mp4 -pass 1 /dev/null
+// 
+// ffmpeg -y -loglevel 8 -threads auto -i Frasier-S01-E05-Heres_Looking_At_You.mkv -t 01:00 -map 0:v:0 -vf idet,yadif=0:deint=all,crop=704:568:10:4 -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -acodec copy -map 0:a:0 -scodec copy -map 0:s:1  -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Frasier/00-processed_files/Frasier-S01-E05-Heres_Looking_At_You -f mp4 -pass 2 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Frasier/00-processed_files/Frasier-S01-E05-Heres_Looking_At_You.mp4
 
 
