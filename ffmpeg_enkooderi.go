@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.17" // This is the version of this program
+var version_number string = "1.18" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -298,6 +298,7 @@ func main() {
 	var subtitle_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font.")
 	var subtitle_int = flag.Int("sn", -1, "Subtitle stream `number, -sn 1` Use subtitle number 1 from the source file. Only use option -sn or -s not both.")
 	var subtitle_vertical_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up).")
+	var subtitle_mux_bool = flag.Bool("sm", false, "Mux subtitle into the target file. This only works with dvd, dvb and bluray bitmap based subtitles. If this option is not set then subtitles will be burned into the video.")
 	var subtitle_palette = flag.String("palette", "", "Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: -palette f,0,f")
 
 	// Scan options
@@ -566,6 +567,7 @@ func main() {
 		fmt.Println("subtitle_vertical_offset_int:",*subtitle_vertical_offset_int)
 		fmt.Println("*subtitle_downscale:",*subtitle_downscale)
 		fmt.Println("*subtitle_palette:",*subtitle_palette)
+		fmt.Println("*subtitle_mux_bool:",*subtitle_mux_bool)
 		fmt.Println("*grayscale_bool:", *grayscale_bool)
 		fmt.Println("grayscale_options:",grayscale_options)
 		fmt.Println("*autocrop_bool:", *autocrop_bool)
@@ -882,7 +884,7 @@ func main() {
 					*audio_stream_number_int = audio_stream_number
 					number_of_audio_channels = audio_info[2]
 					audio_stream_found = true
-					break // Break out of the loop when the first matching subtitle has been found.
+					break // Break out of the loop when the first matching audio has been found.
 				}
 
 			}
@@ -1158,7 +1160,7 @@ func main() {
 
 			// Add possible dvd subtitle color palette hacking option to the FFmpeg commandline.
 			// It must be before the first input file to take effect for that file.
-			if *subtitle_palette != "" {
+			if *subtitle_palette != "" && *subtitle_mux_bool == false {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-palette", *subtitle_palette)
 			}
 
@@ -1175,14 +1177,21 @@ func main() {
 
 			ffmpeg_filter_options := ""
 
-			//////////////////////////////////////////////////////////////////////////////////////////////
-			// If there is no subtitle to process use the simple video processing chain (-vf) in FFmpeg //
-			// It has a processing pipeline with only one video input and output                        //
-			//////////////////////////////////////////////////////////////////////////////////////////////
+			/////////////////////////////////////////////////////////////////////////////////////////////////////////
+			// If there is no subtitle to process or we are just muxing dvd, dvb or bluray subtitle to target file //
+			// then use the simple video processing chain (-vf) in FFmpeg                                          //
+			// It has a processing pipeline with only one video input and output                                   //
+			/////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-			if subtitle_number == -1 {
-				// There is no subtitle to process add the "no subtitle" option to FFmpeg commandline.
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-sn")
+			if subtitle_number == -1 || *subtitle_mux_bool == true {
+
+				if *subtitle_mux_bool == true {
+					// There is a dvd, dvb or bluray bitmap subtitle to mux into the target file add the relevant options to FFmpeg commandline.
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-scodec", "copy", "-map", "0:s:" + strconv.Itoa(subtitle_number))
+				} else {
+					// There is no subtitle to process add the "no subtitle" option to FFmpeg commandline.
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-sn")
+				}
 
 				// Add deinterlace commands to ffmpeg commandline
 				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(deinterlace_options, "")
@@ -1214,10 +1223,10 @@ func main() {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:v:0", "-vf", ffmpeg_filter_options)
 
 			} else {
-				//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-				// There is a subtitle to process with the video, use the complex video processing chain in FFmpeg (-filer_complex) //
-				// It can have several simultaneous video inputs and outputs.                                                       //
-				//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+				// There is a subtitle to burn into the video, use the complex video processing chain in FFmpeg (-filer_complex) //
+				// It can have several simultaneous video inputs and outputs.                                                    //
+				///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 				// Add deinterlace commands to ffmpeg commandline
 				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(deinterlace_options, "")
@@ -1363,7 +1372,7 @@ func main() {
 
 			// Make a copy of the FFmpeg commandline for writing in the logfile.
 			// Modify commandline so that it works if the user wants to copy and paste it from the logfile and run it.
-			if subtitle_number == -1 {
+			if subtitle_number == -1 || *subtitle_mux_bool == true {
 				// Simple processing chain with -vf.
 				pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, "-vf ", "-vf '", 1)
 				pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, " -c:v", "' -c:v", 1)
