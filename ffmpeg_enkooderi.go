@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.18" // This is the version of this program
+var version_number string = "1.19" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -128,7 +128,8 @@ func get_video_and_audio_stream_information(file_name string) {
 	var stream_info_str_slice []string
 
 	// Find text lines in FFprobe info that indicates if this stream is: video, audio or subtitle
-	// and store each stream info in a type specific (video, audio and subtitle) slice that in turn gets stored in a slice containing all video, audio or subtitle specific info.
+	// and store each stream info in a type specific (video, audio and subtitle) slice that
+	// in turn gets stored in a slice containing all video, audio or subtitle specific info.
 
 	// First get dictionary keys and sort them
 	var dictionary_keys []int
@@ -204,6 +205,7 @@ func get_video_and_audio_stream_information(file_name string) {
 			single_audio_stream_info_slice = append(single_audio_stream_info_slice, audio_stream_info_map["disposition.visual_impaired"])
 			single_audio_stream_info_slice = append(single_audio_stream_info_slice, audio_stream_info_map["channels"])
 			single_audio_stream_info_slice = append(single_audio_stream_info_slice, audio_stream_info_map["sample_rate"])
+			single_audio_stream_info_slice = append(single_audio_stream_info_slice, audio_stream_info_map["codec_name"])
 			all_audio_streams_info_slice = append(all_audio_streams_info_slice, single_audio_stream_info_slice)
 		}
 
@@ -239,13 +241,13 @@ func get_video_and_audio_stream_information(file_name string) {
 
 	// Complete_file_info_slice contains one slice for each input file.
 	//
-	// The contents is when info for one file is stored: [ [ [/home/mika/Downloads/dvb_stream.ts 720 576 64.123411]]  [[eng 0 2 48000]  [dut 1 2 48000]]  [[fin 0 dvb_subtitle]  [fin 0 dvb_teletext] ] ]
+	// The contents is when info for one file is stored: [ [ [/home/mika/Downloads/dvb_stream.ts 720 576 64.123411]]  [[eng 0 2 48000 ac3]  [dut 1 2 48000 pcm_s16le]]  [[fin 0 dvb_subtitle]  [fin 0 dvb_teletext] ] ]
 	//
 	// The file path is: /home/mika/Downloads/dvb_stream.ts
 	// Video width is: 720 pixels and height is: 576 pixels and the duration is: 64.123411 seconds.
 	// The input file has two audio streams (languages: eng and dut)
-	// Audio stream 0: language is: english, audio is for for visually impared = 0 (false), there are 2 audio channels in the stream and sample rate is 48000.
-	// Audio stream 1: language is: dutch, audio is for visually impared = 1 (true), there are 2 audio channels in the stream and sample rate is 48000.
+	// Audio stream 0: language is: english, audio is for for visually impared = 0 (false), there are 2 audio channels in the stream and sample rate is 48000 and audio codec is ac3.
+	// Audio stream 1: language is: dutch, audio is for visually impared = 1 (true), there are 2 audio channels in the stream and sample rate is 48000 and audio codec is pcm_s16le.
 	// The input file has two subtitle streams
 	// Subtitle stream 0: language is: finnish, subtitle is for hearing impared = 0 (false), the subtitle codec is: dvb (bitmap)
 	// Subtitle stream 1: language is: finnish, subtitle is for hearing impared = 0 (false), the subtitle codec is: teletext
@@ -329,7 +331,7 @@ func main() {
 	var file_to_process, video_width, video_height, video_duration string
 	var video_height_int int
 	var video_bitrate string
-	var audio_language, for_visually_impared, number_of_audio_channels string
+	var audio_language, for_visually_impared, number_of_audio_channels, audio_codec string
 	var subtitle_language, for_hearing_impared, subtitle_codec_name string
 	var crop_values_picture_width int
 	var crop_values_picture_height int
@@ -708,8 +710,9 @@ func main() {
 				audio_language = audio_info[0]
 				for_visually_impared = audio_info[1]
 				number_of_audio_channels = audio_info[2]
+				audio_codec = audio_info[4]
 
-				fmt.Printf("Audio stream number: %d, language: %s, for visually impared: %s, number of channels: %s\n", audio_stream_number, audio_language, for_visually_impared, number_of_audio_channels)
+				fmt.Printf("Audio stream number: %d, language: %s, for visually impared: %s, number of channels: %s, audio codec: %s\n", audio_stream_number, audio_language, for_visually_impared, number_of_audio_channels, audio_codec)
 			}
 
 			fmt.Println()
@@ -1378,7 +1381,7 @@ func main() {
 				pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, " -c:v", "' -c:v", 1)
 			} else {
 				// Complex processing chain with -filter_complex
-				pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, "[0:s:0]", "'[0:s:0]", 1)
+				pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, "-filter_complex ", "-filter_complex '", 1)
 				pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, "[processed_combined_streams] -map", "[processed_combined_streams]' -map", 1)
 			}
 
@@ -1517,6 +1520,15 @@ func main() {
 // Tsekkaa pitäiskö aina --filter_complexin kanssa käyttää audiossa oletus-delaytä (ehkä 40 ms).
 // Pitäiskö laittaa option, jolla vois rajoittaa käytettävien prosessorien lukumäärän ?
 //
+//
+// streams.stream.1.codec_name="pcm_s16le"
+// streams.stream.4.codec_name="ac3"
+// Tee -an optio, joka pakkaa ainoastaan videon ja jättää audio kokonaan pois.
+// -f optio vois pakata asetuksialla, jotka vastais vanhoja -sameq asetuksia, silloin -f olis käyttökelpoinen ihan itsenään, ei pelkästään testeissä.
+// Pitäiskö tehdä mahdollisuus muxata kohdetiedostoon useamman kielinen tekstitys ? Tässä tulis kohtuullisen isoja koodimuutoksia.
+// Jos Blurayllä on vain pcm_s16le ääni (tai joku muu bittisyys, ei failia voi enkoodata, sillä pcm ei ole sallittu formaatti mp4:ssä, pitää tunnistaa audion formaatti ja laittaa tässä tapauksessa outputfailin formaatiksi -f matroska.
+//
+//
 // ffmpeg -y -i testi-1.mkv -vcodec rawvideo -pix_fmt yuv420p -c:v libx264 -preset ultrafast -qp 0 -acodec copy -scodec copy -map 0  h264_lossless.mkv
 // ffmpeg -y -i testi-1.mkv -vcodec utvideo -pred median -acodec copy -scodec copy -map 0  utvideo.mkv
 //
@@ -1527,10 +1539,17 @@ func main() {
 // pitäistkö se muuttaa komennoksi:
 //		deinterlace_options = []string{"idet,yadif=0:deint=all"}
 //
-// ffmpeg -y -loglevel 8 -threads auto -i Frasier-S01-E05-Heres_Looking_At_You.mkv -t 01:00 -sn -map 0:v:0 -vf idet,yadif=0:deint=all,crop=704:568:10:4 -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -acodec copy -map 0:a:0 -scodec copy -map 0:s:1  -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Frasier/00-processed_files/Frasier-S01-E05-Heres_Looking_At_You -f mp4 -pass 2 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Frasier/00-processed_files/Frasier-S01-E05-Heres_Looking_At_You.mp4
-// 
-// ffmpeg -y -loglevel 8 -threads auto -i Frasier-S01-E05-Heres_Looking_At_You.mkv -t 01:00 -map 0:v:0 -vf 'idet,yadif=0:deint=all,crop=704:568:10:4' -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -acodec copy -map 0:a:0 -scodec copy -map 0:s:1 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Frasier/00-processed_files/Frasier-S01-E05-Heres_Looking_At_You -f mp4 -pass 1 /dev/null
-// 
-// ffmpeg -y -loglevel 8 -threads auto -i Frasier-S01-E05-Heres_Looking_At_You.mkv -t 01:00 -map 0:v:0 -vf idet,yadif=0:deint=all,crop=704:568:10:4 -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -acodec copy -map 0:a:0 -scodec copy -map 0:s:1  -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Frasier/00-processed_files/Frasier-S01-E05-Heres_Looking_At_You -f mp4 -pass 2 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Frasier/00-processed_files/Frasier-S01-E05-Heres_Looking_At_You.mp4
+// ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 00:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=0:main_h-overlay_h+140[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 1 /dev/null
+//
+// ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 00:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=0:main_h-overlay_h+70[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 2 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War.mp4
+//
+// ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 00:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=(main_w-overlay_w)/2:main_h-overlay_h+90[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 2 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War.mp4
+//
+//
+// Muuta nykyinen subtitle scale optio (-sd), joksin muuksi, esim. -scr (subtitle crop resize) tai -sca (subtitle crop adjust). Sitten tee uudet optiot: -ssd (subtitle scale down) -ssu (subtitle scale up), -shc (subtitle horizontal center). muuta nykyinen optio -so optioksi -svo (subtitle vertical offset) ja tee uusi optio: -sho (subtitle horizontal offset).
+// ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 01:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=((main_w-overlay_w)/2)+30:main_h-overlay_h+90[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 1 /dev/null
+//
+// ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 01:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=((main_w-overlay_w)/2)+30:main_h-overlay_h+90[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 2 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War.mp4
+
 
 
