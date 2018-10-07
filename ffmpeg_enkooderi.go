@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.19" // This is the version of this program
+var version_number string = "1.20" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -313,6 +313,7 @@ func main() {
 
 	// Misc options
 	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables and the FFmpeg commandlines used.")
+	var use_matroska_container = flag.Bool("mkv", false, "Use matroska (mkv) as the output file wrapper format.")
 	var show_program_version_short = flag.Bool("v", false,"Show the version of this program.")
 	var show_program_version_long = flag.Bool("version", false,"Show the version of this program.")
 
@@ -518,8 +519,8 @@ func main() {
 	output_video_format := []string{"-f", "mp4"}
 	output_filename_extension := ".mp4"
 
-	if *force_lossless_bool == true {
-		// Lossless output file wrapper options
+	if *force_lossless_bool == true || *use_matroska_container == true {
+		// Use matroska as the output file wrapper format
 		output_video_format = nil
 		output_video_format = append(output_video_format, "-f", "matroska")
 		output_filename_extension = ".mkv"
@@ -552,42 +553,6 @@ func main() {
 			grayscale_options = []string{",lut=u=128:v=128"}
 		}
 	}
-
-	/////////////////////////////////////////
-	// Print variable values in debug mode //
-	/////////////////////////////////////////
-	if *debug_mode_on == true {
-		fmt.Println()
-		fmt.Println("video_compression_options_sd:",video_compression_options_sd)
-		fmt.Println("video_compression_options_hd:",video_compression_options_hd)
-		fmt.Println("audio_compression_options:", audio_compression_options)
-		fmt.Println("denoise_options:",denoise_options)
-		fmt.Println("deinterlace_options:",deinterlace_options)
-		fmt.Println("ffmpeg_commandline_start:",ffmpeg_commandline_start)
-		fmt.Println("subtitle_number:",subtitle_number)
-		fmt.Println("subtitle_language_str:",subtitle_language_str)
-		fmt.Println("subtitle_vertical_offset_int:",*subtitle_vertical_offset_int)
-		fmt.Println("*subtitle_downscale:",*subtitle_downscale)
-		fmt.Println("*subtitle_palette:",*subtitle_palette)
-		fmt.Println("*subtitle_mux_bool:",*subtitle_mux_bool)
-		fmt.Println("*grayscale_bool:", *grayscale_bool)
-		fmt.Println("grayscale_options:",grayscale_options)
-		fmt.Println("*autocrop_bool:", *autocrop_bool)
-		fmt.Println("*subtitle_int:", *subtitle_int)
-		fmt.Println("*no_deinterlace_bool:", *no_deinterlace_bool)
-		fmt.Println("*denoise_bool:", *denoise_bool)
-		fmt.Println("*force_hd_bool:", *force_hd_bool)
-		fmt.Println("*audio_stream_number_int:", *audio_stream_number_int)
-		fmt.Println("*scan_mode_only_bool", *scan_mode_only_bool)
-		fmt.Println("*search_start_str", *search_start_str)
-		fmt.Println("*processing_time_str", *processing_time_str)
-		fmt.Println("*fast_bool", *fast_bool)
-		fmt.Println("*fast_search_bool", *fast_search_bool)
-		fmt.Println("*fast_encode_bool", *fast_encode_bool)
-		fmt.Println("*debug_mode_on", *debug_mode_on)
-		fmt.Println()
-		fmt.Println("input_filenames:", input_filenames)
-}
 
 	///////////////////////////////
 	// Scan inputfile properties //
@@ -752,7 +717,7 @@ func main() {
 
 				if *audio_language_str == audio_language {
 					audio_stream_found = true
-					break // Continue searching the next file when the first matching subtitle has been found.
+					break // Continue searching the next file when the first matching audio language has been found.
 				}
 
 			}
@@ -910,6 +875,31 @@ func main() {
 			audio_slice := file_info_slice[1]
 			audio_info := audio_slice[*audio_stream_number_int]
 			number_of_audio_channels = audio_info[2]
+		}
+
+		// Test if output audio codec is compatible with the mp4 wrapper format
+		audio_slice := file_info_slice[1]
+		audio_info := audio_slice[*audio_stream_number_int]
+		audio_codec = audio_info[4]
+
+		if *audio_compression_ac3 == true {
+			audio_codec = "ac3"
+		}
+
+		if *use_matroska_container == false {
+
+			if audio_codec != "aac" && audio_codec != "ac3" && audio_codec != "mp2" && audio_codec != "mp3" &&audio_codec != "dts" {
+				fmt.Println()
+				fmt.Printf("Error, audio codec: '%s' in file: %s is not compatible with the mp4 wrapper format.\n", audio_codec, file_name)
+				fmt.Println("The compatible audio formats are: aac, ac3, mp2, mp3, dts.")
+				fmt.Println("")
+				fmt.Println("You have three options:")
+				fmt.Println("1. Use the -scan option to find which input files have incompatible audio and process these files separately.")
+				fmt.Println("2. Use the -ac3 option to compress audio to ac3.")
+				fmt.Println("3. Use the -mkv option to use matroska as the output file wrapper format.")
+				fmt.Println()
+				os.Exit(0)
+			}
 		}
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1348,6 +1338,43 @@ func main() {
 				ffmpeg_pass_1_commandline = ffmpeg_pass_2_commandline
 			}
 
+			/////////////////////////////////////////
+			// Print variable values in debug mode //
+			/////////////////////////////////////////
+			if *debug_mode_on == true {
+				fmt.Println()
+				fmt.Println("video_compression_options_sd:",video_compression_options_sd)
+				fmt.Println("video_compression_options_hd:",video_compression_options_hd)
+				fmt.Println("video_compression_options:",video_compression_options)
+				fmt.Println("audio_compression_options:", audio_compression_options)
+				fmt.Println("denoise_options:",denoise_options)
+				fmt.Println("deinterlace_options:",deinterlace_options)
+				fmt.Println("ffmpeg_commandline_start:",ffmpeg_commandline_start)
+				fmt.Println("subtitle_number:",subtitle_number)
+				fmt.Println("subtitle_language_str:",subtitle_language_str)
+				fmt.Println("subtitle_vertical_offset_int:",*subtitle_vertical_offset_int)
+				fmt.Println("*subtitle_downscale:",*subtitle_downscale)
+				fmt.Println("*subtitle_palette:",*subtitle_palette)
+				fmt.Println("*subtitle_mux_bool:",*subtitle_mux_bool)
+				fmt.Println("*grayscale_bool:", *grayscale_bool)
+				fmt.Println("grayscale_options:",grayscale_options)
+				fmt.Println("*autocrop_bool:", *autocrop_bool)
+				fmt.Println("*subtitle_int:", *subtitle_int)
+				fmt.Println("*no_deinterlace_bool:", *no_deinterlace_bool)
+				fmt.Println("*denoise_bool:", *denoise_bool)
+				fmt.Println("*force_hd_bool:", *force_hd_bool)
+				fmt.Println("*audio_stream_number_int:", *audio_stream_number_int)
+				fmt.Println("*scan_mode_only_bool", *scan_mode_only_bool)
+				fmt.Println("*search_start_str", *search_start_str)
+				fmt.Println("*processing_time_str", *processing_time_str)
+				fmt.Println("*fast_bool", *fast_bool)
+				fmt.Println("*fast_search_bool", *fast_search_bool)
+				fmt.Println("*fast_encode_bool", *fast_encode_bool)
+				fmt.Println("*debug_mode_on", *debug_mode_on)
+				fmt.Println()
+				fmt.Println("input_filenames:", input_filenames)
+			}
+
 			/////////////////////////////////////
 			// Run Pass 1 encoding with FFmpeg //
 			/////////////////////////////////////
@@ -1521,8 +1548,8 @@ func main() {
 // Pitäiskö laittaa option, jolla vois rajoittaa käytettävien prosessorien lukumäärän ?
 //
 //
-// streams.stream.1.codec_name="pcm_s16le"
-// streams.stream.4.codec_name="ac3"
+// Mites dts-hd ?:
+//
 // Tee -an optio, joka pakkaa ainoastaan videon ja jättää audio kokonaan pois.
 // -f optio vois pakata asetuksialla, jotka vastais vanhoja -sameq asetuksia, silloin -f olis käyttökelpoinen ihan itsenään, ei pelkästään testeissä.
 // Pitäiskö tehdä mahdollisuus muxata kohdetiedostoon useamman kielinen tekstitys ? Tässä tulis kohtuullisen isoja koodimuutoksia.
