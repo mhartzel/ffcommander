@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.20" // This is the version of this program
+var version_number string = "1.21" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1386,6 +1386,16 @@ func main() {
 			} else {
 				fmt.Println()
 				fmt.Println("Encoding with video bitrate:", video_bitrate)
+
+				if *audio_compression_ac3 == true {
+
+					fmt.Println("Encoding audio to ac3 with bitrate:", audio_compression_options[3])
+
+				} else {
+
+					fmt.Printf("Copying %s audio to target.\n", audio_codec)
+				}
+
 				fmt.Printf("Pass 1 encoding: " + inputfile_name + " ")
 			}
 
@@ -1547,24 +1557,12 @@ func main() {
 // Tsekkaa pitäiskö aina --filter_complexin kanssa käyttää audiossa oletus-delaytä (ehkä 40 ms).
 // Pitäiskö laittaa option, jolla vois rajoittaa käytettävien prosessorien lukumäärän ?
 //
-//
 // Mites dts-hd ?:
 //
 // Tee -an optio, joka pakkaa ainoastaan videon ja jättää audio kokonaan pois.
-// -f optio vois pakata asetuksialla, jotka vastais vanhoja -sameq asetuksia, silloin -f olis käyttökelpoinen ihan itsenään, ei pelkästään testeissä.
 // Pitäiskö tehdä mahdollisuus muxata kohdetiedostoon useamman kielinen tekstitys ? Tässä tulis kohtuullisen isoja koodimuutoksia.
-// Jos Blurayllä on vain pcm_s16le ääni (tai joku muu bittisyys, ei failia voi enkoodata, sillä pcm ei ole sallittu formaatti mp4:ssä, pitää tunnistaa audion formaatti ja laittaa tässä tapauksessa outputfailin formaatiksi -f matroska.
-//
-//
-// ffmpeg -y -i testi-1.mkv -vcodec rawvideo -pix_fmt yuv420p -c:v libx264 -preset ultrafast -qp 0 -acodec copy -scodec copy -map 0  h264_lossless.mkv
-// ffmpeg -y -i testi-1.mkv -vcodec utvideo -pred median -acodec copy -scodec copy -map 0  utvideo.mkv
 //
 // Copy 1 minute starting from 10 minutes of a mkv to a new container: ffmpeg -i InputFile.mkv -ss 10:00 -t 01:00 -vcodec copy -acodec copy -scodec copy -map 0 OutputFile.mkv
-//
-// Deinterlace päästää välillä skarvin jälkeen seuraavassa feimissä interlacea läpi. Deinterlace - komento on nyt:
-//		deinterlace_options = []string{"idet,yadif=0:deint=interlaced"}
-// pitäistkö se muuttaa komennoksi:
-//		deinterlace_options = []string{"idet,yadif=0:deint=all"}
 //
 // ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 00:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=0:main_h-overlay_h+140[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 1 /dev/null
 //
@@ -1578,5 +1576,24 @@ func main() {
 //
 // ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 01:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=((main_w-overlay_w)/2)+30:main_h-overlay_h+90[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 2 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War.mp4
 
+// Processing file 1/2  'Tales_Of_Tomorrow.mkv'
+// Finding crop values for: Tales_Of_Tomorrow.mkv   Top: 6 , Bottom: 2 , Left: 6 , Right: 2
+// 
+// Encoding with video bitrate: 1600k
+// Pass 1 encoding: Tales_Of_Tomorrow.mkv took 5m11.383s
+// Pass 2 encoding: Tales_Of_Tomorrow.mkv took 6m55.197s
+// Processing took 12m14.406s
+// 
+// ################################################################################
+// 
+// Processing file 2/2  'palkintojen_jakojuhla.mkv'
+// 
+// Error, audio codec: 'pcm_s16le' in file: palkintojen_jakojuhla.mkv is not compatible with the mp4 wrapper format.
+// The compatible audio formats are: aac, ac3, mp2, mp3, dts.
+// 
+// You have three options:
+// 1. Use the -scan option to find which input files have incompatible audio and process these files separately.
+// 2. Use the -ac3 option to compress audio to ac3.
+// 3. Use the -mkv option to use matroska as the output file wrapper format.
 
 
