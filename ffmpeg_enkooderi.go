@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.21" // This is the version of this program
+var version_number string = "1.22" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -186,7 +186,7 @@ func get_video_and_audio_stream_information(file_name string) {
 				}
 
 			// Add also duration from wrapper information to the video info.
-			single_video_stream_info_slice = append(single_video_stream_info_slice, file_name, video_stream_info_map["width"], video_stream_info_map["height"], wrapper_info_map["duration"])
+			single_video_stream_info_slice = append(single_video_stream_info_slice, file_name, video_stream_info_map["width"], video_stream_info_map["height"], wrapper_info_map["duration"], video_stream_info_map["codec_name"], video_stream_info_map["pix_fmt"], video_stream_info_map["color_space"])
 			all_video_streams_info_slice = append(all_video_streams_info_slice, single_video_stream_info_slice)
 		}
 
@@ -300,7 +300,7 @@ func main() {
 	var subtitle_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font.")
 	var subtitle_int = flag.Int("sn", -1, "Subtitle stream `number, -sn 1` Use subtitle number 1 from the source file. Only use option -sn or -s not both.")
 	var subtitle_vertical_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up).")
-	var subtitle_mux_bool = flag.Bool("sm", false, "Mux subtitle into the target file. This only works with dvd, dvb and bluray bitmap based subtitles. If this option is not set then subtitles will be burned into the video.")
+	var subtitle_mux_bool = flag.Bool("sm", false, "Mux subtitle into the target file. This only works with dvd, dvb and bluray bitmap based subtitles. If this option is not set then subtitles will be burned into the video. This option can not be used by itself, it must be used with -s or -sn. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file.")
 	var subtitle_palette = flag.String("palette", "", "Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: -palette f,0,f")
 
 	// Scan options
@@ -329,7 +329,7 @@ func main() {
 	var ffmpeg_pass_2_commandline []string
 	var final_crop_string string
 	var command_to_run_str_slice []string
-	var file_to_process, video_width, video_height, video_duration string
+	var file_to_process, video_width, video_height, video_duration, video_codec_name, pixel_format, color_space string
 	var video_height_int int
 	var video_bitrate string
 	var audio_language, for_visually_impared, number_of_audio_channels, audio_codec string
@@ -514,6 +514,8 @@ func main() {
 	audio_compression_options_6_channels_ac3 := []string{"-c:a","ac3","-b:a","640k"}
 	audio_compression_options_lossless_flac := []string{"-acodec", "flac"}
 	denoise_options := []string{"hqdn3d=3.0:3.0:2.0:3.0"}
+	color_subsampling_options := []string{"-pix_fmt", "yuv420p"}
+	var ffmpeg_commandline_start []string
 
 	// Determine output file container
 	output_video_format := []string{"-f", "mp4"}
@@ -535,7 +537,13 @@ func main() {
 		// remained in a couple of frames after the cut.
 		deinterlace_options = []string{"idet,yadif=0:deint=all"}
 	}
-	ffmpeg_commandline_start := []string{"ffmpeg", "-y", "-loglevel", "8", "-threads", "auto"}
+
+	if *debug_mode_on == true {
+		ffmpeg_commandline_start = append(ffmpeg_commandline_start, "ffmpeg", "-y", "-hide_banner", "-threads", "auto")
+	} else {
+		ffmpeg_commandline_start = append(ffmpeg_commandline_start, "ffmpeg", "-y", "-loglevel", "8", "-threads", "auto")
+	}
+
 	subtitle_number := *subtitle_int
 
 	// Create grayscale FFmpeg - options
@@ -573,6 +581,12 @@ func main() {
 		command_to_run_str_slice = append(command_to_run_str_slice, file_name)
 
 		unsorted_ffprobe_information_str_slice, error_message = run_external_command(command_to_run_str_slice)
+
+		if error_message != nil {
+
+			fmt.Println("\n\nFFprobe reported error:", unsorted_ffprobe_information_str_slice, "\n")
+			os.Exit(1)
+		}
 
 		if error_message != nil {
 			log.Fatal(error_message)
@@ -660,6 +674,9 @@ func main() {
 			file_to_process = filepath.Base(file_to_process_temp)
 			video_width = video_slice[1]
 			video_height = video_slice[2]
+			video_codec_name = video_slice[4]
+			pixel_format = video_slice[5]
+			color_space = video_slice[6]
 
 			fmt.Println()
 			subtitle_text := "File name '" + file_to_process + "'"
@@ -667,7 +684,7 @@ func main() {
 			fmt.Println(subtitle_text)
 			fmt.Println(strings.Repeat("-", text_length))
 
-			fmt.Println("Video width", video_width, ", Video height", video_height)
+			fmt.Println("Video width:", video_width, ", height:", video_height, ", codec:", video_codec_name, ", pixel format:", pixel_format, ", color space:", color_space)
 			fmt.Println()
 
 			for audio_stream_number, audio_info := range audio_slice {
@@ -796,6 +813,9 @@ func main() {
 		video_width = video_slice[1]
 		video_height = video_slice[2]
 		video_duration = video_slice[3]
+		video_codec_name = video_slice[4]
+		pixel_format = video_slice[5]
+		color_space = video_slice[6]
 
 		// Create input + output filenames and paths
 		inputfile_absolute_path,_ := filepath.Abs(file_name)
@@ -999,6 +1019,12 @@ func main() {
 
 					ffmpeg_crop_output, ffmpeg_crop_error := run_external_command(command_to_run_str_slice)
 
+					if ffmpeg_crop_error != nil {
+
+						fmt.Println("\n\nFFmpeg reported error:", ffmpeg_crop_output, "\n")
+						os.Exit(1)
+					}
+
 					// Parse the crop value list to find the value that is most frequent, that is the value that can be applied without cropping too much or too little.
 					if ffmpeg_crop_error == nil {
 
@@ -1048,6 +1074,12 @@ func main() {
 				}
 
 				ffmpeg_crop_output, ffmpeg_crop_error := run_external_command(command_to_run_str_slice)
+
+				if ffmpeg_crop_error != nil {
+
+					fmt.Println("\n\nFFmpeg reported error:", ffmpeg_crop_output, "\n")
+					os.Exit(1)
+				}
 
 				// FFmpeg collects possible crop values across the first 1800 seconds of the file and outputs a list of how many times each possible crop values exists.
 				// Parse the list to find the value that is most frequent, that is the value that can be applied without cropping too musch or too little.
@@ -1302,6 +1334,11 @@ func main() {
 			// Add video compression options to ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, video_compression_options...)
 
+			// Add color subsampling options if needed
+			if pixel_format != "yuv420p" {
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, color_subsampling_options...)
+			}
+
 			// Add audio compression options to ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, audio_compression_options...)
 			
@@ -1358,6 +1395,7 @@ func main() {
 				fmt.Println("*subtitle_mux_bool:",*subtitle_mux_bool)
 				fmt.Println("*grayscale_bool:", *grayscale_bool)
 				fmt.Println("grayscale_options:",grayscale_options)
+				fmt.Println("color_subsampling_options",color_subsampling_options)
 				fmt.Println("*autocrop_bool:", *autocrop_bool)
 				fmt.Println("*subtitle_int:", *subtitle_int)
 				fmt.Println("*no_deinterlace_bool:", *no_deinterlace_bool)
@@ -1387,6 +1425,10 @@ func main() {
 				fmt.Println()
 				fmt.Println("Encoding with video bitrate:", video_bitrate)
 
+				if pixel_format != "yuv420p" {
+					fmt.Println("Subsampling color:", pixel_format, "to yuv420p")
+				}
+
 				if *audio_compression_ac3 == true {
 
 					fmt.Println("Encoding audio to ac3 with bitrate:", audio_compression_options[3])
@@ -1402,6 +1444,12 @@ func main() {
 			pass_1_start_time = time.Now()
 
 			ffmpeg_pass_1_output_temp, ffmpeg_pass_1_error := run_external_command(ffmpeg_pass_1_commandline)
+
+			if ffmpeg_pass_1_error != nil {
+
+				fmt.Println("\n\nFFmpeg reported error:", ffmpeg_pass_1_output_temp, "\n")
+				os.Exit(1)
+			}
 
 			pass_1_elapsed_time = time.Since(pass_1_start_time)
 			fmt.Printf("took %s", pass_1_elapsed_time.Round(time.Millisecond))
@@ -1463,14 +1511,31 @@ func main() {
 
 				ffmpeg_pass_2_output_temp, ffmpeg_pass_2_error :=  run_external_command(ffmpeg_pass_2_commandline)
 
+				if ffmpeg_pass_2_error != nil {
+
+					fmt.Println("\n\nFFmpeg reported error:", ffmpeg_pass_2_output_temp, "\n")
+					os.Exit(1)
+				}
+
 				pass_2_elapsed_time = time.Since(pass_2_start_time)
 				fmt.Printf("took %s", pass_2_elapsed_time.Round(time.Millisecond))
 				fmt.Println()
 
 				// Add messages to processing log.
 				pass_2_commandline_for_logfile := strings.Join(ffmpeg_pass_2_commandline, " ")
-				pass_2_commandline_for_logfile = strings.Replace(pass_2_commandline_for_logfile, "[0:s:0]", "'[0:s:0]", 1)
-				pass_2_commandline_for_logfile = strings.Replace(pass_2_commandline_for_logfile, "[processed_combined_streams] -map", "[processed_combined_streams]' -map", 1)
+
+				// Make a copy of the FFmpeg commandline for writing in the logfile.
+				// Modify commandline so that it works if the user wants to copy and paste it from the logfile and run it.
+				if subtitle_number == -1 || *subtitle_mux_bool == true {
+					// Simple processing chain with -vf.
+					pass_2_commandline_for_logfile = strings.Replace(pass_2_commandline_for_logfile, "-vf ", "-vf '", 1)
+					pass_2_commandline_for_logfile = strings.Replace(pass_2_commandline_for_logfile, " -c:v", "' -c:v", 1)
+				} else {
+					// Complex processing chain with -filter_complex
+					pass_2_commandline_for_logfile = strings.Replace(pass_2_commandline_for_logfile, "-filter_complex ", "-filter_complex '", 1)
+					pass_2_commandline_for_logfile = strings.Replace(pass_2_commandline_for_logfile, "[processed_combined_streams] -map", "[processed_combined_streams]' -map", 1)
+				}
+
 				log_messages_str_slice = append(log_messages_str_slice, "")
 				log_messages_str_slice = append(log_messages_str_slice, "FFmpeg Pass 2 Options:")
 				log_messages_str_slice = append(log_messages_str_slice, "-----------------------")
@@ -1549,51 +1614,33 @@ func main() {
 }
 
 // FIXME
-// Jos ohjelmalle annetusta tiedostojoukosta puuttuu yksi failia, ohjelma exitoi eikä käsittele yhtään tiedostoa.
-// Jos kroppausarvot on nolla, poista kroppaysoptiot ffmpegin komentoriviltä ?
-// Tee enkoodauksen aikainen FFmpegin tulosteen tsekkaus, joka laskee koodauksen aika-arvion ja prosentit siitä kuinka paljon failia on jo käsitelty (fps ?) Tästä on esimerkkiohjelma muistiinpanoissa, mutta se jumittaa n. 90 sekuntia FFmpeg - enkoodauksen alkamisesta.
-// Nimeä ffmpeg_enkooderi uudella nimellä (sl_encoder = starlight encoder) ja poista hakemisto: 00-vanhat jotta git repon voi julkaista
-// Tee erillinen skripti audion synkkaamista varten
+// Onks subtitle horizontal offset jo tehty ? Tsekkaa overlay - komentoja alta Avengers3:sta
 // Tsekkaa pitäiskö aina --filter_complexin kanssa käyttää audiossa oletus-delaytä (ehkä 40 ms).
-// Pitäiskö laittaa option, jolla vois rajoittaa käytettävien prosessorien lukumäärän ?
-//
-// Mites dts-hd ?:
-//
+// Muuta nykyinen subtitle scale optio (-sd), joksin muuksi, esim. -scr (subtitle crop resize) tai -sca (subtitle crop adjust). Sitten tee uudet optiot: -ssd (subtitle scale down) -ssu (subtitle scale up), -shc (subtitle horizontal center). muuta nykyinen optio -so optioksi -svo (subtitle vertical offset) ja tee uusi optio: -sho (subtitle horizontal offset).
 // Tee -an optio, joka pakkaa ainoastaan videon ja jättää audio kokonaan pois.
 // Pitäiskö tehdä mahdollisuus muxata kohdetiedostoon useamman kielinen tekstitys ? Tässä tulis kohtuullisen isoja koodimuutoksia.
 //
-// Copy 1 minute starting from 10 minutes of a mkv to a new container: ffmpeg -i InputFile.mkv -ss 10:00 -t 01:00 -vcodec copy -acodec copy -scodec copy -map 0 OutputFile.mkv
+// Nimeä ffmpeg_enkooderi uudella nimellä (sl_encoder = starlight encoder) ja poista hakemisto: 00-vanhat jotta git repon voi julkaista
+//
+// Mites dts-hd ?:
+//
+// Kun teet PGS ---> DVDSUB muunnosoption, muista muuttaa option -sm help - teksti.
+// Bluray subtitleja (hdmv_pgs_subtitle) ei voi ympätä mp4 failiin, ne on tuettuja ilmeisesti vaan mkv ja .ts wrappereissa. Tsekkaa toimiiko alla olevassa linkissä oleva hdmv_pgs_subtitle muunnos dvd_subtitleksi.
+// https://trac.ffmpeg.org/ticket/1277
+// https://en.wikibooks.org/wiki/FFMPEG_An_Intermediate_Guide/subtitle_options
+// subtitle_palette pitää toimia vain subtitlen tyypeillä dvdsub ja dvbsub.
+// Tämä muuntaa Blurayn pgs - subtitlen dbdsub:iksi (laatu heikkenee jonkin verran):
+// ffmpeg -y -threads auto -fix_sub_duration -analyzeduration 20E6 -i extra-S11-02.mkv -scodec dvdsub -map 0:s:0 -map 0:v:0 -vf idet,yadif=0:deint=all -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -f mp4  testi.mp4
+//
 //
 // ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 00:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=0:main_h-overlay_h+140[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 1 /dev/null
-//
 // ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 00:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=0:main_h-overlay_h+70[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 2 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War.mp4
-//
 // ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 00:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=(main_w-overlay_w)/2:main_h-overlay_h+90[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 2 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War.mp4
-//
-//
-// Muuta nykyinen subtitle scale optio (-sd), joksin muuksi, esim. -scr (subtitle crop resize) tai -sca (subtitle crop adjust). Sitten tee uudet optiot: -ssd (subtitle scale down) -ssu (subtitle scale up), -shc (subtitle horizontal center). muuta nykyinen optio -so optioksi -svo (subtitle vertical offset) ja tee uusi optio: -sho (subtitle horizontal offset).
 // ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 01:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=((main_w-overlay_w)/2)+30:main_h-overlay_h+90[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 1 /dev/null
-//
 // ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 01:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=((main_w-overlay_w)/2)+30:main_h-overlay_h+90[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 2 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War.mp4
 
-// Processing file 1/2  'Tales_Of_Tomorrow.mkv'
-// Finding crop values for: Tales_Of_Tomorrow.mkv   Top: 6 , Bottom: 2 , Left: 6 , Right: 2
-// 
-// Encoding with video bitrate: 1600k
-// Pass 1 encoding: Tales_Of_Tomorrow.mkv took 5m11.383s
-// Pass 2 encoding: Tales_Of_Tomorrow.mkv took 6m55.197s
-// Processing took 12m14.406s
-// 
-// ################################################################################
-// 
-// Processing file 2/2  'palkintojen_jakojuhla.mkv'
-// 
-// Error, audio codec: 'pcm_s16le' in file: palkintojen_jakojuhla.mkv is not compatible with the mp4 wrapper format.
-// The compatible audio formats are: aac, ac3, mp2, mp3, dts.
-// 
-// You have three options:
-// 1. Use the -scan option to find which input files have incompatible audio and process these files separately.
-// 2. Use the -ac3 option to compress audio to ac3.
-// 3. Use the -mkv option to use matroska as the output file wrapper format.
-
-
+// Jos ohjelmalle annetusta tiedostojoukosta puuttuu yksi failia, ohjelma exitoi eikä käsittele yhtään tiedostoa.
+// Jos kroppausarvot on nolla, poista kroppaysoptiot ffmpegin komentoriviltä ?
+// Tee enkoodauksen aikainen FFmpegin tulosteen tsekkaus, joka laskee koodauksen aika-arvion ja prosentit siitä kuinka paljon failia on jo käsitelty (fps ?) Tästä on esimerkkiohjelma muistiinpanoissa, mutta se jumittaa n. 90 sekuntia FFmpeg - enkoodauksen alkamisesta.
+// Pitäiskö laittaa optio, jolla vois rajoittaa käytettävien prosessorien lukumäärän ?
+//
