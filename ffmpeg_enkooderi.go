@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.22" // This is the version of this program
+var version_number string = "1.23" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -329,7 +329,7 @@ func main() {
 	var ffmpeg_pass_2_commandline []string
 	var final_crop_string string
 	var command_to_run_str_slice []string
-	var file_to_process, video_width, video_height, video_duration, video_codec_name, pixel_format, color_space string
+	var file_to_process, video_width, video_height, video_duration, video_codec_name, color_subsampling, color_space string
 	var video_height_int int
 	var video_bitrate string
 	var audio_language, for_visually_impared, number_of_audio_channels, audio_codec string
@@ -571,7 +571,7 @@ func main() {
 		// Get video info with: ffprobe -loglevel 16 -show_entries format:stream -print_format flat -i InputFile
 		command_to_run_str_slice = nil
 
-		command_to_run_str_slice = append(command_to_run_str_slice, "ffprobe","-loglevel","16","-show_entries","format:stream","-print_format","flat","-i")
+		command_to_run_str_slice = append(command_to_run_str_slice, "ffprobe","-loglevel","8","-show_entries","format:stream","-print_format","flat","-i")
 
 		if *debug_mode_on == true {
 			fmt.Println()
@@ -675,7 +675,7 @@ func main() {
 			video_width = video_slice[1]
 			video_height = video_slice[2]
 			video_codec_name = video_slice[4]
-			pixel_format = video_slice[5]
+			color_subsampling = video_slice[5]
 			color_space = video_slice[6]
 
 			fmt.Println()
@@ -684,7 +684,7 @@ func main() {
 			fmt.Println(subtitle_text)
 			fmt.Println(strings.Repeat("-", text_length))
 
-			fmt.Println("Video width:", video_width, ", height:", video_height, ", codec:", video_codec_name, ", pixel format:", pixel_format, ", color space:", color_space)
+			fmt.Println("Video width:", video_width, ", height:", video_height, ", codec:", video_codec_name, ", color subsampling:", color_subsampling, ", color space:", color_space)
 			fmt.Println()
 
 			for audio_stream_number, audio_info := range audio_slice {
@@ -814,7 +814,7 @@ func main() {
 		video_height = video_slice[2]
 		video_duration = video_slice[3]
 		video_codec_name = video_slice[4]
-		pixel_format = video_slice[5]
+		color_subsampling = video_slice[5]
 		color_space = video_slice[6]
 
 		// Create input + output filenames and paths
@@ -1335,7 +1335,7 @@ func main() {
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, video_compression_options...)
 
 			// Add color subsampling options if needed
-			if pixel_format != "yuv420p" {
+			if color_subsampling != "yuv420p" {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, color_subsampling_options...)
 			}
 
@@ -1425,8 +1425,8 @@ func main() {
 				fmt.Println()
 				fmt.Println("Encoding with video bitrate:", video_bitrate)
 
-				if pixel_format != "yuv420p" {
-					fmt.Println("Subsampling color:", pixel_format, "to yuv420p")
+				if color_subsampling != "yuv420p" {
+					fmt.Println("Subsampling color:", color_subsampling, "---> yuv420p")
 				}
 
 				if *audio_compression_ac3 == true {
@@ -1624,13 +1624,13 @@ func main() {
 //
 // Mites dts-hd ?:
 //
+// Tämä muuntaa Blurayn pgs - subtitlen dbdsub:iksi (laatu heikkenee jonkin verran):
+// ffmpeg -y -threads auto -fix_sub_duration -analyzeduration 20E6 -i extra-S11-02.mkv -scodec dvdsub -map 0:s:0 -map 0:v:0 -vf idet,yadif=0:deint=all -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -f mp4  testi.mp4
 // Kun teet PGS ---> DVDSUB muunnosoption, muista muuttaa option -sm help - teksti.
 // Bluray subtitleja (hdmv_pgs_subtitle) ei voi ympätä mp4 failiin, ne on tuettuja ilmeisesti vaan mkv ja .ts wrappereissa. Tsekkaa toimiiko alla olevassa linkissä oleva hdmv_pgs_subtitle muunnos dvd_subtitleksi.
 // https://trac.ffmpeg.org/ticket/1277
 // https://en.wikibooks.org/wiki/FFMPEG_An_Intermediate_Guide/subtitle_options
 // subtitle_palette pitää toimia vain subtitlen tyypeillä dvdsub ja dvbsub.
-// Tämä muuntaa Blurayn pgs - subtitlen dbdsub:iksi (laatu heikkenee jonkin verran):
-// ffmpeg -y -threads auto -fix_sub_duration -analyzeduration 20E6 -i extra-S11-02.mkv -scodec dvdsub -map 0:s:0 -map 0:v:0 -vf idet,yadif=0:deint=all -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -f mp4  testi.mp4
 //
 //
 // ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 00:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=0:main_h-overlay_h+140[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 1 /dev/null
