@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.23" // This is the version of this program
+var version_number string = "1.24" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -256,6 +256,195 @@ func get_video_and_audio_stream_information(file_name string) {
 	return
 }
 
+func convert_timestring_to_seconds (timestring string) (string, string) {
+	var hours_int, minutes_int, seconds_int, seconds_total_int int
+	var hours_str, minutes_str, seconds_str, milliseconds_str string
+	var seconds_total_str, error_happened string
+
+	if strings.ContainsAny(timestring, ".") {
+		milliseconds_str = strings.Split(timestring, ".")[1]
+		timestring = strings.Replace(timestring, "." + milliseconds_str, "", 1)
+
+		// Truncate milliseconds to 3 digits
+		if len(milliseconds_str) > 3 {
+			milliseconds_str = milliseconds_str[0:3]
+		}
+	}
+
+	temp_str_slice := strings.Split(timestring, ":")
+	
+	if len(temp_str_slice) == 3 {
+		hours_str = temp_str_slice[0]
+		hours_int,_ = strconv.Atoi(hours_str)
+		minutes_str = temp_str_slice[1]
+		minutes_int,_ = strconv.Atoi(minutes_str)
+		seconds_str = temp_str_slice[2]
+		seconds_int,_ = strconv.Atoi(seconds_str)
+	} else if len(temp_str_slice) == 2 {
+		minutes_str = temp_str_slice[0]
+		minutes_int,_ = strconv.Atoi(minutes_str)
+		seconds_str = temp_str_slice[1]
+		seconds_int,_ = strconv.Atoi(seconds_str)
+	} else if len(temp_str_slice) == 1 {
+		seconds_str = temp_str_slice[0]
+		seconds_int,_ = strconv.Atoi(seconds_str)
+	} else if len(temp_str_slice) == 0 {
+		error_happened = "Could not interpret file split values"
+	}
+
+	if error_happened == "" {
+		seconds_total_int = (hours_int * 60 *60) + (minutes_int * 60) + seconds_int
+		seconds_total_str = strconv.Itoa(seconds_total_int)
+
+		if milliseconds_str != "" {
+			seconds_total_str = seconds_total_str + "." + milliseconds_str
+		}
+	}
+
+	return seconds_total_str, error_happened
+}
+
+func convert_seconds_to_timestring (cut_positions_after_processing_seconds []string) ([]string) {
+	var cut_positions_after_processing_timecodes []string
+	fmt.Println("")
+	return cut_positions_after_processing_timecodes
+}
+
+func process_split_times(split_times *string) ([]string, []string) {
+
+	var cut_list_seconds_str_slice, cut_list_positions_and_durations_seconds, cut_positions_after_processing_seconds, cut_positions_after_processing_timecodes []string
+	var seconds_total_str, error_happened string
+
+	cut_list_string_slice := strings.Split(*split_times, ",")
+
+	if len(cut_list_string_slice) % 2 != 0 {
+		fmt.Println("\nError: Split timecodes must be given in pairs (start_time, stop_time). There are:", len(cut_list_string_slice), "times on the commandline\n")
+		os.Exit(1)
+	}
+
+	//////////////////////////////////////////////////////////////
+	// Convert time values (01:20:25) to seconds (4825 seconds) //
+	//////////////////////////////////////////////////////////////
+	for _, temp_string := range(cut_list_string_slice) {
+
+		if strings.ToLower(temp_string) == "start" {
+			temp_string = "0"
+		}
+
+		if strings.ToLower(temp_string) == "end" {
+			cut_list_seconds_str_slice = append(cut_list_seconds_str_slice , strings.ToLower(temp_string))
+			break
+		}
+
+		seconds_total_str, error_happened = convert_timestring_to_seconds(temp_string)
+
+		if error_happened != "" {
+			fmt.Println("\nError when converting times to seconds: " + error_happened + "\n")
+			os.Exit(1)
+		}
+		cut_list_seconds_str_slice = append(cut_list_seconds_str_slice , seconds_total_str)
+	}
+
+	///////////////////////////////////////////////////////////////////////////////////////////
+	// Convert odd time values to duration. Even values are start times and used as they are //
+	///////////////////////////////////////////////////////////////////////////////////////////
+	for counter := 0 ; counter < len(cut_list_seconds_str_slice) ; counter = counter + 2  {
+
+		start_time_milliseconds := 0
+		stop_time_milliseconds := 0
+
+		// Store even values (start times) as they are
+		cut_list_positions_and_durations_seconds = append(cut_list_positions_and_durations_seconds, cut_list_seconds_str_slice[counter])
+
+		// Convert odd timecodes to durations
+		start_temp_str_slice := strings.Split(cut_list_seconds_str_slice[counter], ".")
+		start_time_seconds,_ := strconv.Atoi(start_temp_str_slice[0])
+
+		if len(start_temp_str_slice) > 1 {
+			temp_string := start_temp_str_slice[1]
+
+			for len(temp_string) < 3 {
+				temp_string = temp_string + "0"
+			}
+
+			start_time_milliseconds,_ = strconv.Atoi(temp_string)
+		}
+
+		// If word 'end' is used to mark the end of file, then remove it, FFmpeg automatically process to the end of file if the last duration is left out
+		if strings.ToLower(cut_list_seconds_str_slice[counter + 1]) == "end" {
+			break
+		}
+
+		stop_temp_str_slice := strings.Split(cut_list_seconds_str_slice[counter + 1], ".")
+		stop_time_seconds,_ := strconv.Atoi(stop_temp_str_slice[0])
+
+		if len(stop_temp_str_slice) > 1 {
+			temp_string := stop_temp_str_slice[1]
+
+			for len(temp_string) < 3 {
+				temp_string = temp_string + "0"
+			}
+
+			stop_time_milliseconds,_ = strconv.Atoi(temp_string)
+		}
+
+		// Handle milliseconds
+		if start_time_milliseconds > stop_time_milliseconds {
+			stop_time_milliseconds = stop_time_milliseconds + 1000
+			stop_time_seconds--
+		}
+
+		duration_int := stop_time_seconds - start_time_seconds
+		milliseconds_left := stop_time_milliseconds - start_time_milliseconds
+		duration_str := strconv.Itoa(duration_int)
+
+		if milliseconds_left > 0 {
+			milliseconds_str := strconv.Itoa(milliseconds_left)
+
+			// Fill the start of the milliseconds string with zeroes
+			for len(milliseconds_str) < 3 {
+				milliseconds_str = "0" + milliseconds_str
+			}
+
+			duration_str = duration_str + "." + milliseconds_str
+		}
+
+		if duration_int < 0 {
+			fmt.Println("\n Error: Stop time:", cut_list_string_slice[counter + 1], "cannot be less than start time:", cut_list_string_slice[counter], "\n")
+			os.Exit(1)
+		}
+
+		cut_list_positions_and_durations_seconds = append(cut_list_positions_and_durations_seconds, duration_str)
+	}
+
+	// Calculate where edit points are in the processed file so that the user can check them easily
+	if len(cut_list_seconds_str_slice) > 2 {
+		duration_of_a_used_file_part_int := 0
+		duration_of_a_removed_file_part_int :=0
+		duration_of_all_used_file_parts_int := 0
+		duration_of_all_removed_file_parts_int := 0
+		previous_stop_time := 0
+
+		for counter := 0 ; counter < len(cut_list_seconds_str_slice) ; counter = counter + 2 {
+			start_time ,_ := strconv.Atoi(cut_list_seconds_str_slice[counter])
+			duration_of_a_removed_file_part_int = start_time - previous_stop_time
+			duration_of_all_removed_file_parts_int = duration_of_all_removed_file_parts_int + duration_of_a_removed_file_part_int
+
+			if counter + 1 < len(cut_list_seconds_str_slice) {
+				stop_time ,_ := strconv.Atoi(cut_list_seconds_str_slice[counter + 1])
+				duration_of_a_used_file_part_int = (stop_time  - start_time)
+				duration_of_all_used_file_parts_int = duration_of_all_used_file_parts_int + duration_of_a_used_file_part_int
+				cut_positions_after_processing_seconds = append(cut_positions_after_processing_seconds, strconv.Itoa(start_time - duration_of_all_removed_file_parts_int))
+				previous_stop_time = stop_time
+			}
+		}
+	}
+	// Convert second to timecode values
+	cut_positions_after_processing_timecodes = convert_seconds_to_timestring(cut_positions_after_processing_seconds)
+
+	return cut_list_positions_and_durations_seconds, cut_positions_after_processing_timecodes
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 func main() {
@@ -283,7 +472,7 @@ func main() {
 	// Audio options
 	var audio_language_str = flag.String("a", "", "Audio language: -a fin or -a eng or -a ita  Only use option -an or -a not both.")
 	var audio_stream_number_int = flag.Int("an", 0, "Audio stream number, -a 1 (Use audio stream number 1 from the source file).")
-	var audio_compression_ac3 = flag.Bool("ac3", false, "Compress audio as ac3. Channel count adjusts compression bitrate automatically. Stereo uses 192k and 3 - 6 channels uses 640k bitrate.")
+	var audio_compression_ac3 = flag.Bool("ac3", false, "Compress audio as ac3. Channel count adjusts compression bitrate automatically. Stereo uses 256k and 3 - 6 channels uses 640k bitrate.")
 
 	// Video options
 	var autocrop_bool = flag.Bool("ac", false, "Autocrop. Find crop values automatically by doing 10 second spot checks in 10 places for the duration of the file.")
@@ -291,6 +480,7 @@ func main() {
 	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.")
 	var force_hd_bool = flag.Bool("hd", false, "Force video encoding to use HD bitrate and profile (Profile = High, Level = 4.1, Bitrate = 8000k) By default this program decides video encoding profile and bitrate automatically depending on the vertical resolution of the picture.")
 	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.")
+	var split_times = flag.String("st", "", "Split out parts of the file. Give colon separated start and stop times for the parts of the file to use, for example: -st 0,10:00,01:35:12.800,01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mean the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.")
 
 	// Options that affect both video and audio
 	var force_lossless_bool = flag.Bool("ls", false, "Force encoding to use lossless 'utvideo' compression for video and 'flac' compression for audio. This also turns on -fe")
@@ -327,6 +517,7 @@ func main() {
 	var subtitle_processing_options string
 	var ffmpeg_pass_1_commandline []string
 	var ffmpeg_pass_2_commandline []string
+	var ffmpeg_file_split_commandline []string
 	var final_crop_string string
 	var command_to_run_str_slice []string
 	var file_to_process, video_width, video_height, video_duration, video_codec_name, color_subsampling, color_space string
@@ -346,15 +537,20 @@ func main() {
 	var files_to_process_str string
 	var subtitle_horizontal_offset_int int
 	var subtitle_horizontal_offset_str string
+	var cut_list_seconds_str_slice []string
+	var split_video bool
+	var split_info_filename string
+	var split_info_file_absolute_path string
+	var list_of_splitfiles []string
+	var cut_positions_after_processing []string
 
 	start_time := time.Now()
 	pass_1_start_time := time.Now()
-	pass_1_elapsed_time := time.Since(start_time)
+	pass_1_elapsed_time := time.Since(pass_1_start_time)
 	pass_2_start_time := time.Now()
-	pass_2_elapsed_time := time.Since(start_time)
+	pass_2_elapsed_time := time.Since(pass_2_start_time)
 
 	output_directory_name := "00-processed_files"
-
 
 	///////////////////////////////
 	// Parse commandline options //
@@ -393,6 +589,15 @@ func main() {
 		fmt.Println("The option -s requires a language code like: eng, fin, ita not a number.")
 		fmt.Println()
 		os.Exit(0)
+	}
+
+
+	// Convert time values used in splitting the inputfile to seconds
+	if *split_times != "" {
+		split_video = true
+		*use_matroska_container = true
+		cut_list_seconds_str_slice, cut_positions_after_processing = process_split_times(split_times)
+
 	}
 
 	// -f option turns on both options -fs and -fe
@@ -510,7 +715,7 @@ func main() {
 	video_compression_options_hd := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "4.1", "-b:v", "8000k"}
 	video_compression_options_lossless := []string{"-c:v", "utvideo"}
 	audio_compression_options := []string{"-acodec", "copy"}
-	audio_compression_options_2_channels_ac3 := []string{"-c:a","ac3","-b:a","192k"}
+	audio_compression_options_2_channels_ac3 := []string{"-c:a","ac3","-b:a","256k"}
 	audio_compression_options_6_channels_ac3 := []string{"-c:a","ac3","-b:a","640k"}
 	audio_compression_options_lossless_flac := []string{"-acodec", "flac"}
 	denoise_options := []string{"hqdn3d=3.0:3.0:2.0:3.0"}
@@ -519,13 +724,16 @@ func main() {
 
 	// Determine output file container
 	output_video_format := []string{"-f", "mp4"}
-	output_filename_extension := ".mp4"
+	output_mp4_filename_extension := ".mp4"
+	output_matroska_filename_extension := ".mkv"
+	output_filename_extension := output_mp4_filename_extension
+	output_matroska_wrapper_format := "matroska"
 
 	if *force_lossless_bool == true || *use_matroska_container == true {
 		// Use matroska as the output file wrapper format
 		output_video_format = nil
-		output_video_format = append(output_video_format, "-f", "matroska")
-		output_filename_extension = ".mkv"
+		output_video_format = append(output_video_format, "-f", output_matroska_wrapper_format)
+		output_filename_extension = output_matroska_filename_extension
 	}
 
 	if *no_deinterlace_bool == true {
@@ -857,9 +1065,9 @@ func main() {
 		fmt.Println("")
 		fmt.Println("Processing file " + file_counter_str + "/" + files_to_process_str + "  '" + inputfile_name + "'")
 
-		//////////////////////////////////////////////////////////////////////////////////////////////////////
-		// Find audio number corresponding to the audio language name (eng, fin, ita) user possibly gave us //
-		//////////////////////////////////////////////////////////////////////////////////////////////////////
+		/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Find stream audio number corresponding to the audio language name (eng, fin, ita) user possibly gave us //
+		/////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		if *audio_language_str != "" {
 
 			audio_slice := file_info_slice[1]
@@ -922,9 +1130,9 @@ func main() {
 			}
 		}
 
-		////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// Find subtitle number corresponding to the subtitle language name (eng, fin, ita) user possibly gave us //
-		////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Find subtitle stream number corresponding to the subtitle language name (eng, fin, ita) user possibly gave us //
+		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 		if *subtitle_language_str != "" {
 
 			subtitle_slice := file_info_slice[2]
@@ -956,6 +1164,73 @@ func main() {
 			}
 		}
 
+		////////////////////////////////////////////////////
+		// Split out and use only some parts of the video //
+		////////////////////////////////////////////////////
+		if split_video == true {
+
+			counter_2 := 0
+
+			// Open split_infofile for appending info about file splits
+			split_info_filename = "00-splitfile_info.txt"
+			split_info_file_absolute_path = filepath.Join(inputfile_path, output_directory_name, split_info_filename)
+
+			if _, err := os.Stat(split_info_file_absolute_path); err == nil {
+				os.Remove(split_info_file_absolute_path)
+			}
+
+			// Create a new split info file
+			split_info_file_pointer, err := os.OpenFile(split_info_file_absolute_path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0755)
+			defer split_info_file_pointer.Close()
+
+			if err != nil {
+				fmt.Println("")
+				fmt.Println("Error, could not open split info file:", split_info_filename, "for writing.")
+				log.Fatal(err)
+				os.Exit(0)
+			}
+
+			log_messages_str_slice = append(log_messages_str_slice, "\n")
+			log_messages_str_slice = append(log_messages_str_slice, "Creating splitfiles:")
+			log_messages_str_slice = append(log_messages_str_slice, "--------------------")
+
+			for counter := 0 ; counter < len(cut_list_seconds_str_slice) ; counter = counter + 2 {
+				counter_2++
+				splitfile_name := "splitfile-" + strconv.Itoa(counter_2) + output_matroska_filename_extension
+				split_file_path := filepath.Join(inputfile_path, output_directory_name, splitfile_name)
+				list_of_splitfiles = append(list_of_splitfiles, split_file_path)
+
+				ffmpeg_file_split_commandline = nil
+				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, ffmpeg_commandline_start...)
+				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-i", file_name , "-ss", cut_list_seconds_str_slice[counter])
+
+				if cut_list_seconds_str_slice[counter + 1] != "0" {
+					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-t", cut_list_seconds_str_slice[counter + 1])
+				}
+
+				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-vcodec", "utvideo", "-acodec", "flac", "-scodec", "copy", split_file_path)
+
+				fmt.Println("Creating splitfile: " + splitfile_name)
+				log_messages_str_slice = append(log_messages_str_slice, strings.Join(ffmpeg_file_split_commandline, " "))
+
+				// Write split file names to a text file
+				if _, err = split_info_file_pointer.WriteString("file " + splitfile_name + "\n"); err != nil {
+					fmt.Println("")
+					fmt.Println("Error, could not write to split info file:", split_info_filename)
+					log.Fatal(err)
+					os.Exit(0)
+				}
+
+				file_split_output_temp, file_split_error := run_external_command(ffmpeg_file_split_commandline)
+
+				if file_split_error != nil {
+
+					fmt.Println("\n\nFFmpeg reported error:", file_split_output_temp, "\n")
+					os.Exit(1)
+				}
+			}
+		}
+
 		/////////////////////////////////////////////////////////////
 		// Find out autocrop parameters by scanning the input file //
 		/////////////////////////////////////////////////////////////
@@ -973,7 +1248,7 @@ func main() {
 		// Lets see what this means and replace the values by variables: crop=A:B:C:D
 		// The line tells us what part of the picture will be left over after cropping. The line means:
 		//
-		// The detected left border is at C pixels from the left of the picture.
+		// The detected left border is at C pixels counting from the left of the picture.
 		// Take A pixels starting from C to the right and where we end at is the detected right border of the picture.
 		// Pixels on the right of this point will be cropped.
 		//
@@ -1189,7 +1464,11 @@ func main() {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-palette", *subtitle_palette)
 			}
 
-			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name)
+			if split_video == true {
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-f",  "concat", "-safe", "0", "-i", split_info_file_absolute_path)
+			} else {
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name)
+			}
 
 			// The user wants to use the slow and accurate search, place the -ss option after the first -i on ffmpeg commandline.
 			if *search_start_str != "" && *fast_search_bool == false {
@@ -1521,6 +1800,16 @@ func main() {
 				fmt.Printf("took %s", pass_2_elapsed_time.Round(time.Millisecond))
 				fmt.Println()
 
+				if split_video == true {
+					fmt.Println(log_messages_str_slice, "Please check the following edit positions for video / audio glitches: ")
+
+					for _, timecode := range cut_positions_after_processing {
+						fmt.Println(log_messages_str_slice, timecode)
+					}
+				}
+
+				fmt.Println()
+
 				// Add messages to processing log.
 				pass_2_commandline_for_logfile := strings.Join(ffmpeg_pass_2_commandline, " ")
 
@@ -1559,9 +1848,9 @@ func main() {
 				}
 			}
 
-			/////////////////////////////////////
-			// Remove ffmpeg 2 - pass logfiles //
-			/////////////////////////////////////
+			////////////////////////////
+			// Remove temporary files //
+			////////////////////////////
 
 			if _, err := os.Stat(ffmpeg_2_pass_logfile_path + "-0.log"); err == nil {
 				os.Remove(ffmpeg_2_pass_logfile_path + "-0.log")
@@ -1569,6 +1858,20 @@ func main() {
 
 			if _, err := os.Stat(ffmpeg_2_pass_logfile_path + "-0.log.mbtree"); err == nil {
 				os.Remove(ffmpeg_2_pass_logfile_path + "-0.log.mbtree")
+			}
+
+			for _,splitfile_name := range list_of_splitfiles {
+				if _, err := os.Stat(splitfile_name); err == nil {
+					os.Remove(splitfile_name)
+				} else {
+					fmt.Println("Could not delete splitfile:", splitfile_name)
+				}
+			}
+
+			if _, err := os.Stat(split_info_file_absolute_path); err == nil {
+				os.Remove(split_info_file_absolute_path)
+			} else {
+					fmt.Println("Could not delete split_info_file:", split_info_file_absolute_path)
 			}
 
 			elapsed_time := time.Since(start_time)
@@ -1583,6 +1886,15 @@ func main() {
 			log_messages_str_slice = append(log_messages_str_slice, "Pass 1 took: " + pass_1_elapsed_time.String())
 			log_messages_str_slice = append(log_messages_str_slice, "Pass 2 took: " + pass_2_elapsed_time.String())
 			log_messages_str_slice = append(log_messages_str_slice, "Processing took: " + total_elapsed_time.String())
+
+			if split_video == true {
+				log_messages_str_slice = append(log_messages_str_slice, "Please check the following edit positions for video / audio glitches: ")
+
+				for _, timecode := range cut_positions_after_processing {
+					log_messages_str_slice = append(log_messages_str_slice, timecode)
+				}
+			}
+
 			log_messages_str_slice = append(log_messages_str_slice, "")
 			log_messages_str_slice = append(log_messages_str_slice, "########################################################################################################################")
 			log_messages_str_slice = append(log_messages_str_slice, "")
@@ -1614,6 +1926,11 @@ func main() {
 }
 
 // FIXME
+// Pilko faili palasiksi jo ennen croppia ja tarkista sitten kaikista palasista kroppiarvot.
+// Failia pillkoessa pitää alku- ja loppuarvoja olla aina parillinen määrä, muuten printtaa virheilmo ja exit.
+// Tsekkaa eteneekö pillkomisarvojen alkuaika aina loogisesti ylöspäin, jos eteneminen on epälineaarista tulosta virheilmo ja exit.
+// Pilkkomisarvojen järjellisyyden tsekkaus, missä kohdassa kannattaa tehdä ?
+// Splittaus käyttää flac audiota ja siksi pakottaa wrapperiksi mkv:n muista kirjata helppeihin
 // Onks subtitle horizontal offset jo tehty ? Tsekkaa overlay - komentoja alta Avengers3:sta
 // Tsekkaa pitäiskö aina --filter_complexin kanssa käyttää audiossa oletus-delaytä (ehkä 40 ms).
 // Muuta nykyinen subtitle scale optio (-sd), joksin muuksi, esim. -scr (subtitle crop resize) tai -sca (subtitle crop adjust). Sitten tee uudet optiot: -ssd (subtitle scale down) -ssu (subtitle scale up), -shc (subtitle horizontal center). muuta nykyinen optio -so optioksi -svo (subtitle vertical offset) ja tee uusi optio: -sho (subtitle horizontal offset).
