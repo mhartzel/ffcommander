@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.24" // This is the version of this program
+var version_number string = "1.25" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -304,15 +304,54 @@ func convert_timestring_to_seconds (timestring string) (string, string) {
 	return seconds_total_str, error_happened
 }
 
-func convert_seconds_to_timestring (cut_positions_after_processing_seconds []string) ([]string) {
-	var cut_positions_after_processing_timecodes []string
-	fmt.Println("")
-	return cut_positions_after_processing_timecodes
+func convert_seconds_to_timecode (cut_positions_after_processing_seconds []string) ([]string) {
+	var cut_positions_as_timecodes []string
+
+	for _, item := range cut_positions_after_processing_seconds {
+		item_int ,_ := strconv.Atoi(item)
+		hours_int := 0
+		minutes_int := 0
+		seconds_int := 0
+		timecode := ""
+
+		if item_int / 3600 > 0 {
+			hours_int = item_int / 3600
+			item_int = item_int - (hours_int * 3600)
+		}
+
+		if item_int / 60 > 0 {
+			minutes_int = item_int / 60
+			item_int = item_int - (minutes_int * 60)
+		}
+		seconds_int = item_int
+
+		hours_str := strconv.Itoa(hours_int)
+
+		if len(hours_str) < 2 {
+			hours_str = "0" + hours_str
+		}
+
+		minutes_str := strconv.Itoa(minutes_int)
+
+		if len(minutes_str) < 2 {
+			minutes_str = "0" + minutes_str
+		}
+
+		seconds_str := strconv.Itoa(seconds_int)
+
+		if len(seconds_str) < 2 {
+			seconds_str = "0" + seconds_str
+		}
+
+		timecode = hours_str + ":" + minutes_str + ":" + seconds_str
+		cut_positions_as_timecodes = append(cut_positions_as_timecodes, timecode)
+	}
+	return cut_positions_as_timecodes
 }
 
 func process_split_times(split_times *string) ([]string, []string) {
 
-	var cut_list_seconds_str_slice, cut_list_positions_and_durations_seconds, cut_positions_after_processing_seconds, cut_positions_after_processing_timecodes []string
+	var cut_list_seconds_str_slice, cut_list_positions_and_durations_seconds, cut_positions_after_processing_seconds, cut_positions_as_timecodes []string
 	var seconds_total_str, error_happened string
 
 	cut_list_string_slice := strings.Split(*split_times, ",")
@@ -440,9 +479,9 @@ func process_split_times(split_times *string) ([]string, []string) {
 		}
 	}
 	// Convert second to timecode values
-	cut_positions_after_processing_timecodes = convert_seconds_to_timestring(cut_positions_after_processing_seconds)
+	cut_positions_as_timecodes = convert_seconds_to_timecode(cut_positions_after_processing_seconds)
 
-	return cut_list_positions_and_durations_seconds, cut_positions_after_processing_timecodes
+	return cut_list_positions_and_durations_seconds, cut_positions_as_timecodes
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -542,7 +581,7 @@ func main() {
 	var split_info_filename string
 	var split_info_file_absolute_path string
 	var list_of_splitfiles []string
-	var cut_positions_after_processing []string
+	var cut_positions_as_timecodes []string
 
 	start_time := time.Now()
 	pass_1_start_time := time.Now()
@@ -596,7 +635,7 @@ func main() {
 	if *split_times != "" {
 		split_video = true
 		*use_matroska_container = true
-		cut_list_seconds_str_slice, cut_positions_after_processing = process_split_times(split_times)
+		cut_list_seconds_str_slice, cut_positions_as_timecodes = process_split_times(split_times)
 
 	}
 
@@ -1204,7 +1243,8 @@ func main() {
 				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, ffmpeg_commandline_start...)
 				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-i", file_name , "-ss", cut_list_seconds_str_slice[counter])
 
-				if cut_list_seconds_str_slice[counter + 1] != "0" {
+				// There is no timecode if the user wants to process to the end of file. Skip the -t FFmpeg option since FFmpeg processes to the end of file without it.
+				if len(cut_list_seconds_str_slice) > counter + 1 {
 					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-t", cut_list_seconds_str_slice[counter + 1])
 				}
 
@@ -1803,7 +1843,7 @@ func main() {
 				if split_video == true {
 					fmt.Println(log_messages_str_slice, "Please check the following edit positions for video / audio glitches: ")
 
-					for _, timecode := range cut_positions_after_processing {
+					for _, timecode := range cut_positions_as_timecodes {
 						fmt.Println(log_messages_str_slice, timecode)
 					}
 				}
@@ -1890,7 +1930,7 @@ func main() {
 			if split_video == true {
 				log_messages_str_slice = append(log_messages_str_slice, "Please check the following edit positions for video / audio glitches: ")
 
-				for _, timecode := range cut_positions_after_processing {
+				for _, timecode := range cut_positions_as_timecodes {
 					log_messages_str_slice = append(log_messages_str_slice, timecode)
 				}
 			}
@@ -1926,8 +1966,11 @@ func main() {
 }
 
 // FIXME
+// Splittaus tulostaa turhaan skarvien aikakoodien mukana koodin: 00:00:00
+// Tee kaikkii uusiin aikarutiineihin millisekuntien händläys
+// Debug tulostaa split toiminnolla ihmeellisiä viestejä, jäljitä ne ja kato onko tarpeen.
+// Tee uusiin rutiineihin debug - toiminto, joka tulostaa toiminnon kriittiset muuttujat
 // Pilko faili palasiksi jo ennen croppia ja tarkista sitten kaikista palasista kroppiarvot.
-// Failia pillkoessa pitää alku- ja loppuarvoja olla aina parillinen määrä, muuten printtaa virheilmo ja exit.
 // Tsekkaa eteneekö pillkomisarvojen alkuaika aina loogisesti ylöspäin, jos eteneminen on epälineaarista tulosta virheilmo ja exit.
 // Pilkkomisarvojen järjellisyyden tsekkaus, missä kohdassa kannattaa tehdä ?
 // Splittaus käyttää flac audiota ja siksi pakottaa wrapperiksi mkv:n muista kirjata helppeihin
