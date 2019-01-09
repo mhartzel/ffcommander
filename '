@@ -407,6 +407,7 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 	///////////////////////////////////////////////////////////////////////////////////////////
 	// Convert odd time values to duration. Even values are start times and used as they are //
 	///////////////////////////////////////////////////////////////////////////////////////////
+
 	
 	for counter := 0 ; counter < len(cut_list_seconds_str_slice) ; counter = counter + 2  {
 
@@ -414,7 +415,6 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 		start_time_string := ""
 		stop_time_string := ""
 
-		// Store the start time as it is
 		cut_list_positions_and_durations_seconds = append(cut_list_positions_and_durations_seconds, cut_list_seconds_str_slice[counter])
 		start_time_string = cut_list_seconds_str_slice[counter]
 
@@ -425,19 +425,89 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 			if strings.ToLower(stop_time_string) == "end" {
 				break
 			}
+
 		}
 
 		duration_str := custom_float_substraction(stop_time_string, start_time_string)
-		duration_int ,_ := strconv.Atoi(duration_str)
+		duration_int := strconv.Atoi(duration_str)
 
 		if duration_int < 0 {
 			fmt.Println("\n Error: Stop time:", stop_time_string, "cannot be less than start time:", start_time_string, "\n")
 			os.Exit(1)
 		}
 
-		// Store the duration
 		cut_list_positions_and_durations_seconds = append(cut_list_positions_and_durations_seconds, duration_str)
+
 	}
+
+	// for counter := 0 ; counter < len(cut_list_seconds_str_slice) ; counter = counter + 2  {
+
+	// 	start_time_milliseconds := 0
+	// 	stop_time_milliseconds := 0
+
+	// 	// Store even values (start times) as they are
+	// 	cut_list_positions_and_durations_seconds = append(cut_list_positions_and_durations_seconds, cut_list_seconds_str_slice[counter])
+
+	// 	// Convert odd timecodes to durations
+	// 	start_temp_str_slice := strings.Split(cut_list_seconds_str_slice[counter], ".")
+	// 	start_time_seconds,_ := strconv.Atoi(start_temp_str_slice[0])
+
+	// 	if len(start_temp_str_slice) > 1 {
+	// 		temp_string := start_temp_str_slice[1]
+
+	// 		for len(temp_string) < 3 {
+	// 			temp_string = temp_string + "0"
+	// 		}
+
+	// 		start_time_milliseconds,_ = strconv.Atoi(temp_string)
+	// 	}
+
+	// 	// If word 'end' is used to mark the end of file, then remove it, FFmpeg automatically process to the end of file if the last duration is left out
+	// 	if strings.ToLower(cut_list_seconds_str_slice[counter + 1]) == "end" {
+	// 		break
+	// 	}
+
+	// 	stop_temp_str_slice := strings.Split(cut_list_seconds_str_slice[counter + 1], ".")
+	// 	stop_time_seconds,_ := strconv.Atoi(stop_temp_str_slice[0])
+
+	// 	if len(stop_temp_str_slice) > 1 {
+	// 		temp_string := stop_temp_str_slice[1]
+
+	// 		for len(temp_string) < 3 {
+	// 			temp_string = temp_string + "0"
+	// 		}
+
+	// 		stop_time_milliseconds,_ = strconv.Atoi(temp_string)
+	// 	}
+
+	// 	// Handle milliseconds
+	// 	if start_time_milliseconds > stop_time_milliseconds {
+	// 		stop_time_milliseconds = stop_time_milliseconds + 1000
+	// 		stop_time_seconds--
+	// 	}
+
+	// 	duration_int := stop_time_seconds - start_time_seconds
+	// 	milliseconds_left := stop_time_milliseconds - start_time_milliseconds
+	// 	duration_str := strconv.Itoa(duration_int)
+
+	// 	if milliseconds_left > 0 {
+	// 		milliseconds_str := strconv.Itoa(milliseconds_left)
+
+	// 		// Fill the start of the milliseconds string with zeroes
+	// 		for len(milliseconds_str) < 3 {
+	// 			milliseconds_str = "0" + milliseconds_str
+	// 		}
+
+	// 		duration_str = duration_str + "." + milliseconds_str
+	// 	}
+
+	// 	if duration_int < 0 {
+	// 		fmt.Println("\n Error: Stop time:", cut_list_string_slice[counter + 1], "cannot be less than start time:", cut_list_string_slice[counter], "\n")
+	// 		os.Exit(1)
+	// 	}
+
+	// 	cut_list_positions_and_durations_seconds = append(cut_list_positions_and_durations_seconds, duration_str)
+	// }
 
 	// Calculate where edit points are in the processed file so that the user can check them easily
 	if len(cut_list_seconds_str_slice) > 2 {
@@ -1290,10 +1360,6 @@ func main() {
 			audio_codec = "ac3"
 		}
 
-		if split_video == true {
-			audio_codec = "flac"
-		}
-
 		if *use_matroska_container == false {
 
 			if audio_codec != "aac" && audio_codec != "ac3" && audio_codec != "mp2" && audio_codec != "mp3" &&audio_codec != "dts" {
@@ -1950,7 +2016,7 @@ func main() {
 				ffmpeg_pass_1_output := strings.TrimSpace(strings.Join(ffmpeg_pass_1_output_temp, ""))
 
 				if len(ffmpeg_pass_1_output) > 0 {
-					fmt.Println("Length of FFmpeg Pass 1 Text Output", len(ffmpeg_pass_1_output))
+					fmt.Println("Length of FFmpeg Pass 1 Output", len(ffmpeg_pass_1_output))
 					fmt.Println(ffmpeg_pass_1_output)
 				}
 
@@ -2026,7 +2092,7 @@ func main() {
 					ffmpeg_pass_2_output := strings.TrimSpace(strings.Join(ffmpeg_pass_2_output_temp, ""))
 
 					if len(ffmpeg_pass_2_output) > 0 {
-						fmt.Println("Length of FFmpeg Pass Text 2 Output", len(ffmpeg_pass_2_output))
+						fmt.Println("Length of FFmpeg Pass 2 Output", len(ffmpeg_pass_2_output))
 						fmt.Println(ffmpeg_pass_2_output)
 					}
 
@@ -2116,11 +2182,11 @@ func main() {
 }
 
 // FIXME
+// Siirrä kaikki float laskenta alirutiineille
 // Pilko faili palasiksi jo ennen croppia ja tarkista sitten kaikista palasista kroppiarvot.
 // Tsekkaa eteneekö pillkomisarvojen alkuaika aina loogisesti ylöspäin, jos eteneminen on epälineaarista tulosta virheilmo ja exit.
 // Pilkkomisarvojen järjellisyyden tsekkaus, missä kohdassa kannattaa tehdä ?
 // Splittaus käyttää flac audiota ja siksi pakottaa wrapperiksi mkv:n muista kirjata helppeihin
-//
 // Onks subtitle horizontal offset jo tehty ? Tsekkaa overlay - komentoja alta Avengers3:sta
 // Tsekkaa pitäiskö aina --filter_complexin kanssa käyttää audiossa oletus-delaytä (ehkä 40 ms).
 // Muuta nykyinen subtitle scale optio (-sd), joksin muuksi, esim. -scr (subtitle crop resize) tai -sca (subtitle crop adjust). Sitten tee uudet optiot: -ssd (subtitle scale down) -ssu (subtitle scale up), -shc (subtitle horizontal center). muuta nykyinen optio -so optioksi -svo (subtitle vertical offset) ja tee uusi optio: -sho (subtitle horizontal offset).
@@ -2151,19 +2217,3 @@ func main() {
 // Tee enkoodauksen aikainen FFmpegin tulosteen tsekkaus, joka laskee koodauksen aika-arvion ja prosentit siitä kuinka paljon failia on jo käsitelty (fps ?) Tästä on esimerkkiohjelma muistiinpanoissa, mutta se jumittaa n. 90 sekuntia FFmpeg - enkoodauksen alkamisesta.
 // Pitäiskö laittaa optio, jolla vois rajoittaa käytettävien prosessorien lukumäärän ?
 //
-// start           - 00:00:30      alkaa 00:00:00          kesto 00:00:30
-// 00:02:00.800    - 01:02:30      alkaa 00:00:30          kesto 01:00:29.200
-// 01:03:00        - 01:33:30      alkaa 01:00:59.200      kesto 00:30:30
-// 01:40:00        - 02:00:00      alkaa 01:31:29.200
-// 
-// split_times: start,00:00:30,00:02:00.800,01:02:30,01:03:00,01:33:30,01:40:00,02:00:00
-// split_times: start|00:00:30|00:02:00.800|01:02:30|01:03:00|01:33:30|01:40:00|02:00:00
-// split_times: start/00:00:30/00:02:00.800/01:02:30/01:03:00/01:33:30/01:40:00/02:00:00
-// split_times: start*00:00:30*00:02:00.800*01:02:30*01:03:00*01:33:30*01:40:00*02:00:00
-// split_times: start-00:00:30-00:02:00.800-01:02:30-01:03:00-01:33:30-01:40:00-02:00:00
-// 
-// split_times: start,00:00:30,00:02:00.800,01:02:30,01:03:00,01:33:30,01:40:00,02:00:00
-// cut_list_positions_and_durations_seconds: [0 30 120.800 3629.200 3780 1830 6000 1200]
-// cut_positions_after_processing_seconds: [0 30 3659.200 5489.200]
-// cut_positions_as_timecodes: [00:00:30 01:00:59.200 01:31:29.200]
-// 
