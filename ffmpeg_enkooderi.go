@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.25" // This is the version of this program
+var version_number string = "1.27" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -256,7 +256,7 @@ func get_video_and_audio_stream_information(file_name string) {
 	return
 }
 
-func convert_timestring_to_seconds (timestring string) (string, string) {
+func convert_timecode_to_seconds (timestring string) (string, string) {
 	var hours_int, minutes_int, seconds_int, seconds_total_int int
 	var hours_str, minutes_str, seconds_str, milliseconds_str string
 	var seconds_total_str, error_happened string
@@ -292,7 +292,7 @@ func convert_timestring_to_seconds (timestring string) (string, string) {
 		error_happened = "Could not interpret file split values"
 	}
 
-	if error_happened == "" {
+	if len(error_happened) == 0 {
 		seconds_total_int = (hours_int * 60 *60) + (minutes_int * 60) + seconds_int
 		seconds_total_str = strconv.Itoa(seconds_total_int)
 
@@ -307,8 +307,22 @@ func convert_timestring_to_seconds (timestring string) (string, string) {
 func convert_seconds_to_timecode (cut_positions_after_processing_seconds []string) ([]string) {
 	var cut_positions_as_timecodes []string
 
-	for _, item := range cut_positions_after_processing_seconds {
-		item_int ,_ := strconv.Atoi(item)
+	for counter, item := range cut_positions_after_processing_seconds {
+
+		// Remove the first edit point if it is zero, as this really is no edit point
+		if counter == 0 && item == "0" {
+			continue
+		}
+
+		item_str := item
+		milliseconds_str := ""
+
+		if strings.ContainsAny(item, ".") {
+			item_str = strings.Split(item, ".")[0]
+			milliseconds_str = strings.Split(item, ".")[1]
+		}
+
+		item_int ,_ := strconv.Atoi(item_str)
 		hours_int := 0
 		minutes_int := 0
 		seconds_int := 0
@@ -344,12 +358,18 @@ func convert_seconds_to_timecode (cut_positions_after_processing_seconds []strin
 		}
 
 		timecode = hours_str + ":" + minutes_str + ":" + seconds_str
+
+		if len(milliseconds_str) > 0 {
+			timecode =  timecode + "." + milliseconds_str
+		}
+
 		cut_positions_as_timecodes = append(cut_positions_as_timecodes, timecode)
 	}
+
 	return cut_positions_as_timecodes
 }
 
-func process_split_times(split_times *string) ([]string, []string) {
+func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []string) {
 
 	var cut_list_seconds_str_slice, cut_list_positions_and_durations_seconds, cut_positions_after_processing_seconds, cut_positions_as_timecodes []string
 	var seconds_total_str, error_happened string
@@ -375,7 +395,7 @@ func process_split_times(split_times *string) ([]string, []string) {
 			break
 		}
 
-		seconds_total_str, error_happened = convert_timestring_to_seconds(temp_string)
+		seconds_total_str, error_happened = convert_timecode_to_seconds(temp_string)
 
 		if error_happened != "" {
 			fmt.Println("\nError when converting times to seconds: " + error_happened + "\n")
@@ -387,6 +407,7 @@ func process_split_times(split_times *string) ([]string, []string) {
 	///////////////////////////////////////////////////////////////////////////////////////////
 	// Convert odd time values to duration. Even values are start times and used as they are //
 	///////////////////////////////////////////////////////////////////////////////////////////
+
 	for counter := 0 ; counter < len(cut_list_seconds_str_slice) ; counter = counter + 2  {
 
 		start_time_milliseconds := 0
@@ -458,30 +479,182 @@ func process_split_times(split_times *string) ([]string, []string) {
 
 	// Calculate where edit points are in the processed file so that the user can check them easily
 	if len(cut_list_seconds_str_slice) > 2 {
-		duration_of_a_used_file_part_int := 0
-		duration_of_a_removed_file_part_int :=0
-		duration_of_all_used_file_parts_int := 0
-		duration_of_all_removed_file_parts_int := 0
-		previous_stop_time := 0
+		duration_of_a_used_file_part_str := ""
+		duration_of_all_used_file_parts_str := ""
+		duration_of_all_removed_file_parts_str := ""
+		duration_of_a_removed_file_part_str := ""
+		previous_stop_time_str := "0"
 
 		for counter := 0 ; counter < len(cut_list_seconds_str_slice) ; counter = counter + 2 {
-			start_time ,_ := strconv.Atoi(cut_list_seconds_str_slice[counter])
-			duration_of_a_removed_file_part_int = start_time - previous_stop_time
-			duration_of_all_removed_file_parts_int = duration_of_all_removed_file_parts_int + duration_of_a_removed_file_part_int
+			start_time_str := cut_list_seconds_str_slice[counter]
+			duration_of_a_removed_file_part_str = custom_float_substraction(start_time_str, previous_stop_time_str)
+			duration_of_all_removed_file_parts_str = custom_float_addition(duration_of_all_removed_file_parts_str, duration_of_a_removed_file_part_str)
 
 			if counter + 1 < len(cut_list_seconds_str_slice) {
-				stop_time ,_ := strconv.Atoi(cut_list_seconds_str_slice[counter + 1])
-				duration_of_a_used_file_part_int = (stop_time  - start_time)
-				duration_of_all_used_file_parts_int = duration_of_all_used_file_parts_int + duration_of_a_used_file_part_int
-				cut_positions_after_processing_seconds = append(cut_positions_after_processing_seconds, strconv.Itoa(start_time - duration_of_all_removed_file_parts_int))
-				previous_stop_time = stop_time
+				stop_time_str := cut_list_seconds_str_slice[counter + 1]
+				duration_of_a_used_file_part_str = custom_float_substraction(stop_time_str, start_time_str)
+				duration_of_all_used_file_parts_str = custom_float_addition(duration_of_all_used_file_parts_str, duration_of_a_used_file_part_str)
+
+				cut_positions_after_processing_seconds = append(cut_positions_after_processing_seconds, custom_float_substraction(start_time_str, duration_of_all_removed_file_parts_str))
+				previous_stop_time_str = stop_time_str
 			}
 		}
 	}
+
 	// Convert second to timecode values
 	cut_positions_as_timecodes = convert_seconds_to_timecode(cut_positions_after_processing_seconds)
 
+	if *debug_mode_on == true {
+		fmt.Println("")
+		fmt.Println("split_times:", *split_times)
+		fmt.Println("cut_list_positions_and_durations_seconds:", cut_list_positions_and_durations_seconds)
+		fmt.Println("cut_positions_after_processing_seconds:", cut_positions_after_processing_seconds)
+		fmt.Println("cut_positions_as_timecodes:", cut_positions_as_timecodes)
+	}
+
 	return cut_list_positions_and_durations_seconds, cut_positions_as_timecodes
+}
+
+func custom_float_addition (value_1_str string, value_2_str string) (remaining_str string) {
+
+	// Add two floats losslessly without using the unprecise float type
+	var value_1_whole_int, value_1_fractions_int, value_2_whole_int, value_2_fractions_int, remaining_int, remaining_milliseconds_int int
+	var value_1_fractions_str, value_2_fractions_str string
+
+	temp_1_str := strings.Split(value_1_str, ".")
+	value_1_whole_str := temp_1_str[0]
+
+	if len(temp_1_str) > 1 {
+		value_1_fractions_str = temp_1_str[1]
+	}
+
+	value_1_whole_int ,_ = strconv.Atoi(value_1_whole_str)
+
+	// If user gave a value .8 covert it to .800
+	if len(value_1_fractions_str) > 1 {
+		for len(value_1_fractions_str) < 3 {
+			value_1_fractions_str = value_1_fractions_str + "0"
+		}
+	}
+
+	value_1_fractions_int ,_ = strconv.Atoi(value_1_fractions_str)
+
+	temp_2_str := strings.Split(value_2_str, ".")
+	value_2_whole_str := temp_2_str[0]
+
+	if len(temp_2_str) > 1 {
+		value_2_fractions_str = temp_2_str[1]
+	}
+
+	value_2_whole_int ,_ = strconv.Atoi(value_2_whole_str)
+
+	if len(value_2_fractions_str) > 1 {
+		for len(value_2_fractions_str) < 3 {
+			value_2_fractions_str = value_2_fractions_str + "0"
+		}
+	}
+
+	value_2_fractions_int ,_ = strconv.Atoi(value_2_fractions_str)
+
+	remaining_int = value_1_whole_int + value_2_whole_int
+	remaining_milliseconds_int = value_1_fractions_int + value_2_fractions_int
+
+	// Add 1000 milliseconds from the whole numbers
+	if remaining_milliseconds_int >= 1000 {
+		remaining_milliseconds_int = remaining_milliseconds_int - 1000
+		remaining_int++
+	}
+
+	remaining_str = strconv.Itoa(remaining_int)
+
+	if remaining_milliseconds_int > 0 {
+		remaining_milliseconds_str := strconv.Itoa(remaining_milliseconds_int)
+
+		// Fill the start of the milliseconds string with zeroes
+		for len(remaining_milliseconds_str) < 3 {
+			remaining_milliseconds_str = "0" + remaining_milliseconds_str
+		}
+
+		remaining_str = remaining_str + "." + remaining_milliseconds_str
+	}
+
+	if remaining_int < 0 {
+		fmt.Println("\n Error: Time addition rolled over and produced a negative number:", remaining_str, "\n")
+		os.Exit(1)
+	}
+
+	return remaining_str
+}
+
+func custom_float_substraction (value_1_str string, value_2_str string) (remaining_str string) {
+
+	// Subtract two floats losslessly without using the unprecise float type
+	// The first value (value_1_str) needs to be the bigger one, since we subtract the second from the first
+	var value_1_whole_int, value_1_fractions_int, value_2_whole_int, value_2_fractions_int, remaining_int, remaining_milliseconds_int int
+	var value_1_fractions_str, value_2_fractions_str string
+
+	temp_1_str := strings.Split(value_1_str, ".")
+	value_1_whole_str := temp_1_str[0]
+
+	if len(temp_1_str) > 1 {
+		value_1_fractions_str = temp_1_str[1]
+	}
+
+	value_1_whole_int ,_ = strconv.Atoi(value_1_whole_str)
+
+	// If user gave a value .8 covert it to .800
+	if len(value_1_fractions_str) > 1 {
+		for len(value_1_fractions_str) < 3 {
+			value_1_fractions_str = value_1_fractions_str + "0"
+		}
+	}
+
+	value_1_fractions_int ,_ = strconv.Atoi(value_1_fractions_str)
+
+	temp_2_str := strings.Split(value_2_str, ".")
+	value_2_whole_str := temp_2_str[0]
+
+	if len(temp_2_str) > 1 {
+		value_2_fractions_str = temp_2_str[1]
+	}
+
+	value_2_whole_int ,_ = strconv.Atoi(value_2_whole_str)
+
+	if len(value_2_fractions_str) > 1 {
+		for len(value_2_fractions_str) < 3 {
+			value_2_fractions_str = value_2_fractions_str + "0"
+		}
+	}
+
+	value_2_fractions_int ,_ = strconv.Atoi(value_2_fractions_str)
+
+	// Borrow 1000 milliseconds from the whole numbers
+	if value_2_fractions_int > value_1_fractions_int {
+		value_1_fractions_int = value_1_fractions_int + 1000
+		value_1_whole_int--
+	}
+
+	remaining_int = value_1_whole_int - value_2_whole_int
+	remaining_milliseconds_int = value_1_fractions_int - value_2_fractions_int
+	remaining_str = strconv.Itoa(remaining_int)
+
+	if remaining_milliseconds_int > 0 {
+		remaining_milliseconds_str := strconv.Itoa(remaining_milliseconds_int)
+
+		// Fill the start of the milliseconds string with zeroes
+		for len(remaining_milliseconds_str) < 3 {
+			remaining_milliseconds_str = "0" + remaining_milliseconds_str
+		}
+
+		remaining_str = remaining_str + "." + remaining_milliseconds_str
+	}
+
+	if remaining_int < 0 {
+		fmt.Println("\n Error: Time substraction produced a negative number:", remaining_str, "\n")
+		os.Exit(1)
+	}
+
+	return remaining_str
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -584,6 +757,8 @@ func main() {
 	var cut_positions_as_timecodes []string
 
 	start_time := time.Now()
+	file_split_start_time := time.Now()
+	file_split_elapsed_time := time.Since(file_split_start_time)
 	pass_1_start_time := time.Now()
 	pass_1_elapsed_time := time.Since(pass_1_start_time)
 	pass_2_start_time := time.Now()
@@ -635,7 +810,7 @@ func main() {
 	if *split_times != "" {
 		split_video = true
 		*use_matroska_container = true
-		cut_list_seconds_str_slice, cut_positions_as_timecodes = process_split_times(split_times)
+		cut_list_seconds_str_slice, cut_positions_as_timecodes = process_split_times(split_times, debug_mode_on)
 
 	}
 
@@ -1208,6 +1383,7 @@ func main() {
 		////////////////////////////////////////////////////
 		if split_video == true {
 
+			file_split_start_time = time.Now()
 			counter_2 := 0
 
 			// Open split_infofile for appending info about file splits
@@ -1244,7 +1420,7 @@ func main() {
 				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-i", file_name , "-ss", cut_list_seconds_str_slice[counter])
 
 				// There is no timecode if the user wants to process to the end of file. Skip the -t FFmpeg option since FFmpeg processes to the end of file without it.
-				if len(cut_list_seconds_str_slice) > counter + 1 {
+				if len(cut_list_seconds_str_slice) -1 > counter {
 					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-t", cut_list_seconds_str_slice[counter + 1])
 				}
 
@@ -1269,6 +1445,13 @@ func main() {
 					os.Exit(1)
 				}
 			}
+
+			file_split_elapsed_time = time.Since(file_split_start_time)
+			fmt.Printf("\nSplitfile creation took %s\n", file_split_elapsed_time.Round(time.Millisecond))
+			fmt.Println()
+
+			log_messages_str_slice = append(log_messages_str_slice, "\nSplitfile creation took " + file_split_elapsed_time.Round(time.Millisecond).String())
+
 		}
 
 		/////////////////////////////////////////////////////////////
@@ -1801,7 +1984,7 @@ func main() {
 				ffmpeg_pass_1_output := strings.TrimSpace(strings.Join(ffmpeg_pass_1_output_temp, ""))
 
 				if len(ffmpeg_pass_1_output) > 0 {
-					fmt.Println(len(ffmpeg_pass_1_output))
+					fmt.Println("Length of FFmpeg Pass 1 Output", len(ffmpeg_pass_1_output))
 					fmt.Println(ffmpeg_pass_1_output)
 				}
 
@@ -1841,10 +2024,10 @@ func main() {
 				fmt.Println()
 
 				if split_video == true {
-					fmt.Println(log_messages_str_slice, "Please check the following edit positions for video / audio glitches: ")
+					fmt.Println("\nPlease check the following edit positions for possible video / audio glitches and adjust split times if needed: ")
 
 					for _, timecode := range cut_positions_as_timecodes {
-						fmt.Println(log_messages_str_slice, timecode)
+						fmt.Println(timecode)
 					}
 				}
 
@@ -1877,6 +2060,7 @@ func main() {
 					ffmpeg_pass_2_output := strings.TrimSpace(strings.Join(ffmpeg_pass_2_output_temp, ""))
 
 					if len(ffmpeg_pass_2_output) > 0 {
+						fmt.Println("Length of FFmpeg Pass 2 Output", len(ffmpeg_pass_2_output))
 						fmt.Println(ffmpeg_pass_2_output)
 					}
 
@@ -1928,7 +2112,7 @@ func main() {
 			log_messages_str_slice = append(log_messages_str_slice, "Processing took: " + total_elapsed_time.String())
 
 			if split_video == true {
-				log_messages_str_slice = append(log_messages_str_slice, "Please check the following edit positions for video / audio glitches: ")
+				log_messages_str_slice = append(log_messages_str_slice, "\nPlease check the following edit positions for video / audio glitches: ")
 
 				for _, timecode := range cut_positions_as_timecodes {
 					log_messages_str_slice = append(log_messages_str_slice, timecode)
@@ -1966,10 +2150,7 @@ func main() {
 }
 
 // FIXME
-// Splittaus tulostaa turhaan skarvien aikakoodien mukana koodin: 00:00:00
-// Tee kaikkii uusiin aikarutiineihin millisekuntien händläys
-// Debug tulostaa split toiminnolla ihmeellisiä viestejä, jäljitä ne ja kato onko tarpeen.
-// Tee uusiin rutiineihin debug - toiminto, joka tulostaa toiminnon kriittiset muuttujat
+// Siirrä kaikki float laskenta alirutiineille
 // Pilko faili palasiksi jo ennen croppia ja tarkista sitten kaikista palasista kroppiarvot.
 // Tsekkaa eteneekö pillkomisarvojen alkuaika aina loogisesti ylöspäin, jos eteneminen on epälineaarista tulosta virheilmo ja exit.
 // Pilkkomisarvojen järjellisyyden tsekkaus, missä kohdassa kannattaa tehdä ?
