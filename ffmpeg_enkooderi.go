@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.29" // This is the version of this program
+var version_number string = "1.31" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -457,6 +457,9 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 			if counter + 1 < len(cut_list_seconds_str_slice) {
 				stop_time_str := cut_list_seconds_str_slice[counter + 1]
 
+				cut_positions_after_processing_seconds = append(cut_positions_after_processing_seconds, custom_float_substraction(start_time_str, duration_of_all_removed_file_parts_str))
+				previous_stop_time_str = stop_time_str
+
 				// If word 'end' is used to mark the end of file, then remove it, FFmpeg automatically process to the end of file if the last duration is left out
 				if strings.ToLower(stop_time_str) == "end" {
 					break
@@ -464,9 +467,6 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 
 				duration_of_a_used_file_part_str = custom_float_substraction(stop_time_str, start_time_str)
 				duration_of_all_used_file_parts_str = custom_float_addition(duration_of_all_used_file_parts_str, duration_of_a_used_file_part_str)
-
-				cut_positions_after_processing_seconds = append(cut_positions_after_processing_seconds, custom_float_substraction(start_time_str, duration_of_all_removed_file_parts_str))
-				previous_stop_time_str = stop_time_str
 			}
 		}
 	}
@@ -557,11 +557,6 @@ func custom_float_addition (value_1_str string, value_2_str string) (remaining_s
 }
 
 func custom_float_substraction (value_1_str string, value_2_str string) (remaining_str string) {
-
-	// FIXME
-	fmt.Println("")
-	fmt.Println("custom_float_substraction")
-	fmt.Println("value_1_str:", value_1_str, "value_2_str:", value_2_str)
 
 	// Subtract two floats losslessly without using the unprecise float type
 	// The first value (value_1_str) needs to be the bigger one, since we subtract the second from the first
