@@ -1,20 +1,20 @@
 package main
 
 import (
-	"fmt"
-	"os/exec"
-	"os"
-	"strings"
 	"flag"
+	"fmt"
 	"log"
-	"strconv"
+	"os"
+	"os/exec"
 	"path/filepath"
-	"time"
 	"sort"
+	"strconv"
+	"strings"
+	"time"
 )
 
 // Global variable definitions
-var version_number string = "1.32" // This is the version of this program
+var version_number string = "1.33" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -25,7 +25,7 @@ var wrapper_info_map = make(map[string]string)
 // There can be many audio and subtitle streams in a file.
 var Complete_file_info_slice [][][][]string
 
-func run_external_command(command_to_run_str_slice []string) ([]string,  error) {
+func run_external_command(command_to_run_str_slice []string) ([]string, error) {
 
 	var command_output_str_slice []string
 	command_output_str := ""
@@ -39,7 +39,7 @@ func run_external_command(command_to_run_str_slice []string) ([]string,  error) 
 	command_output_str = string(command_output) // The output of the command is []byte convert it to a string
 
 	// Split the output of the command to lines and store in a slice
-	for _, line := range strings.Split(command_output_str, "\n")  {
+	for _, line := range strings.Split(command_output_str, "\n") {
 		command_output_str_slice = append(command_output_str_slice, line)
 	}
 
@@ -61,40 +61,40 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 	var error error // a variable named error of type error
 
 	// Collect information about all streams in the media file.
-        // The info is collected to stream specific slices and stored in map: Complete_stream_info_map
-        // The stream number is used as the map key when saving info slice to map
+	// The info is collected to stream specific slices and stored in map: Complete_stream_info_map
+	// The stream number is used as the map key when saving info slice to map
 
-	for _,text_line := range unsorted_ffprobe_information_str_slice {
+	for _, text_line := range unsorted_ffprobe_information_str_slice {
 		stream_number_int = -1
 		stream_info_str_slice = nil
 
 		// If there are many programs in the file, then the stream information is listed twice by ffprobe,
-                // discard duplicate data.
-		if strings.HasPrefix(text_line, "programs.program"){
+		// discard duplicate data.
+		if strings.HasPrefix(text_line, "programs.program") {
 			continue
 		}
 
 		if strings.HasPrefix(text_line, "streams.stream") {
 
-			text_line_str_slice = strings.Split(strings.Replace(text_line, "streams.stream.","",1),".")
+			text_line_str_slice = strings.Split(strings.Replace(text_line, "streams.stream.", "", 1), ".")
 
 			// Convert stream number from string to int
 			error = nil
 
-			if stream_number_int, error = strconv.Atoi(text_line_str_slice[0]) ; error != nil {
+			if stream_number_int, error = strconv.Atoi(text_line_str_slice[0]); error != nil {
 				// Stream number could not be understood, skip the stream
 				continue
 			}
 
 			// Remove the text "streams.stream." from the beginning of each text line
 			string_to_remove_str_slice = string_to_remove_str_slice[:0] // Clear the slice so that allocated slice ram space remains and is not garbage collected.
-			string_to_remove_str_slice = append(string_to_remove_str_slice, "streams.stream.",strconv.Itoa(stream_number_int),".")
-			stream_data_str = strings.Replace(text_line, strings.Join(string_to_remove_str_slice,""),"",1) // Remove the unwanted string in front of the text line.
-			stream_data_str = strings.Replace(stream_data_str, "\"", "", -1) // Remove " characters from the data.
+			string_to_remove_str_slice = append(string_to_remove_str_slice, "streams.stream.", strconv.Itoa(stream_number_int), ".")
+			stream_data_str = strings.Replace(text_line, strings.Join(string_to_remove_str_slice, ""), "", 1) // Remove the unwanted string in front of the text line.
+			stream_data_str = strings.Replace(stream_data_str, "\"", "", -1)                                  // Remove " characters from the data.
 
 			// Add found stream info line to a slice with previously stored info
 			// and store it in a map. The stream number acts as the map key.
-			if _, item_found := Complete_stream_info_map[stream_number_int] ; item_found == true {
+			if _, item_found := Complete_stream_info_map[stream_number_int]; item_found == true {
 				stream_info_str_slice = Complete_stream_info_map[stream_number_int]
 			}
 			stream_info_str_slice = append(stream_info_str_slice, stream_data_str)
@@ -102,11 +102,11 @@ func sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice []strin
 		}
 
 		// Get media file wrapper information and store it in a slice.
-                if strings.HasPrefix(text_line, "format") {
-                        wrapper_info_str_slice = strings.Split(strings.Replace(text_line, "format.", "", 1), "=")
-                        wrapper_key := strings.TrimSpace(wrapper_info_str_slice[0])
-                        wrapper_value := strings.TrimSpace(strings.Replace(wrapper_info_str_slice[1],"\"", "", -1)) // Remove whitespace and " charcters from the data
-                        wrapper_info_map[wrapper_key] = wrapper_value
+		if strings.HasPrefix(text_line, "format") {
+			wrapper_info_str_slice = strings.Split(strings.Replace(text_line, "format.", "", 1), "=")
+			wrapper_key := strings.TrimSpace(wrapper_info_str_slice[0])
+			wrapper_value := strings.TrimSpace(strings.Replace(wrapper_info_str_slice[1], "\"", "", -1)) // Remove whitespace and " charcters from the data
+			wrapper_info_map[wrapper_key] = wrapper_value
 		}
 	}
 }
@@ -134,7 +134,7 @@ func get_video_and_audio_stream_information(file_name string) {
 	// First get dictionary keys and sort them
 	var dictionary_keys []int
 
-	for key:= range Complete_stream_info_map {
+	for key := range Complete_stream_info_map {
 		dictionary_keys = append(dictionary_keys, key)
 	}
 
@@ -183,7 +183,7 @@ func get_video_and_audio_stream_information(file_name string) {
 				video_key := strings.TrimSpace(temp_slice[0])
 				video_value := strings.TrimSpace(temp_slice[1])
 				video_stream_info_map[video_key] = video_value
-				}
+			}
 
 			// Add also duration from wrapper information to the video info.
 			single_video_stream_info_slice = append(single_video_stream_info_slice, file_name, video_stream_info_map["width"], video_stream_info_map["height"], wrapper_info_map["duration"], video_stream_info_map["codec_name"], video_stream_info_map["pix_fmt"], video_stream_info_map["color_space"])
@@ -251,19 +251,19 @@ func get_video_and_audio_stream_information(file_name string) {
 	// The input file has two subtitle streams
 	// Subtitle stream 0: language is: finnish, subtitle is for hearing impared = 0 (false), the subtitle codec is: dvb (bitmap)
 	// Subtitle stream 1: language is: finnish, subtitle is for hearing impared = 0 (false), the subtitle codec is: teletext
-	// 
+	//
 
 	return
 }
 
-func convert_timecode_to_seconds (timestring string) (string, string) {
+func convert_timecode_to_seconds(timestring string) (string, string) {
 	var hours_int, minutes_int, seconds_int, seconds_total_int int
 	var hours_str, minutes_str, seconds_str, milliseconds_str string
 	var seconds_total_str, error_happened string
 
 	if strings.ContainsAny(timestring, ".") {
 		milliseconds_str = strings.Split(timestring, ".")[1]
-		timestring = strings.Replace(timestring, "." + milliseconds_str, "", 1)
+		timestring = strings.Replace(timestring, "."+milliseconds_str, "", 1)
 
 		// Truncate milliseconds to 3 digits
 		if len(milliseconds_str) > 3 {
@@ -272,28 +272,28 @@ func convert_timecode_to_seconds (timestring string) (string, string) {
 	}
 
 	temp_str_slice := strings.Split(timestring, ":")
-	
+
 	if len(temp_str_slice) == 3 {
 		hours_str = temp_str_slice[0]
-		hours_int,_ = strconv.Atoi(hours_str)
+		hours_int, _ = strconv.Atoi(hours_str)
 		minutes_str = temp_str_slice[1]
-		minutes_int,_ = strconv.Atoi(minutes_str)
+		minutes_int, _ = strconv.Atoi(minutes_str)
 		seconds_str = temp_str_slice[2]
-		seconds_int,_ = strconv.Atoi(seconds_str)
+		seconds_int, _ = strconv.Atoi(seconds_str)
 	} else if len(temp_str_slice) == 2 {
 		minutes_str = temp_str_slice[0]
-		minutes_int,_ = strconv.Atoi(minutes_str)
+		minutes_int, _ = strconv.Atoi(minutes_str)
 		seconds_str = temp_str_slice[1]
-		seconds_int,_ = strconv.Atoi(seconds_str)
+		seconds_int, _ = strconv.Atoi(seconds_str)
 	} else if len(temp_str_slice) == 1 {
 		seconds_str = temp_str_slice[0]
-		seconds_int,_ = strconv.Atoi(seconds_str)
+		seconds_int, _ = strconv.Atoi(seconds_str)
 	} else if len(temp_str_slice) == 0 {
 		error_happened = "Could not interpret file split values"
 	}
 
 	if len(error_happened) == 0 {
-		seconds_total_int = (hours_int * 60 *60) + (minutes_int * 60) + seconds_int
+		seconds_total_int = (hours_int * 60 * 60) + (minutes_int * 60) + seconds_int
 		seconds_total_str = strconv.Itoa(seconds_total_int)
 
 		if milliseconds_str != "" {
@@ -304,7 +304,7 @@ func convert_timecode_to_seconds (timestring string) (string, string) {
 	return seconds_total_str, error_happened
 }
 
-func convert_seconds_to_timecode (cut_positions_after_processing_seconds []string) ([]string) {
+func convert_seconds_to_timecode(cut_positions_after_processing_seconds []string) []string {
 	var cut_positions_as_timecodes []string
 
 	for counter, item := range cut_positions_after_processing_seconds {
@@ -322,18 +322,18 @@ func convert_seconds_to_timecode (cut_positions_after_processing_seconds []strin
 			milliseconds_str = strings.Split(item, ".")[1]
 		}
 
-		item_int ,_ := strconv.Atoi(item_str)
+		item_int, _ := strconv.Atoi(item_str)
 		hours_int := 0
 		minutes_int := 0
 		seconds_int := 0
 		timecode := ""
 
-		if item_int / 3600 > 0 {
+		if item_int/3600 > 0 {
 			hours_int = item_int / 3600
 			item_int = item_int - (hours_int * 3600)
 		}
 
-		if item_int / 60 > 0 {
+		if item_int/60 > 0 {
 			minutes_int = item_int / 60
 			item_int = item_int - (minutes_int * 60)
 		}
@@ -360,7 +360,7 @@ func convert_seconds_to_timecode (cut_positions_after_processing_seconds []strin
 		timecode = hours_str + ":" + minutes_str + ":" + seconds_str
 
 		if len(milliseconds_str) > 0 {
-			timecode =  timecode + "." + milliseconds_str
+			timecode = timecode + "." + milliseconds_str
 		}
 
 		cut_positions_as_timecodes = append(cut_positions_as_timecodes, timecode)
@@ -376,7 +376,7 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 
 	cut_list_string_slice := strings.Split(*split_times, ",")
 
-	if len(cut_list_string_slice) % 2 != 0 {
+	if len(cut_list_string_slice)%2 != 0 {
 		fmt.Println("\nError: Split timecodes must be given in pairs (start_time, stop_time). There are:", len(cut_list_string_slice), "times on the commandline\n")
 		os.Exit(1)
 	}
@@ -384,14 +384,14 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 	//////////////////////////////////////////////////////////////
 	// Convert time values (01:20:25) to seconds (4825 seconds) //
 	//////////////////////////////////////////////////////////////
-	for _, temp_string := range(cut_list_string_slice) {
+	for _, temp_string := range cut_list_string_slice {
 
 		if strings.ToLower(temp_string) == "start" {
 			temp_string = "0"
 		}
 
 		if strings.ToLower(temp_string) == "end" {
-			cut_list_seconds_str_slice = append(cut_list_seconds_str_slice , strings.ToLower(temp_string))
+			cut_list_seconds_str_slice = append(cut_list_seconds_str_slice, strings.ToLower(temp_string))
 			break
 		}
 
@@ -401,7 +401,7 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 			fmt.Println("\nError when converting times to seconds: " + error_happened + "\n")
 			os.Exit(1)
 		}
-		cut_list_seconds_str_slice = append(cut_list_seconds_str_slice , seconds_total_str)
+		cut_list_seconds_str_slice = append(cut_list_seconds_str_slice, seconds_total_str)
 	}
 
 	///////////////////////////////////////////////////////////
@@ -411,13 +411,13 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 	var current_item, previous_item int
 
 	for _, item := range cut_list_seconds_str_slice {
-		current_item ,_ = strconv.Atoi(item)
+		current_item, _ = strconv.Atoi(item)
 
 		if previous_item > current_item {
 			var temp_str_slice []string
 			temp_str_slice = append(temp_str_slice, strconv.Itoa(previous_item), strconv.Itoa(current_item))
 			temp_2_str_slice := convert_seconds_to_timecode(temp_str_slice)
-			fmt.Println("\nError: times " + temp_2_str_slice[0]  + " and " + temp_2_str_slice[1] + " are not in ascending order. Timecodes must be ascending and not overlap\n")
+			fmt.Println("\nError: times " + temp_2_str_slice[0] + " and " + temp_2_str_slice[1] + " are not in ascending order. Timecodes must be ascending and not overlap\n")
 			os.Exit(1)
 		}
 		previous_item = current_item
@@ -426,8 +426,8 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 	///////////////////////////////////////////////////////////////////////////////////////////
 	// Convert odd time values to duration. Even values are start times and used as they are //
 	///////////////////////////////////////////////////////////////////////////////////////////
-	
-	for counter := 0 ; counter < len(cut_list_seconds_str_slice) ; counter = counter + 2  {
+
+	for counter := 0; counter < len(cut_list_seconds_str_slice); counter = counter + 2 {
 
 		start_time_string := ""
 		stop_time_string := ""
@@ -436,8 +436,8 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 		cut_list_positions_and_durations_seconds = append(cut_list_positions_and_durations_seconds, cut_list_seconds_str_slice[counter])
 		start_time_string = cut_list_seconds_str_slice[counter]
 
-		if len(cut_list_seconds_str_slice) - 1 > counter {
-			stop_time_string = cut_list_seconds_str_slice[counter + 1]
+		if len(cut_list_seconds_str_slice)-1 > counter {
+			stop_time_string = cut_list_seconds_str_slice[counter+1]
 
 		}
 
@@ -447,7 +447,7 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 		}
 
 		duration_str := custom_float_substraction(stop_time_string, start_time_string)
-		duration_int ,_ := strconv.Atoi(duration_str)
+		duration_int, _ := strconv.Atoi(duration_str)
 
 		if duration_int < 0 {
 			fmt.Println("\nError: Stop time:", stop_time_string, "cannot be less than start time:", start_time_string)
@@ -470,14 +470,14 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 		duration_of_a_removed_file_part_str := ""
 		previous_stop_time_str := "0"
 
-		for counter := 0 ; counter < len(cut_list_seconds_str_slice) ; counter = counter + 2 {
+		for counter := 0; counter < len(cut_list_seconds_str_slice); counter = counter + 2 {
 			start_time_str := cut_list_seconds_str_slice[counter]
 
 			duration_of_a_removed_file_part_str = custom_float_substraction(start_time_str, previous_stop_time_str)
 			duration_of_all_removed_file_parts_str = custom_float_addition(duration_of_all_removed_file_parts_str, duration_of_a_removed_file_part_str)
 
-			if counter + 1 < len(cut_list_seconds_str_slice) {
-				stop_time_str := cut_list_seconds_str_slice[counter + 1]
+			if counter+1 < len(cut_list_seconds_str_slice) {
+				stop_time_str := cut_list_seconds_str_slice[counter+1]
 
 				cut_positions_after_processing_seconds = append(cut_positions_after_processing_seconds, custom_float_substraction(start_time_str, duration_of_all_removed_file_parts_str))
 				previous_stop_time_str = stop_time_str
@@ -507,7 +507,7 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 	return cut_list_positions_and_durations_seconds, cut_positions_as_timecodes
 }
 
-func custom_float_addition (value_1_str string, value_2_str string) (remaining_str string) {
+func custom_float_addition(value_1_str string, value_2_str string) (remaining_str string) {
 
 	// Add two floats losslessly without using the unprecise float type
 	var value_1_whole_int, value_1_fractions_int, value_2_whole_int, value_2_fractions_int, remaining_int, remaining_milliseconds_int int
@@ -520,7 +520,7 @@ func custom_float_addition (value_1_str string, value_2_str string) (remaining_s
 		value_1_fractions_str = temp_1_str[1]
 	}
 
-	value_1_whole_int ,_ = strconv.Atoi(value_1_whole_str)
+	value_1_whole_int, _ = strconv.Atoi(value_1_whole_str)
 
 	// If user gave a value .8 covert it to .800
 	if len(value_1_fractions_str) > 1 {
@@ -529,7 +529,7 @@ func custom_float_addition (value_1_str string, value_2_str string) (remaining_s
 		}
 	}
 
-	value_1_fractions_int ,_ = strconv.Atoi(value_1_fractions_str)
+	value_1_fractions_int, _ = strconv.Atoi(value_1_fractions_str)
 
 	temp_2_str := strings.Split(value_2_str, ".")
 	value_2_whole_str := temp_2_str[0]
@@ -538,7 +538,7 @@ func custom_float_addition (value_1_str string, value_2_str string) (remaining_s
 		value_2_fractions_str = temp_2_str[1]
 	}
 
-	value_2_whole_int ,_ = strconv.Atoi(value_2_whole_str)
+	value_2_whole_int, _ = strconv.Atoi(value_2_whole_str)
 
 	if len(value_2_fractions_str) > 1 {
 		for len(value_2_fractions_str) < 3 {
@@ -546,7 +546,7 @@ func custom_float_addition (value_1_str string, value_2_str string) (remaining_s
 		}
 	}
 
-	value_2_fractions_int ,_ = strconv.Atoi(value_2_fractions_str)
+	value_2_fractions_int, _ = strconv.Atoi(value_2_fractions_str)
 
 	remaining_int = value_1_whole_int + value_2_whole_int
 	remaining_milliseconds_int = value_1_fractions_int + value_2_fractions_int
@@ -578,7 +578,7 @@ func custom_float_addition (value_1_str string, value_2_str string) (remaining_s
 	return remaining_str
 }
 
-func custom_float_substraction (value_1_str string, value_2_str string) (remaining_str string) {
+func custom_float_substraction(value_1_str string, value_2_str string) (remaining_str string) {
 
 	// Subtract two floats losslessly without using the unprecise float type
 	// The first value (value_1_str) needs to be the bigger one, since we subtract the second from the first
@@ -592,7 +592,7 @@ func custom_float_substraction (value_1_str string, value_2_str string) (remaini
 		value_1_fractions_str = temp_1_str[1]
 	}
 
-	value_1_whole_int ,_ = strconv.Atoi(value_1_whole_str)
+	value_1_whole_int, _ = strconv.Atoi(value_1_whole_str)
 
 	// If user gave a value .8 covert it to .800
 	if len(value_1_fractions_str) > 1 {
@@ -601,7 +601,7 @@ func custom_float_substraction (value_1_str string, value_2_str string) (remaini
 		}
 	}
 
-	value_1_fractions_int ,_ = strconv.Atoi(value_1_fractions_str)
+	value_1_fractions_int, _ = strconv.Atoi(value_1_fractions_str)
 
 	temp_2_str := strings.Split(value_2_str, ".")
 	value_2_whole_str := temp_2_str[0]
@@ -610,7 +610,7 @@ func custom_float_substraction (value_1_str string, value_2_str string) (remaini
 		value_2_fractions_str = temp_2_str[1]
 	}
 
-	value_2_whole_int ,_ = strconv.Atoi(value_2_whole_str)
+	value_2_whole_int, _ = strconv.Atoi(value_2_whole_str)
 
 	if len(value_2_fractions_str) > 1 {
 		for len(value_2_fractions_str) < 3 {
@@ -618,7 +618,7 @@ func custom_float_substraction (value_1_str string, value_2_str string) (remaini
 		}
 	}
 
-	value_2_fractions_int ,_ = strconv.Atoi(value_2_fractions_str)
+	value_2_fractions_int, _ = strconv.Atoi(value_2_fractions_str)
 
 	// Borrow 1000 milliseconds from the whole numbers
 	if value_2_fractions_int > value_1_fractions_int {
@@ -657,14 +657,14 @@ func main() {
 	/////////////////////////////////////////////////////
 	// Test if ffmpeg and ffprobe can be found in path //
 	/////////////////////////////////////////////////////
-	if _,error := exec.LookPath("ffmpeg") ; error != nil {
+	if _, error := exec.LookPath("ffmpeg"); error != nil {
 		fmt.Println()
 		fmt.Println("Error, cant find FFmpeg in path, can't continue.")
 		fmt.Println()
 		os.Exit(1)
 	}
 
-	if _,error := exec.LookPath("ffprobe") ; error != nil {
+	if _, error := exec.LookPath("ffprobe"); error != nil {
 		fmt.Println()
 		fmt.Println("Error, cant find FFprobe in path, can't continue.")
 		fmt.Println()
@@ -709,8 +709,8 @@ func main() {
 	// Misc options
 	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables and the FFmpeg commandlines used.")
 	var use_matroska_container = flag.Bool("mkv", false, "Use matroska (mkv) as the output file wrapper format.")
-	var show_program_version_short = flag.Bool("v", false,"Show the version of this program.")
-	var show_program_version_long = flag.Bool("version", false,"Show the version of this program.")
+	var show_program_version_short = flag.Bool("v", false, "Show the version of this program.")
+	var show_program_version_long = flag.Bool("version", false, "Show the version of this program.")
 
 	//////////////////////
 	// Define variables //
@@ -765,7 +765,7 @@ func main() {
 	flag.Parse()
 
 	// The unparsed options left on the commandline are filenames, store them in a slice.
-	for _,file_name := range flag.Args()  {
+	for _, file_name := range flag.Args() {
 
 		// Test if input files exist
 		if _, err := os.Stat(file_name); os.IsNotExist(err) {
@@ -798,7 +798,6 @@ func main() {
 		os.Exit(0)
 	}
 
-
 	// Convert time values used in splitting the inputfile to seconds
 	if *split_times != "" {
 		split_video = true
@@ -822,10 +821,10 @@ func main() {
 	if *subtitle_palette != "" {
 		temp_slice := strings.Split(*subtitle_palette, ",")
 		*subtitle_palette = ""
-		hex_characters := [17]string{ "0","1","2","3","4","5","6","7","8","9","a","b","c","d","e","f" }
+		hex_characters := [17]string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"}
 
 		// Test that all characters are valid hex
-		for _,character := range temp_slice {
+		for _, character := range temp_slice {
 
 			hex_match_found := false
 
@@ -835,7 +834,7 @@ func main() {
 				fmt.Println("")
 				os.Exit(0)
 			}
-			for _,hex_value := range hex_characters {
+			for _, hex_value := range hex_characters {
 
 				if strings.ToLower(character) == hex_value {
 					hex_match_found = true
@@ -845,7 +844,7 @@ func main() {
 
 			if hex_match_found == false {
 				fmt.Println("")
-				fmt.Println("Illegal character:",character ,"in -palette option string. Values must be hex ranging from 0 to f.")
+				fmt.Println("Illegal character:", character, "in -palette option string. Values must be hex ranging from 0 to f.")
 				fmt.Println("")
 				os.Exit(0)
 			}
@@ -854,25 +853,25 @@ func main() {
 		// Test that user gave between 1 to 16 characters
 		if len(temp_slice) < 1 {
 			fmt.Println("")
-			fmt.Println("Too few (",len(temp_slice) , ") hex characters in -palette option string. Please give 1 to 16 characters.")
+			fmt.Println("Too few (", len(temp_slice), ") hex characters in -palette option string. Please give 1 to 16 characters.")
 			fmt.Println("")
 			os.Exit(0)
 		}
 
 		if len(temp_slice) > 16 {
 			fmt.Println("")
-			fmt.Println("Too many (",len(temp_slice) , ") hex characters in -palette option string. Please give 1 to 16 characters.")
+			fmt.Println("Too many (", len(temp_slice), ") hex characters in -palette option string. Please give 1 to 16 characters.")
 			fmt.Println("")
 			os.Exit(0)
 		}
 
 		// Prepare -palette option string for FFmpeg. It requires 16 hex strings where each consists of 6 hex numbers. Of these every 2 numbers control RBG color.
 		// The user is limited here to use only shades between black -> gray -> white.
-		for counter,character := range temp_slice {
+		for counter, character := range temp_slice {
 
 			*subtitle_palette = *subtitle_palette + strings.Repeat(strings.ToLower(character), 6)
 
-			if counter < len(temp_slice) - 1 {
+			if counter < len(temp_slice)-1 {
 				*subtitle_palette = *subtitle_palette + ","
 			}
 
@@ -882,7 +881,7 @@ func main() {
 
 			*subtitle_palette = *subtitle_palette + ","
 
-			for counter:= len(temp_slice); counter < 16; counter++ {
+			for counter := len(temp_slice); counter < 16; counter++ {
 				*subtitle_palette = *subtitle_palette + "ffffff"
 
 				if counter < 15 {
@@ -922,8 +921,8 @@ func main() {
 	video_compression_options_hd := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "4.1", "-b:v", "8000k"}
 	video_compression_options_lossless := []string{"-c:v", "utvideo"}
 	audio_compression_options := []string{"-acodec", "copy"}
-	audio_compression_options_2_channels_ac3 := []string{"-c:a","ac3","-b:a","256k"}
-	audio_compression_options_6_channels_ac3 := []string{"-c:a","ac3","-b:a","640k"}
+	audio_compression_options_2_channels_ac3 := []string{"-c:a", "ac3", "-b:a", "256k"}
+	audio_compression_options_6_channels_ac3 := []string{"-c:a", "ac3", "-b:a", "640k"}
 	audio_compression_options_lossless_flac := []string{"-acodec", "flac"}
 	denoise_options := []string{"hqdn3d=3.0:3.0:2.0:3.0"}
 	color_subsampling_options := []string{"-pix_fmt", "yuv420p"}
@@ -981,12 +980,12 @@ func main() {
 	// Scan inputfile properties //
 	///////////////////////////////
 
-	for _,file_name := range input_filenames {
+	for _, file_name := range input_filenames {
 
 		// Get video info with: ffprobe -loglevel 16 -show_entries format:stream -print_format flat -i InputFile
 		command_to_run_str_slice = nil
 
-		command_to_run_str_slice = append(command_to_run_str_slice, "ffprobe","-loglevel","8","-show_entries","format:stream","-print_format","flat","-i")
+		command_to_run_str_slice = append(command_to_run_str_slice, "ffprobe", "-loglevel", "8", "-show_entries", "format:stream", "-print_format", "flat", "-i")
 
 		if *debug_mode_on == true {
 			fmt.Println()
@@ -1029,7 +1028,7 @@ func main() {
 	// Test that all input files have a video stream and that the audio and subtitle streams the user wants do exist //
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	for _,file_info_slice := range Complete_file_info_slice {
+	for _, file_info_slice := range Complete_file_info_slice {
 
 		video_slice_temp := file_info_slice[0]
 		video_slice := video_slice_temp[0]
@@ -1043,22 +1042,22 @@ func main() {
 		video_height := video_slice[2]
 
 		if video_width == "0" || video_height == "0" {
-			error_messages = append(error_messages, "File: '" + file_name + "' does not have a video stream.")
+			error_messages = append(error_messages, "File: '"+file_name+"' does not have a video stream.")
 		}
 
 		// If user gave audio stream number, check that we have at least that much audio streams in the source file.
-		if len(audio_slice) - 1 < *audio_stream_number_int {
-			error_messages = append(error_messages, "File: '" + file_name + "' does not have an audio stream number: " + strconv.Itoa(*audio_stream_number_int))
+		if len(audio_slice)-1 < *audio_stream_number_int {
+			error_messages = append(error_messages, "File: '"+file_name+"' does not have an audio stream number: "+strconv.Itoa(*audio_stream_number_int))
 		}
 
 		// If user gave subtitle stream number, check that we have at least that much subtitle streams in the source file.
-		if len(subtitle_slice) - 1 < subtitle_number {
-			error_messages = append(error_messages, "File: '" + file_name + "' does not have an subtitle stream number: " + strconv.Itoa(subtitle_number))
+		if len(subtitle_slice)-1 < subtitle_number {
+			error_messages = append(error_messages, "File: '"+file_name+"' does not have an subtitle stream number: "+strconv.Itoa(subtitle_number))
 		}
 	}
 
 	// If there were error messages then we can't process all files that the user gave on the commandline, inform the user and exit.
-	if len(error_messages) >0 {
+	if len(error_messages) > 0 {
 
 		fmt.Println()
 		fmt.Println("Error cannot continue !!!!!!!")
@@ -1079,7 +1078,7 @@ func main() {
 	// Only scan the input files, display their stream properties and exit.
 	if *scan_mode_only_bool == true {
 
-		for _,file_info_slice := range Complete_file_info_slice {
+		for _, file_info_slice := range Complete_file_info_slice {
 			video_slice_temp := file_info_slice[0]
 			video_slice := video_slice_temp[0]
 			audio_slice := file_info_slice[1]
@@ -1136,7 +1135,7 @@ func main() {
 	////////////////////////////////////////////////////////////////////////////////////////////////////
 	if *audio_language_str != "" {
 
-		for _,file_info_slice := range Complete_file_info_slice {
+		for _, file_info_slice := range Complete_file_info_slice {
 
 			video_slice_temp := file_info_slice[0]
 			video_slice := video_slice_temp[0]
@@ -1176,7 +1175,7 @@ func main() {
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////
 	if *subtitle_language_str != "" {
 
-		for _,file_info_slice := range Complete_file_info_slice {
+		for _, file_info_slice := range Complete_file_info_slice {
 
 			video_slice_temp := file_info_slice[0]
 			video_slice := video_slice_temp[0]
@@ -1217,7 +1216,7 @@ func main() {
 
 	files_to_process_str = strconv.Itoa(len(Complete_file_info_slice))
 
-	for _,file_info_slice := range Complete_file_info_slice {
+	for _, file_info_slice := range Complete_file_info_slice {
 
 		subtitle_horizontal_offset_int = 0
 		subtitle_horizontal_offset_str = "0"
@@ -1233,11 +1232,11 @@ func main() {
 		color_space = video_slice[6]
 
 		// Create input + output filenames and paths
-		inputfile_absolute_path,_ := filepath.Abs(file_name)
+		inputfile_absolute_path, _ := filepath.Abs(file_name)
 		inputfile_path := filepath.Dir(inputfile_absolute_path)
 		inputfile_name := filepath.Base(file_name)
 		input_filename_extension := filepath.Ext(inputfile_name)
-		output_file_absolute_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension) + output_filename_extension)
+		output_file_absolute_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension)+output_filename_extension)
 
 		if *debug_mode_on == true {
 			fmt.Println("inputfile_path:", inputfile_path)
@@ -1250,8 +1249,8 @@ func main() {
 		// Add messages to processing log.
 		var log_messages_str_slice []string
 		log_messages_str_slice = append(log_messages_str_slice, "")
-		log_messages_str_slice = append(log_messages_str_slice, "Filename: " + file_name)
-		underline_length := len(file_name) + len ("Filename: ") + 1
+		log_messages_str_slice = append(log_messages_str_slice, "Filename: "+file_name)
+		underline_length := len(file_name) + len("Filename: ") + 1
 		log_messages_str_slice = append(log_messages_str_slice, strings.Repeat("-", underline_length))
 		log_messages_str_slice = append(log_messages_str_slice, "")
 		log_messages_str_slice = append(log_messages_str_slice, "Commandline options:")
@@ -1327,7 +1326,7 @@ func main() {
 
 		if *use_matroska_container == false {
 
-			if audio_codec != "aac" && audio_codec != "ac3" && audio_codec != "mp2" && audio_codec != "mp3" &&audio_codec != "dts" {
+			if audio_codec != "aac" && audio_codec != "ac3" && audio_codec != "mp2" && audio_codec != "mp3" && audio_codec != "dts" {
 				fmt.Println()
 				fmt.Printf("Error, audio codec: '%s' in file: %s is not compatible with the mp4 wrapper format.\n", audio_codec, file_name)
 				fmt.Println("The compatible audio formats are: aac, ac3, mp2, mp3, dts.")
@@ -1406,7 +1405,7 @@ func main() {
 			log_messages_str_slice = append(log_messages_str_slice, "Creating splitfiles:")
 			log_messages_str_slice = append(log_messages_str_slice, "--------------------")
 
-			for counter := 0 ; counter < len(cut_list_seconds_str_slice) ; counter = counter + 2 {
+			for counter := 0; counter < len(cut_list_seconds_str_slice); counter = counter + 2 {
 				counter_2++
 				splitfile_name := "splitfile-" + strconv.Itoa(counter_2) + output_matroska_filename_extension
 				split_file_path := filepath.Join(inputfile_path, output_directory_name, splitfile_name)
@@ -1414,11 +1413,11 @@ func main() {
 
 				ffmpeg_file_split_commandline = nil
 				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, ffmpeg_commandline_start...)
-				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-i", file_name , "-ss", cut_list_seconds_str_slice[counter])
+				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-i", file_name, "-ss", cut_list_seconds_str_slice[counter])
 
 				// There is no timecode if the user wants to process to the end of file. Skip the -t FFmpeg option since FFmpeg processes to the end of file without it.
-				if len(cut_list_seconds_str_slice) -1 > counter {
-					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-t", cut_list_seconds_str_slice[counter + 1])
+				if len(cut_list_seconds_str_slice)-1 > counter {
+					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-t", cut_list_seconds_str_slice[counter+1])
 				}
 
 				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-vcodec", "utvideo", "-acodec", "flac", "-scodec", "copy", split_file_path)
@@ -1447,7 +1446,7 @@ func main() {
 			fmt.Printf("\nSplitfile creation took %s\n", file_split_elapsed_time.Round(time.Millisecond))
 			fmt.Println()
 
-			log_messages_str_slice = append(log_messages_str_slice, "\nSplitfile creation took " + file_split_elapsed_time.Round(time.Millisecond).String())
+			log_messages_str_slice = append(log_messages_str_slice, "\nSplitfile creation took "+file_split_elapsed_time.Round(time.Millisecond).String())
 
 		}
 
@@ -1475,7 +1474,7 @@ func main() {
 		// The detected upper border is at D pixels from the top of the picture
 		// Take B pixels starting from D down and where we end at is the detected bottom border of the picture.
 		// Pixels below this point will be cropped.
-		// 
+		//
 
 		if *autocrop_bool == true {
 
@@ -1486,21 +1485,21 @@ func main() {
 			// Clear crop value storage map by creating a new map with the same name.
 			var crop_value_map = make(map[string]int)
 
-			video_duration_int,_ := strconv.Atoi(strings.Split(video_duration, ".")[0])
+			video_duration_int, _ := strconv.Atoi(strings.Split(video_duration, ".")[0])
 
 			// For long videos take short snapshots of crop values spanning the whole file. This is "quick scan mode".
 			if video_duration_int > 300 {
 
 				spotcheck_interval := video_duration_int / 10 // How many spot checks will be made across the duration of the video (default = 10)
-				scan_duration_str := "10" // How many seconds of video to scan for each spot (default = 10 seconds)
-				scan_duration_int,_ := strconv.Atoi(scan_duration_str)
+				scan_duration_str := "10"                     // How many seconds of video to scan for each spot (default = 10 seconds)
+				scan_duration_int, _ := strconv.Atoi(scan_duration_str)
 
 				if *debug_mode_on == false {
 					fmt.Printf("Finding crop values for: " + inputfile_name + "   ")
 				}
 
 				// Repeat spot checks
-				for time_to_jump_to := scan_duration_int ; time_to_jump_to + scan_duration_int < video_duration_int ; time_to_jump_to = time_to_jump_to + spotcheck_interval {
+				for time_to_jump_to := scan_duration_int; time_to_jump_to+scan_duration_int < video_duration_int; time_to_jump_to = time_to_jump_to + spotcheck_interval {
 
 					// Create the ffmpeg command to scan for crop values
 					command_to_run_str_slice = nil
@@ -1525,15 +1524,15 @@ func main() {
 
 						crop_value_counter := 0
 
-						for _,slice_item := range ffmpeg_crop_output {
+						for _, slice_item := range ffmpeg_crop_output {
 
-							for _,item := range strings.Split(slice_item, "\n") {
+							for _, item := range strings.Split(slice_item, "\n") {
 
-								if strings.Contains(item, "crop="){
+								if strings.Contains(item, "crop=") {
 
 									crop_value := strings.Split(item, "crop=")[1]
 
-									if _,item_found := crop_value_map[crop_value] ; item_found == true {
+									if _, item_found := crop_value_map[crop_value]; item_found == true {
 										crop_value_counter = crop_value_map[crop_value]
 									}
 									crop_value_counter = crop_value_counter + 1
@@ -1582,15 +1581,15 @@ func main() {
 
 					crop_value_counter := 0
 
-					for _,slice_item := range ffmpeg_crop_output {
+					for _, slice_item := range ffmpeg_crop_output {
 
-						for _,item := range strings.Split(slice_item, "\n") {
+						for _, item := range strings.Split(slice_item, "\n") {
 
-							if strings.Contains(item, "crop="){
+							if strings.Contains(item, "crop=") {
 
 								crop_value := strings.Split(item, "crop=")[1]
 
-								if _,item_found := crop_value_map[crop_value] ; item_found == true {
+								if _, item_found := crop_value_map[crop_value]; item_found == true {
 									crop_value_counter = crop_value_map[crop_value]
 								}
 								crop_value_counter = crop_value_counter + 1
@@ -1619,10 +1618,10 @@ func main() {
 			}
 
 			// Store the crop values we will use in variables.
-			crop_values_picture_width,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[0])
-			crop_values_picture_height,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[1])
-			crop_values_width_offset,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[2])
-			crop_values_height_offset,_ = strconv.Atoi(strings.Split(final_crop_string, ":")[3])
+			crop_values_picture_width, _ = strconv.Atoi(strings.Split(final_crop_string, ":")[0])
+			crop_values_picture_height, _ = strconv.Atoi(strings.Split(final_crop_string, ":")[1])
+			crop_values_width_offset, _ = strconv.Atoi(strings.Split(final_crop_string, ":")[2])
+			crop_values_height_offset, _ = strconv.Atoi(strings.Split(final_crop_string, ":")[3])
 
 			/////////////////////////////////////////
 			// Print variable values in debug mode //
@@ -1634,17 +1633,17 @@ func main() {
 
 				for crop_value := range crop_value_map {
 					fmt.Println(crop_value_map[crop_value], "instances of crop values:", crop_value)
-					
+
 				}
 
 				fmt.Println()
 				fmt.Println("Most frequent crop value is", final_crop_string)
 			}
 
-			video_height_int, _  := strconv.Atoi(video_height)
+			video_height_int, _ := strconv.Atoi(video_height)
 			cropped_height := video_height_int - crop_values_picture_height - crop_values_height_offset
 
-			video_width_int, _  := strconv.Atoi(video_width)
+			video_width_int, _ := strconv.Atoi(video_width)
 			cropped_width := video_width_int - crop_values_picture_width - crop_values_width_offset
 
 			// Prepare offset for possible subtitle burn in
@@ -1656,8 +1655,8 @@ func main() {
 			fmt.Println("Top:", crop_values_height_offset, ", Bottom:", strconv.Itoa(cropped_height), ", Left:", crop_values_width_offset, ", Right:", strconv.Itoa(cropped_width))
 
 			log_messages_str_slice = append(log_messages_str_slice, "")
-			log_messages_str_slice = append(log_messages_str_slice, "Crop values are, Top: " + strconv.Itoa(crop_values_height_offset) + ", Bottom: " + strconv.Itoa(cropped_height) + ", Left: " + strconv.Itoa(crop_values_width_offset) + ", Right: " + strconv.Itoa(cropped_width))
-			log_messages_str_slice = append(log_messages_str_slice, "After cropping video width is: " + strconv.Itoa(crop_values_picture_width) + ", and height is: " + strconv.Itoa(crop_values_picture_height))
+			log_messages_str_slice = append(log_messages_str_slice, "Crop values are, Top: "+strconv.Itoa(crop_values_height_offset)+", Bottom: "+strconv.Itoa(cropped_height)+", Left: "+strconv.Itoa(crop_values_width_offset)+", Right: "+strconv.Itoa(cropped_width))
+			log_messages_str_slice = append(log_messages_str_slice, "After cropping video width is: "+strconv.Itoa(crop_values_picture_width)+", and height is: "+strconv.Itoa(crop_values_picture_height))
 
 		}
 
@@ -1685,7 +1684,7 @@ func main() {
 			}
 
 			if split_video == true {
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-f",  "concat", "-safe", "0", "-i", split_info_file_absolute_path)
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-f", "concat", "-safe", "0", "-i", split_info_file_absolute_path)
 			} else {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name)
 			}
@@ -1711,7 +1710,7 @@ func main() {
 
 				if *subtitle_mux_bool == true {
 					// There is a dvd, dvb or bluray bitmap subtitle to mux into the target file add the relevant options to FFmpeg commandline.
-					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-scodec", "copy", "-map", "0:s:" + strconv.Itoa(subtitle_number))
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-scodec", "copy", "-map", "0:s:"+strconv.Itoa(subtitle_number))
 				} else {
 					// There is no subtitle to process add the "no subtitle" option to FFmpeg commandline.
 					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-sn")
@@ -1739,7 +1738,7 @@ func main() {
 				// Add grayscale options to ffmpeg commandline
 				if *grayscale_bool == true {
 					if ffmpeg_filter_options != "" {
-						ffmpeg_filter_options =  ffmpeg_filter_options + ","
+						ffmpeg_filter_options = ffmpeg_filter_options + ","
 					}
 					ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(grayscale_options, "")
 				}
@@ -1780,10 +1779,10 @@ func main() {
 					subtitle_processing_options = "scale=" + strconv.Itoa(crop_values_picture_width) + ":" + strconv.Itoa(crop_values_picture_height)
 				}
 
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number) +
-				"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
-				"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=" + subtitle_horizontal_offset_str + ":main_h-overlay_h+" +
-				strconv.Itoa(*subtitle_vertical_offset_int) + strings.Join(grayscale_options, "") + "[processed_combined_streams]", "-map", "[processed_combined_streams]")
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:s:"+strconv.Itoa(subtitle_number)+
+					"]"+subtitle_processing_options+"[subtitle_processing_stream];[0:v:0]"+ffmpeg_filter_options+
+					"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay="+subtitle_horizontal_offset_str+":main_h-overlay_h+"+
+					strconv.Itoa(*subtitle_vertical_offset_int)+strings.Join(grayscale_options, "")+"[processed_combined_streams]", "-map", "[processed_combined_streams]")
 			}
 
 			///////////////////////////////////////////////////////////////////
@@ -1793,7 +1792,7 @@ func main() {
 			// If video vertical resolution is over 700 pixel choose HD video compression settings
 			video_compression_options := video_compression_options_sd
 
-			video_height_int,_ = strconv.Atoi(video_height)
+			video_height_int, _ = strconv.Atoi(video_height)
 
 			// If video has been cropped, decide video compression bitrate  by the cropped hight of the video.
 			if *autocrop_bool == true {
@@ -1819,7 +1818,7 @@ func main() {
 
 			if *audio_compression_ac3 == true {
 
-				number_of_audio_channels_int,_ := strconv.Atoi(number_of_audio_channels)
+				number_of_audio_channels_int, _ := strconv.Atoi(number_of_audio_channels)
 
 				if number_of_audio_channels_int <= 2 {
 					audio_compression_options = nil
@@ -1840,15 +1839,15 @@ func main() {
 
 			// Add audio compression options to ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, audio_compression_options...)
-			
+
 			// Add audiomapping options on the commanline
-			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(*audio_stream_number_int))
+			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:a:"+strconv.Itoa(*audio_stream_number_int))
 
 			// Add 2 - pass logfile path to ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-passlogfile")
 			ffmpeg_2_pass_logfile_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension))
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_2_pass_logfile_path)
-		
+
 			// Add video output format to ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, output_video_format...)
 
@@ -1879,22 +1878,22 @@ func main() {
 			/////////////////////////////////////////
 			if *debug_mode_on == true {
 				fmt.Println()
-				fmt.Println("video_compression_options_sd:",video_compression_options_sd)
-				fmt.Println("video_compression_options_hd:",video_compression_options_hd)
-				fmt.Println("video_compression_options:",video_compression_options)
+				fmt.Println("video_compression_options_sd:", video_compression_options_sd)
+				fmt.Println("video_compression_options_hd:", video_compression_options_hd)
+				fmt.Println("video_compression_options:", video_compression_options)
 				fmt.Println("audio_compression_options:", audio_compression_options)
-				fmt.Println("denoise_options:",denoise_options)
-				fmt.Println("deinterlace_options:",deinterlace_options)
-				fmt.Println("ffmpeg_commandline_start:",ffmpeg_commandline_start)
-				fmt.Println("subtitle_number:",subtitle_number)
-				fmt.Println("subtitle_language_str:",subtitle_language_str)
-				fmt.Println("subtitle_vertical_offset_int:",*subtitle_vertical_offset_int)
-				fmt.Println("*subtitle_downscale:",*subtitle_downscale)
-				fmt.Println("*subtitle_palette:",*subtitle_palette)
-				fmt.Println("*subtitle_mux_bool:",*subtitle_mux_bool)
+				fmt.Println("denoise_options:", denoise_options)
+				fmt.Println("deinterlace_options:", deinterlace_options)
+				fmt.Println("ffmpeg_commandline_start:", ffmpeg_commandline_start)
+				fmt.Println("subtitle_number:", subtitle_number)
+				fmt.Println("subtitle_language_str:", subtitle_language_str)
+				fmt.Println("subtitle_vertical_offset_int:", *subtitle_vertical_offset_int)
+				fmt.Println("*subtitle_downscale:", *subtitle_downscale)
+				fmt.Println("*subtitle_palette:", *subtitle_palette)
+				fmt.Println("*subtitle_mux_bool:", *subtitle_mux_bool)
 				fmt.Println("*grayscale_bool:", *grayscale_bool)
-				fmt.Println("grayscale_options:",grayscale_options)
-				fmt.Println("color_subsampling_options",color_subsampling_options)
+				fmt.Println("grayscale_options:", grayscale_options)
+				fmt.Println("color_subsampling_options", color_subsampling_options)
 				fmt.Println("*autocrop_bool:", *autocrop_bool)
 				fmt.Println("*subtitle_int:", *subtitle_int)
 				fmt.Println("*no_deinterlace_bool:", *no_deinterlace_bool)
@@ -1985,7 +1984,7 @@ func main() {
 					fmt.Println(ffmpeg_pass_1_output)
 				}
 
-				if ffmpeg_pass_1_error != nil  {
+				if ffmpeg_pass_1_error != nil {
 					fmt.Println(ffmpeg_pass_1_error)
 				}
 			}
@@ -2008,7 +2007,7 @@ func main() {
 
 				pass_2_start_time = time.Now()
 
-				ffmpeg_pass_2_output_temp, ffmpeg_pass_2_error :=  run_external_command(ffmpeg_pass_2_commandline)
+				ffmpeg_pass_2_output_temp, ffmpeg_pass_2_error := run_external_command(ffmpeg_pass_2_commandline)
 
 				if ffmpeg_pass_2_error != nil {
 
@@ -2061,7 +2060,7 @@ func main() {
 						fmt.Println(ffmpeg_pass_2_output)
 					}
 
-					if ffmpeg_pass_2_error != nil  {
+					if ffmpeg_pass_2_error != nil {
 						fmt.Println(ffmpeg_pass_2_error)
 					}
 
@@ -2081,7 +2080,7 @@ func main() {
 				os.Remove(ffmpeg_2_pass_logfile_path + "-0.log.mbtree")
 			}
 
-			for _,splitfile_name := range list_of_splitfiles {
+			for _, splitfile_name := range list_of_splitfiles {
 				if _, err := os.Stat(splitfile_name); err == nil {
 					os.Remove(splitfile_name)
 				} else {
@@ -2089,10 +2088,10 @@ func main() {
 				}
 			}
 
-			if _, err := os.Stat(split_info_file_absolute_path); ! os.IsNotExist(err) {
-				os.Remove(split_info_file_absolute_path)
-			} else {
+			if _, err := os.Stat(split_info_file_absolute_path); !os.IsNotExist(err) {
+				if err = os.Remove(split_info_file_absolute_path); err != nil {
 					fmt.Println("Could not delete split_info_file:", split_info_file_absolute_path)
+				}
 			}
 
 			elapsed_time := time.Since(start_time)
@@ -2104,9 +2103,9 @@ func main() {
 			pass_1_elapsed_time := pass_1_elapsed_time.Round(time.Millisecond)
 			pass_2_elapsed_time := pass_2_elapsed_time.Round(time.Millisecond)
 			total_elapsed_time := elapsed_time.Round(time.Millisecond)
-			log_messages_str_slice = append(log_messages_str_slice, "Pass 1 took: " + pass_1_elapsed_time.String())
-			log_messages_str_slice = append(log_messages_str_slice, "Pass 2 took: " + pass_2_elapsed_time.String())
-			log_messages_str_slice = append(log_messages_str_slice, "Processing took: " + total_elapsed_time.String())
+			log_messages_str_slice = append(log_messages_str_slice, "Pass 1 took: "+pass_1_elapsed_time.String())
+			log_messages_str_slice = append(log_messages_str_slice, "Pass 2 took: "+pass_2_elapsed_time.String())
+			log_messages_str_slice = append(log_messages_str_slice, "Processing took: "+total_elapsed_time.String())
 
 			if split_video == true {
 				log_messages_str_slice = append(log_messages_str_slice, "\nPlease check the following edit positions for video / audio glitches: ")
@@ -2184,15 +2183,15 @@ func main() {
 // 00:02:00.800    - 01:02:30      alkaa 00:00:30          kesto 01:00:29.200
 // 01:03:00        - 01:33:30      alkaa 01:00:59.200      kesto 00:30:30
 // 01:40:00        - 02:00:00      alkaa 01:31:29.200
-// 
+//
 // split_times: start,00:00:30,00:02:00.800,01:02:30,01:03:00,01:33:30,01:40:00,02:00:00
 // split_times: start|00:00:30|00:02:00.800|01:02:30|01:03:00|01:33:30|01:40:00|02:00:00
 // split_times: start/00:00:30/00:02:00.800/01:02:30/01:03:00/01:33:30/01:40:00/02:00:00
 // split_times: start*00:00:30*00:02:00.800*01:02:30*01:03:00*01:33:30*01:40:00*02:00:00
 // split_times: start-00:00:30-00:02:00.800-01:02:30-01:03:00-01:33:30-01:40:00-02:00:00
-// 
+//
 // split_times: start,00:00:30,00:02:00.800,01:02:30,01:03:00,01:33:30,01:40:00,02:00:00
 // cut_list_positions_and_durations_seconds: [0 30 120.800 3629.200 3780 1830 6000 1200]
 // cut_positions_after_processing_seconds: [0 30 3659.200 5489.200]
 // cut_positions_as_timecodes: [00:00:30 01:00:59.200 01:31:29.200]
-// 
+//
