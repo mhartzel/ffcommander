@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.31" // This is the version of this program
+var version_number string = "1.32" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -404,13 +404,31 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 		cut_list_seconds_str_slice = append(cut_list_seconds_str_slice , seconds_total_str)
 	}
 
+	///////////////////////////////////////////////////////////
+	// Test that all times are ascending and not overlapping //
+	///////////////////////////////////////////////////////////
+
+	var current_item, previous_item int
+
+	for _, item := range cut_list_seconds_str_slice {
+		current_item ,_ = strconv.Atoi(item)
+
+		if previous_item > current_item {
+			var temp_str_slice []string
+			temp_str_slice = append(temp_str_slice, strconv.Itoa(previous_item), strconv.Itoa(current_item))
+			temp_2_str_slice := convert_seconds_to_timecode(temp_str_slice)
+			fmt.Println("\nError: times " + temp_2_str_slice[0]  + " and " + temp_2_str_slice[1] + " are not in ascending order. Timecodes must be ascending and not overlap\n")
+			os.Exit(1)
+		}
+		previous_item = current_item
+	}
+
 	///////////////////////////////////////////////////////////////////////////////////////////
 	// Convert odd time values to duration. Even values are start times and used as they are //
 	///////////////////////////////////////////////////////////////////////////////////////////
 	
 	for counter := 0 ; counter < len(cut_list_seconds_str_slice) ; counter = counter + 2  {
 
-		// Store even values (start times) as they are
 		start_time_string := ""
 		stop_time_string := ""
 
@@ -423,7 +441,7 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 
 		}
 
-		// If word 'end' is used to mark the end of file, then remove it, FFmpeg automatically process to the end of file if the last duration is left out
+		// If word 'end' is used to mark the end of file, then remove it, FFmpeg automatically processes to the end of file if the last duration is left out
 		if strings.ToLower(stop_time_string) == "end" {
 			break
 		}
@@ -432,7 +450,8 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 		duration_int ,_ := strconv.Atoi(duration_str)
 
 		if duration_int < 0 {
-			fmt.Println("\n Error: Stop time:", stop_time_string, "cannot be less than start time:", start_time_string, "\n")
+			fmt.Println("\nError: Stop time:", stop_time_string, "cannot be less than start time:", start_time_string)
+			fmt.Println("All times must be absolute timecode positions NOT start times and durations\n")
 			os.Exit(1)
 		}
 
@@ -440,7 +459,10 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 		cut_list_positions_and_durations_seconds = append(cut_list_positions_and_durations_seconds, duration_str)
 	}
 
-	// Calculate where edit points are in the processed file so that the user can check them easily
+	//////////////////////////////////////////////////////////////////////////////////////////////////
+	// Calculate where edit points are in the processed file so that the user can check them easily //
+	//////////////////////////////////////////////////////////////////////////////////////////////////
+
 	if len(cut_list_seconds_str_slice) > 2 {
 		duration_of_a_used_file_part_str := ""
 		duration_of_all_used_file_parts_str := ""
@@ -549,7 +571,7 @@ func custom_float_addition (value_1_str string, value_2_str string) (remaining_s
 	}
 
 	if remaining_int < 0 {
-		fmt.Println("\n Error: Time addition rolled over and produced a negative number:", remaining_str, "\n")
+		fmt.Println("\nError: Time addition rolled over and produced a negative number:", remaining_str, "\n")
 		os.Exit(1)
 	}
 
@@ -620,7 +642,8 @@ func custom_float_substraction (value_1_str string, value_2_str string) (remaini
 	}
 
 	if remaining_int < 0 {
-		fmt.Println("\n Error: Time substraction produced a negative number:", remaining_str, "\n")
+		fmt.Println("\nError: Time substraction produced a negative number:", remaining_str)
+		fmt.Println("All times must be absolute timecode positions NOT start times and durations\n")
 		os.Exit(1)
 	}
 
@@ -2066,7 +2089,7 @@ func main() {
 				}
 			}
 
-			if _, err := os.Stat(split_info_file_absolute_path); err == nil {
+			if _, err := os.Stat(split_info_file_absolute_path); ! os.IsNotExist(err) {
 				os.Remove(split_info_file_absolute_path)
 			} else {
 					fmt.Println("Could not delete split_info_file:", split_info_file_absolute_path)
@@ -2125,8 +2148,6 @@ func main() {
 
 // FIXME
 // Pilko faili palasiksi jo ennen croppia ja tarkista sitten kaikista palasista kroppiarvot.
-// Tsekkaa eteneekö pillkomisarvojen alkuaika aina loogisesti ylöspäin, jos eteneminen on epälineaarista tulosta virheilmo ja exit.
-// Pilkkomisarvojen järjellisyyden tsekkaus, missä kohdassa kannattaa tehdä ?
 // Splittaus käyttää flac audiota ja siksi pakottaa wrapperiksi mkv:n muista kirjata helppeihin
 //
 // Onks subtitle horizontal offset jo tehty ? Tsekkaa overlay - komentoja alta Avengers3:sta
