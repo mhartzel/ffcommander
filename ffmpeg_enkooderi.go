@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.33" // This is the version of this program
+var version_number string = "1.34" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -408,15 +408,29 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 	// Test that all times are ascending and not overlapping //
 	///////////////////////////////////////////////////////////
 
-	var current_item, previous_item int
+	var previous_item string
 
-	for _, item := range cut_list_seconds_str_slice {
-		current_item, _ = strconv.Atoi(item)
+	if *debug_mode_on == true {
+		fmt.Println("")
+		fmt.Println("process_split_times: cut_list_seconds_str_slice:", cut_list_seconds_str_slice)
+	}
 
-		if previous_item > current_item {
+	for _, current_item := range cut_list_seconds_str_slice {
+
+		if current_item == "end" {
+			break
+		}
+		_, remaining_int := custom_float_substraction(current_item, previous_item)
+
+		if remaining_int < 0 {
 			var temp_str_slice []string
-			temp_str_slice = append(temp_str_slice, strconv.Itoa(previous_item), strconv.Itoa(current_item))
+			temp_str_slice = append(temp_str_slice, previous_item, current_item)
 			temp_2_str_slice := convert_seconds_to_timecode(temp_str_slice)
+
+			if *debug_mode_on == true {
+				fmt.Println("process_split_times: temp_str_slice:", temp_str_slice, "process_split_times: temp_2_str_slice:", temp_2_str_slice)
+			}
+
 			fmt.Println("\nError: times " + temp_2_str_slice[0] + " and " + temp_2_str_slice[1] + " are not in ascending order. Timecodes must be ascending and not overlap\n")
 			os.Exit(1)
 		}
@@ -446,7 +460,14 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 			break
 		}
 
-		duration_str := custom_float_substraction(stop_time_string, start_time_string)
+		duration_str, remaining_int := custom_float_substraction(stop_time_string, start_time_string)
+
+		if remaining_int < 0 {
+			fmt.Println("\nError: Time substraction produced a negative number:", remaining_int)
+			fmt.Println("All times must be absolute timecode positions NOT start times and durations\n")
+			os.Exit(1)
+		}
+
 		duration_int, _ := strconv.Atoi(duration_str)
 
 		if duration_int < 0 {
@@ -473,13 +494,14 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 		for counter := 0; counter < len(cut_list_seconds_str_slice); counter = counter + 2 {
 			start_time_str := cut_list_seconds_str_slice[counter]
 
-			duration_of_a_removed_file_part_str = custom_float_substraction(start_time_str, previous_stop_time_str)
+			duration_of_a_removed_file_part_str ,_ = custom_float_substraction(start_time_str, previous_stop_time_str)
 			duration_of_all_removed_file_parts_str = custom_float_addition(duration_of_all_removed_file_parts_str, duration_of_a_removed_file_part_str)
 
 			if counter+1 < len(cut_list_seconds_str_slice) {
 				stop_time_str := cut_list_seconds_str_slice[counter+1]
 
-				cut_positions_after_processing_seconds = append(cut_positions_after_processing_seconds, custom_float_substraction(start_time_str, duration_of_all_removed_file_parts_str))
+				new_edit_position ,_ := custom_float_substraction(start_time_str, duration_of_all_removed_file_parts_str)
+				cut_positions_after_processing_seconds = append(cut_positions_after_processing_seconds, new_edit_position)
 				previous_stop_time_str = stop_time_str
 
 				// If word 'end' is used to mark the end of file, then remove it, FFmpeg automatically process to the end of file if the last duration is left out
@@ -487,7 +509,7 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 					break
 				}
 
-				duration_of_a_used_file_part_str = custom_float_substraction(stop_time_str, start_time_str)
+				duration_of_a_used_file_part_str ,_ = custom_float_substraction(stop_time_str, start_time_str)
 				duration_of_all_used_file_parts_str = custom_float_addition(duration_of_all_used_file_parts_str, duration_of_a_used_file_part_str)
 			}
 		}
@@ -497,11 +519,10 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 	cut_positions_as_timecodes = convert_seconds_to_timecode(cut_positions_after_processing_seconds)
 
 	if *debug_mode_on == true {
-		fmt.Println("")
-		fmt.Println("split_times:", *split_times)
-		fmt.Println("cut_list_positions_and_durations_seconds:", cut_list_positions_and_durations_seconds)
-		fmt.Println("cut_positions_after_processing_seconds:", cut_positions_after_processing_seconds)
-		fmt.Println("cut_positions_as_timecodes:", cut_positions_as_timecodes)
+		fmt.Println("process_split_times: split_times:", *split_times)
+		fmt.Println("process_split_times: cut_list_positions_and_durations_seconds:", cut_list_positions_and_durations_seconds)
+		fmt.Println("process_split_times: cut_positions_after_processing_seconds:", cut_positions_after_processing_seconds)
+		fmt.Println("process_split_times: cut_positions_as_timecodes:", cut_positions_as_timecodes)
 	}
 
 	return cut_list_positions_and_durations_seconds, cut_positions_as_timecodes
@@ -578,11 +599,11 @@ func custom_float_addition(value_1_str string, value_2_str string) (remaining_st
 	return remaining_str
 }
 
-func custom_float_substraction(value_1_str string, value_2_str string) (remaining_str string) {
+func custom_float_substraction(value_1_str string, value_2_str string) (remaining_str string, remaining_int int) {
 
 	// Subtract two floats losslessly without using the unprecise float type
 	// The first value (value_1_str) needs to be the bigger one, since we subtract the second from the first
-	var value_1_whole_int, value_1_fractions_int, value_2_whole_int, value_2_fractions_int, remaining_int, remaining_milliseconds_int int
+	var value_1_whole_int, value_1_fractions_int, value_2_whole_int, value_2_fractions_int, remaining_milliseconds_int int
 	var value_1_fractions_str, value_2_fractions_str string
 
 	temp_1_str := strings.Split(value_1_str, ".")
@@ -641,13 +662,7 @@ func custom_float_substraction(value_1_str string, value_2_str string) (remainin
 		remaining_str = remaining_str + "." + remaining_milliseconds_str
 	}
 
-	if remaining_int < 0 {
-		fmt.Println("\nError: Time substraction produced a negative number:", remaining_str)
-		fmt.Println("All times must be absolute timecode positions NOT start times and durations\n")
-		os.Exit(1)
-	}
-
-	return remaining_str
+	return remaining_str, remaining_int
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2144,8 +2159,31 @@ func main() {
 		}
 	}
 }
+// 
+// // FIXME
+//
+// Disabloi -ss ja -t optiot jos optio -st on päällä, muuten menee homma sekaisin.
+// 
+// 
+// ffmpeg -y -i movie.mov -loop 1 -i overlay.png -loop 1 -i fademe.png \ -filter_complex '[0:v][1:v] overlay [V1]; \ [2:v] fade=out:25:25:alpha=1 [V2]; [V1][V2] overlay' \ faded.mp4
+// ffmpeg -i input -i logo1 -i logo2 -filter_complex 'overlay=x=10:y=H-h-10,overlay=x=W-w-10:y=H-h-10' output
+// 
+// ffmpeg -i title_t03.mkv -vn -an -scodec xsub -f image2 out%03d.xsub
+//
+// Tee aikakoodin polttovideon päälle:
+// ffmpeg -y -loglevel 8 -threads auto -ss 18:20 -i Kylla_Jeeves_Hoitaa-S02-E01-Jeeves_Saves_The_Cow_Creamer.mkv -t 00:20 -filter_complex '[0:s:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=696:568:14:6[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=-14:main_h-overlay_h+50[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -acodec copy -map 0:a:0 -f mp4 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Jeeves_And_Wooster/00-processed_files/aikakooditesti.mp4
 
-// FIXME
+// ffmpeg -y -loglevel 8 -threads auto -ss 18:20 -i Kylla_Jeeves_Hoitaa-S02-E01-Jeeves_Saves_The_Cow_Creamer.mkv -t 00:20 -filter_complex '[0:s:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=696:568:14:6[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=-14:main_h-overlay_h+50,drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:text=%{pts \\: hms}:fontcolor=#ffc400:fontsize=48:box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -acodec copy -map 0:a:0 -f mp4 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Jeeves_And_Wooster/00-processed_files/aikakooditesti.mp4 
+// 
+// ffmpeg -y -threads auto -ss 18:20 -i Kylla_Jeeves_Hoitaa-S02-E01-Jeeves_Saves_The_Cow_Creamer.mkv -t 00:20 -filter_complex '[0:s:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=696:568:14:6[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=-14:main_h-overlay_h+50,drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:timecode=00\\:18\\:20\\:000:timecode_rate=25:fontcolor=#ffc400:fontsize=48:box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -acodec copy -map 0:a:0 -f mp4 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Jeeves_And_Wooster/00-processed_files/aikakooditesti.mp4
+// 
+// 
+// 
+// 
+// Overlay lähtee tekstistä: ,drawtext
+// ffmpeg -y -loglevel 8 -threads auto -ss 22:40 -i title_t03.mkv -t 00:30 -filter_complex '[0:s:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=704:576:8:0[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=x=0:y=0,drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:text=%{pts \\: hms}:fontcolor=#ffc400:fontsize=48:box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -an -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Absolutelu_Fabulous/S05-Levy-02/00-processed_files/title_t03 -f mp4 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Absolutelu_Fabulous/S05-Levy-02/00-processed_files/title_t03.mp4
+//
+//
 // Pilko faili palasiksi jo ennen croppia ja tarkista sitten kaikista palasista kroppiarvot.
 // Splittaus käyttää flac audiota ja siksi pakottaa wrapperiksi mkv:n muista kirjata helppeihin
 //
