@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.34" // This is the version of this program
+var version_number string = "1.35" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -420,9 +420,9 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 		if current_item == "end" {
 			break
 		}
-		_, remaining_int := custom_float_substraction(current_item, previous_item)
+		_, remaining_float := custom_float_substraction(current_item, previous_item)
 
-		if remaining_int < 0 {
+		if remaining_float < 0.0 {
 			var temp_str_slice []string
 			temp_str_slice = append(temp_str_slice, previous_item, current_item)
 			temp_2_str_slice := convert_seconds_to_timecode(temp_str_slice)
@@ -450,7 +450,7 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 		cut_list_positions_and_durations_seconds = append(cut_list_positions_and_durations_seconds, cut_list_seconds_str_slice[counter])
 		start_time_string = cut_list_seconds_str_slice[counter]
 
-		if len(cut_list_seconds_str_slice)-1 > counter {
+		if len(cut_list_seconds_str_slice) - 1 > counter {
 			stop_time_string = cut_list_seconds_str_slice[counter+1]
 
 		}
@@ -460,17 +460,9 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 			break
 		}
 
-		duration_str, remaining_int := custom_float_substraction(stop_time_string, start_time_string)
+		duration_str, remaining_float := custom_float_substraction(stop_time_string, start_time_string)
 
-		if remaining_int < 0 {
-			fmt.Println("\nError: Time substraction produced a negative number:", remaining_int)
-			fmt.Println("All times must be absolute timecode positions NOT start times and durations\n")
-			os.Exit(1)
-		}
-
-		duration_int, _ := strconv.Atoi(duration_str)
-
-		if duration_int < 0 {
+		if remaining_float < 0.0 {
 			fmt.Println("\nError: Stop time:", stop_time_string, "cannot be less than start time:", start_time_string)
 			fmt.Println("All times must be absolute timecode positions NOT start times and durations\n")
 			os.Exit(1)
@@ -533,6 +525,7 @@ func custom_float_addition(value_1_str string, value_2_str string) (remaining_st
 	// Add two floats losslessly without using the unprecise float type
 	var value_1_whole_int, value_1_fractions_int, value_2_whole_int, value_2_fractions_int, remaining_int, remaining_milliseconds_int int
 	var value_1_fractions_str, value_2_fractions_str string
+	var remaining_float float64
 
 	temp_1_str := strings.Split(value_1_str, ".")
 	value_1_whole_str := temp_1_str[0]
@@ -591,7 +584,9 @@ func custom_float_addition(value_1_str string, value_2_str string) (remaining_st
 		remaining_str = remaining_str + "." + remaining_milliseconds_str
 	}
 
-	if remaining_int < 0 {
+	remaining_float ,_ = strconv.ParseFloat(remaining_str, 64)
+
+	if remaining_float < 0.0 {
 		fmt.Println("\nError: Time addition rolled over and produced a negative number:", remaining_str, "\n")
 		os.Exit(1)
 	}
@@ -599,11 +594,11 @@ func custom_float_addition(value_1_str string, value_2_str string) (remaining_st
 	return remaining_str
 }
 
-func custom_float_substraction(value_1_str string, value_2_str string) (remaining_str string, remaining_int int) {
+func custom_float_substraction(value_1_str string, value_2_str string) (remaining_str string, remaining_float float64) {
 
 	// Subtract two floats losslessly without using the unprecise float type
 	// The first value (value_1_str) needs to be the bigger one, since we subtract the second from the first
-	var value_1_whole_int, value_1_fractions_int, value_2_whole_int, value_2_fractions_int, remaining_milliseconds_int int
+	var value_1_whole_int, value_1_fractions_int, value_2_whole_int, value_2_fractions_int, remaining_int, remaining_milliseconds_int int
 	var value_1_fractions_str, value_2_fractions_str string
 
 	temp_1_str := strings.Split(value_1_str, ".")
@@ -662,7 +657,9 @@ func custom_float_substraction(value_1_str string, value_2_str string) (remainin
 		remaining_str = remaining_str + "." + remaining_milliseconds_str
 	}
 
-	return remaining_str, remaining_int
+	remaining_float ,_ = strconv.ParseFloat(remaining_str, 64)
+
+	return remaining_str, remaining_float
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -825,6 +822,12 @@ func main() {
 	if *fast_bool == true {
 		*fast_search_bool = true
 		*fast_encode_bool = true
+	}
+
+	// Disable -ss and -t options if user did use the -st option and input some edit times
+	if split_video == true {
+		*search_start_str = ""
+		*processing_time_str = ""
 	}
 
 	// Always use 1-pass encoding with lossless encoding. Turn on option -fe.
@@ -1858,10 +1861,13 @@ func main() {
 			// Add audiomapping options on the commanline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:a:"+strconv.Itoa(*audio_stream_number_int))
 
-			// Add 2 - pass logfile path to ffmpeg commandline
-			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-passlogfile")
 			ffmpeg_2_pass_logfile_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension))
-			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_2_pass_logfile_path)
+
+			if *fast_encode_bool == false {
+				// Add 2 - pass logfile path to ffmpeg commandline
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-passlogfile")
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_2_pass_logfile_path)
+			}
 
 			// Add video output format to ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, output_video_format...)
@@ -2162,8 +2168,6 @@ func main() {
 // 
 // // FIXME
 //
-// Disabloi -ss ja -t optiot jos optio -st on päällä, muuten menee homma sekaisin.
-// 
 // 
 // ffmpeg -y -i movie.mov -loop 1 -i overlay.png -loop 1 -i fademe.png \ -filter_complex '[0:v][1:v] overlay [V1]; \ [2:v] fade=out:25:25:alpha=1 [V2]; [V1][V2] overlay' \ faded.mp4
 // ffmpeg -i input -i logo1 -i logo2 -filter_complex 'overlay=x=10:y=H-h-10,overlay=x=W-w-10:y=H-h-10' output
@@ -2178,10 +2182,10 @@ func main() {
 // ffmpeg -y -threads auto -ss 18:20 -i Kylla_Jeeves_Hoitaa-S02-E01-Jeeves_Saves_The_Cow_Creamer.mkv -t 00:20 -filter_complex '[0:s:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=696:568:14:6[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=-14:main_h-overlay_h+50,drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:timecode=00\\:18\\:20\\:000:timecode_rate=25:fontcolor=#ffc400:fontsize=48:box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -acodec copy -map 0:a:0 -f mp4 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Jeeves_And_Wooster/00-processed_files/aikakooditesti.mp4
 // 
 // 
-// 
-// 
 // Overlay lähtee tekstistä: ,drawtext
 // ffmpeg -y -loglevel 8 -threads auto -ss 22:40 -i title_t03.mkv -t 00:30 -filter_complex '[0:s:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=704:576:8:0[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=x=0:y=0,drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:text=%{pts \\: hms}:fontcolor=#ffc400:fontsize=48:box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -an -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Absolutelu_Fabulous/S05-Levy-02/00-processed_files/title_t03 -f mp4 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Absolutelu_Fabulous/S05-Levy-02/00-processed_files/title_t03.mp4
+//
+// ,drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:text=%{pts \\: hms}:fontcolor=#ffc400:fontsize=48:box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)
 //
 //
 // Pilko faili palasiksi jo ennen croppia ja tarkista sitten kaikista palasista kroppiarvot.
