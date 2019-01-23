@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.35" // This is the version of this program
+var version_number string = "1.37" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -698,6 +698,7 @@ func main() {
 	var force_hd_bool = flag.Bool("hd", false, "Force video encoding to use HD bitrate and profile (Profile = High, Level = 4.1, Bitrate = 8000k) By default this program decides video encoding profile and bitrate automatically depending on the vertical resolution of the picture.")
 	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.")
 	var split_times = flag.String("st", "", "Split out parts of the file. Give colon separated start and stop times for the parts of the file to use, for example: -st 0,10:00,01:35:12.800,01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mean the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.")
+	var burn_timecode_bool = flag.Bool("tc", false, "Burn timecode on top of the video. Timecode can be used to look for exact edit points for the file split feature")
 
 	// Options that affect both video and audio
 	var force_lossless_bool = flag.Bool("ls", false, "Force encoding to use lossless 'utvideo' compression for video and 'flac' compression for audio. This also turns on -fe")
@@ -732,6 +733,7 @@ func main() {
 	var deinterlace_options []string
 	var grayscale_options []string
 	var subtitle_processing_options string
+	var timecode_burn_options string
 	var ffmpeg_pass_1_commandline []string
 	var ffmpeg_pass_2_commandline []string
 	var ffmpeg_file_split_commandline []string
@@ -760,6 +762,7 @@ func main() {
 	var split_info_file_absolute_path string
 	var list_of_splitfiles []string
 	var cut_positions_as_timecodes []string
+	var timecode_font_size int
 
 	start_time := time.Now()
 	file_split_start_time := time.Now()
@@ -1687,6 +1690,19 @@ func main() {
 			ffmpeg_pass_1_commandline = nil
 			ffmpeg_pass_2_commandline = nil
 
+			// Set timecode burn font size
+			video_height_int, _ = strconv.Atoi(video_height)
+			timecode_font_size = 24
+
+			if *force_hd_bool == true || video_height_int > 700 {
+				timecode_font_size = 48
+			}
+
+			if *burn_timecode_bool == true {
+				timecode_burn_options = ",drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:text=%{pts \\\\: hms}:fontcolor=#ffc400:fontsize=" +
+				strconv.Itoa(timecode_font_size) + ":box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)"
+			}
+
 			// Create the start of ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_commandline_start...)
 
@@ -1761,6 +1777,13 @@ func main() {
 					ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(grayscale_options, "")
 				}
 
+				if *burn_timecode_bool == true {
+					if ffmpeg_filter_options != "" {
+						ffmpeg_filter_options = ffmpeg_filter_options + ","
+					}
+					ffmpeg_filter_options = ffmpeg_filter_options + timecode_burn_options[1:]
+				}
+
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:v:0", "-vf", ffmpeg_filter_options)
 
 			} else {
@@ -1797,10 +1820,11 @@ func main() {
 					subtitle_processing_options = "scale=" + strconv.Itoa(crop_values_picture_width) + ":" + strconv.Itoa(crop_values_picture_height)
 				}
 
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:s:"+strconv.Itoa(subtitle_number)+
-					"]"+subtitle_processing_options+"[subtitle_processing_stream];[0:v:0]"+ffmpeg_filter_options+
-					"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay="+subtitle_horizontal_offset_str+":main_h-overlay_h+"+
-					strconv.Itoa(*subtitle_vertical_offset_int)+strings.Join(grayscale_options, "")+"[processed_combined_streams]", "-map", "[processed_combined_streams]")
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number) +
+					"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
+					"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=" + subtitle_horizontal_offset_str + ":main_h-overlay_h+" +
+					strconv.Itoa(*subtitle_vertical_offset_int) + strings.Join(grayscale_options, "") + timecode_burn_options +
+					"[processed_combined_streams]", "-map", "[processed_combined_streams]")
 			}
 
 			///////////////////////////////////////////////////////////////////
@@ -1927,6 +1951,8 @@ func main() {
 				fmt.Println("*fast_bool", *fast_bool)
 				fmt.Println("*fast_search_bool", *fast_search_bool)
 				fmt.Println("*fast_encode_bool", *fast_encode_bool)
+				fmt.Println("*burn_timecode_bool", *burn_timecode_bool)
+				fmt.Println("timecode_burn_options", timecode_burn_options)
 				fmt.Println("*debug_mode_on", *debug_mode_on)
 				fmt.Println()
 				fmt.Println("input_filenames:", input_filenames)
