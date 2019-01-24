@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.38" // This is the version of this program
+var version_number string = "1.39" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -730,8 +730,8 @@ func main() {
 	//////////////////////
 
 	var input_filenames []string
-	var deinterlace_options []string
-	var grayscale_options []string
+	var deinterlace_options string
+	var grayscale_options string
 	var subtitle_processing_options string
 	var timecode_burn_options string
 	var ffmpeg_pass_1_commandline []string
@@ -964,13 +964,13 @@ func main() {
 	}
 
 	if *no_deinterlace_bool == true {
-		deinterlace_options = []string{"copy"}
+		deinterlace_options = "copy"
 	} else {
 		// Deinterlacing options used to be: "idet,yadif=0:deint=interlaced"  which tries to detect
 		// if a frame is interlaced and deinterlaces only those that are.
 		// If there was a cut where there was lots of movement in the picture then some interlace
 		// remained in a couple of frames after the cut.
-		deinterlace_options = []string{"idet,yadif=0:deint=all"}
+		deinterlace_options = "idet,yadif=0:deint=all"
 	}
 
 	if *debug_mode_on == true {
@@ -1722,16 +1722,16 @@ func main() {
 			// Create grayscale FFmpeg - options
 			if *grayscale_bool == false {
 
-				grayscale_options = []string{""}
+				grayscale_options = ""
 
 			} else {
 
 				if subtitle_number == -1 {
-					grayscale_options = []string{"lut=u=128:v=128"}
+					grayscale_options = "lut=u=128:v=128"
 				}
 
 				if subtitle_number >= 0 {
-					grayscale_options = []string{",lut=u=128:v=128"}
+					grayscale_options = ",lut=u=128:v=128"
 				}
 			}
 
@@ -1751,7 +1751,7 @@ func main() {
 				}
 
 				// Add deinterlace commands to ffmpeg commandline
-				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(deinterlace_options, "")
+				ffmpeg_filter_options = ffmpeg_filter_options + deinterlace_options
 
 				// Add crop commands to ffmpeg commandline
 				if *autocrop_bool == true {
@@ -1782,7 +1782,7 @@ func main() {
 					if ffmpeg_filter_options != "" {
 						ffmpeg_filter_options = ffmpeg_filter_options + ","
 					}
-					ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(grayscale_options, "")
+					ffmpeg_filter_options = ffmpeg_filter_options + grayscale_options
 				}
 
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:v:0", "-vf", ffmpeg_filter_options)
@@ -1794,7 +1794,7 @@ func main() {
 				///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 				// Add deinterlace commands to ffmpeg commandline
-				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(deinterlace_options, "")
+				ffmpeg_filter_options = ffmpeg_filter_options + deinterlace_options
 
 				// Add crop commands to ffmpeg commandline
 				if *autocrop_bool == true {
@@ -1824,7 +1824,7 @@ func main() {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number) +
 					"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
 					"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=" + subtitle_horizontal_offset_str + ":main_h-overlay_h+" +
-					strconv.Itoa(*subtitle_vertical_offset_int) + timecode_burn_options + strings.Join(grayscale_options, "") +
+					strconv.Itoa(*subtitle_vertical_offset_int) + timecode_burn_options + grayscale_options +
 					"[processed_combined_streams]", "-map", "[processed_combined_streams]")
 			}
 
@@ -2200,19 +2200,6 @@ func main() {
 // ffmpeg -i input -i logo1 -i logo2 -filter_complex 'overlay=x=10:y=H-h-10,overlay=x=W-w-10:y=H-h-10' output
 // 
 // ffmpeg -i title_t03.mkv -vn -an -scodec xsub -f image2 out%03d.xsub
-//
-// Tee aikakoodin polttovideon päälle:
-// ffmpeg -y -loglevel 8 -threads auto -ss 18:20 -i Kylla_Jeeves_Hoitaa-S02-E01-Jeeves_Saves_The_Cow_Creamer.mkv -t 00:20 -filter_complex '[0:s:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=696:568:14:6[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=-14:main_h-overlay_h+50[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -acodec copy -map 0:a:0 -f mp4 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Jeeves_And_Wooster/00-processed_files/aikakooditesti.mp4
-
-// ffmpeg -y -loglevel 8 -threads auto -ss 18:20 -i Kylla_Jeeves_Hoitaa-S02-E01-Jeeves_Saves_The_Cow_Creamer.mkv -t 00:20 -filter_complex '[0:s:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=696:568:14:6[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=-14:main_h-overlay_h+50,drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:text=%{pts \\: hms}:fontcolor=#ffc400:fontsize=48:box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -acodec copy -map 0:a:0 -f mp4 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Jeeves_And_Wooster/00-processed_files/aikakooditesti.mp4 
-// 
-// ffmpeg -y -threads auto -ss 18:20 -i Kylla_Jeeves_Hoitaa-S02-E01-Jeeves_Saves_The_Cow_Creamer.mkv -t 00:20 -filter_complex '[0:s:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=696:568:14:6[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=-14:main_h-overlay_h+50,drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:timecode=00\\:18\\:20\\:000:timecode_rate=25:fontcolor=#ffc400:fontsize=48:box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -acodec copy -map 0:a:0 -f mp4 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Jeeves_And_Wooster/00-processed_files/aikakooditesti.mp4
-// 
-// 
-// Overlay lähtee tekstistä: ,drawtext
-// ffmpeg -y -loglevel 8 -threads auto -ss 22:40 -i title_t03.mkv -t 00:30 -filter_complex '[0:s:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=704:576:8:0[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=x=0:y=0,drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:text=%{pts \\: hms}:fontcolor=#ffc400:fontsize=48:box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -an -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Absolutelu_Fabulous/S05-Levy-02/00-processed_files/title_t03 -f mp4 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Absolutelu_Fabulous/S05-Levy-02/00-processed_files/title_t03.mp4
-//
-// ,drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:text=%{pts \\: hms}:fontcolor=#ffc400:fontsize=48:box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)
 //
 //
 // Pilko faili palasiksi jo ennen croppia ja tarkista sitten kaikista palasista kroppiarvot.
