@@ -14,7 +14,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.37" // This is the version of this program
+var version_number string = "1.38" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -981,22 +981,6 @@ func main() {
 
 	subtitle_number := *subtitle_int
 
-	// Create grayscale FFmpeg - options
-	if *grayscale_bool == false {
-
-		grayscale_options = []string{""}
-
-	} else {
-
-		if subtitle_number == -1 {
-			grayscale_options = []string{"lut=u=128:v=128"}
-		}
-
-		if subtitle_number >= 0 {
-			grayscale_options = []string{",lut=u=128:v=128"}
-		}
-	}
-
 	///////////////////////////////
 	// Scan inputfile properties //
 	///////////////////////////////
@@ -1698,11 +1682,6 @@ func main() {
 				timecode_font_size = 48
 			}
 
-			if *burn_timecode_bool == true {
-				timecode_burn_options = ",drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:text=%{pts \\\\: hms}:fontcolor=#ffc400:fontsize=" +
-				strconv.Itoa(timecode_font_size) + ":box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)"
-			}
-
 			// Create the start of ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_commandline_start...)
 
@@ -1740,6 +1719,27 @@ func main() {
 			// It has a processing pipeline with only one video input and output                                   //
 			/////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+			// Create grayscale FFmpeg - options
+			if *grayscale_bool == false {
+
+				grayscale_options = []string{""}
+
+			} else {
+
+				if subtitle_number == -1 {
+					grayscale_options = []string{"lut=u=128:v=128"}
+				}
+
+				if subtitle_number >= 0 {
+					grayscale_options = []string{",lut=u=128:v=128"}
+				}
+			}
+
+			if *burn_timecode_bool == true {
+				timecode_burn_options = ",drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:text=%{pts \\\\: hms}:fontcolor=#ffc400:fontsize=" +
+				strconv.Itoa(timecode_font_size) + ":box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)"
+			}
+
 			if subtitle_number == -1 || *subtitle_mux_bool == true {
 
 				if *subtitle_mux_bool == true {
@@ -1769,19 +1769,20 @@ func main() {
 					ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(denoise_options, "")
 				}
 
+				// Add timecode burn in options
+				if *burn_timecode_bool == true {
+					if ffmpeg_filter_options != "" {
+						ffmpeg_filter_options = ffmpeg_filter_options + ","
+					}
+					ffmpeg_filter_options = ffmpeg_filter_options + timecode_burn_options[1:]
+				}
+
 				// Add grayscale options to ffmpeg commandline
 				if *grayscale_bool == true {
 					if ffmpeg_filter_options != "" {
 						ffmpeg_filter_options = ffmpeg_filter_options + ","
 					}
 					ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(grayscale_options, "")
-				}
-
-				if *burn_timecode_bool == true {
-					if ffmpeg_filter_options != "" {
-						ffmpeg_filter_options = ffmpeg_filter_options + ","
-					}
-					ffmpeg_filter_options = ffmpeg_filter_options + timecode_burn_options[1:]
 				}
 
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:v:0", "-vf", ffmpeg_filter_options)
@@ -1823,7 +1824,7 @@ func main() {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number) +
 					"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
 					"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=" + subtitle_horizontal_offset_str + ":main_h-overlay_h+" +
-					strconv.Itoa(*subtitle_vertical_offset_int) + strings.Join(grayscale_options, "") + timecode_burn_options +
+					strconv.Itoa(*subtitle_vertical_offset_int) + timecode_burn_options + strings.Join(grayscale_options, "") +
 					"[processed_combined_streams]", "-map", "[processed_combined_streams]")
 			}
 
