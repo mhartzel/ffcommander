@@ -15,7 +15,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.40" // This is the version of this program
+var version_number string = "1.41" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -800,15 +800,6 @@ func main() {
 	original_subtitles_dir :="original_subtitles"
 	fixed_subtitles_dir :="fixed_subtitles"
 
-	/////////////////////////////////////////////////////////
-	// Test if needed executables can be found in the path //
-	/////////////////////////////////////////////////////////
-	imagemagic_exe_name := "convert"
-
-	find_executable_path("ffmpeg")
-	find_executable_path("ffprobe")
-	find_executable_path(imagemagic_exe_name)
-
 	///////////////////////////////
 	// Parse commandline options //
 	///////////////////////////////
@@ -833,6 +824,17 @@ func main() {
 		}
 	}
 
+	/////////////////////////////////////////////////////////
+	// Test if needed executables can be found in the path //
+	/////////////////////////////////////////////////////////
+	find_executable_path("ffmpeg")
+	find_executable_path("ffprobe")
+
+	if *subtitle_split == true {
+		find_executable_path("convert")
+		find_executable_path("mogrify")
+	}
+
 	// Test that user gave a string not a number for options -a and -s
 	if _, err := strconv.Atoi(*audio_language_str); err == nil {
 		fmt.Println()
@@ -853,7 +855,6 @@ func main() {
 		split_video = true
 		*use_matroska_container = true
 		cut_list_seconds_str_slice, cut_positions_as_timecodes = process_split_times(split_times, debug_mode_on)
-
 	}
 
 	// -f option turns on both options -fs and -fe
@@ -1502,9 +1503,6 @@ func main() {
 
 			subtitle_extract_start_time = time.Now()
 
-			fmt.Println("subtitles_absolute_extract_path:", subtitles_absolute_extract_path)
-			fmt.Println("fixed_subtitles_absolute_path", fixed_subtitles_absolute_path)
-
 			// Create output subdirectories
 			if _, err := os.Stat(subtitles_absolute_extract_path); os.IsNotExist(err) {
 				os.MkdirAll(subtitles_absolute_extract_path, 0777)
@@ -1538,26 +1536,90 @@ func main() {
 			fmt.Println()
 
 			// Trimm extracted subtitles
-			fmt.Println("Trimming subtile images. This might take a long time ...")
+			fmt.Println("Fixing subtitle images. This might take a long time ...")
 
 			// Read in subtitle file names
 			files_str_slice := read_filenames_in_a_dir(subtitles_absolute_extract_path)
+			number_of_subtitle_files := len(files_str_slice)
 
-			command_to_run_str_slice = nil
-			command_to_run_str_slice = append(command_to_run_str_slice, imagemagic_exe_name, "-trim")
+			// var subtitle_dimensions_str_slice []string
+			var subtitles_dimension_map = make(map[string][]string)
+			var subtitle_dimension_info []string
 
-			subtitle_trim_output, subtitle_trim_error = run_external_command(command_to_run_str_slice)
+			for subtitle_counter, subtitle_name := range files_str_slice {
 
-			if subtitle_trim_error != nil {
+				subtitle_trim_output, subtitle_trim_error = run_external_command([]string{"convert", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]", filepath.Join(subtitles_absolute_extract_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 
-				fmt.Println("\n\n" + imagemagic_exe_name  + " reported error:", subtitle_trim_error, "\n")
-				os.Exit(1)
+				fmt.Println("subtitle_trim_error:", subtitle_trim_error)
+
+				// if subtitle_trim_error != nil {
+				// 	fmt.Println(subtitle_trim_error.Error())
+				// }
+
+				// if len(subtitle_trim_error.Error()) != 0 {
+				// 	fmt.Println(subtitle_trim_error.Error())
+				// } else {
+				// 	fmt.Println("   nil")
+				// }
+
+
+				// If there is no subtitle in the image, then copy over the original image.
+				if subtitle_trim_error != nil {
+
+					// Copy original empty image over
+					subtitle_trim_output, subtitle_trim_error = run_external_command([]string{"convert", filepath.Join(subtitles_absolute_extract_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+					continue
+				}
+
+				// Take image properties before and after crop and store them in a map.
+				// Image info n 'subtitle_dimension_info' is:
+				// Original width
+				// Original height
+				// Cropped width
+				// Cropped height
+
+				subtitle_dimension_info = strings.Split(subtitle_trim_output[0], ",")
+				subtitles_dimension_map[subtitle_name] = subtitle_dimension_info
+
+				fmt.Printf("\rProcessing image %d / %d", subtitle_counter, number_of_subtitle_files)
 			}
 
-			if len(subtitle_trim_output) != 0 {
-				fmt.Println("\n", subtitle_trim_output, "\n")
-			}
+			fmt.Println()
 
+			fmt.Println(subtitles_dimension_map)
+
+			// func main() {
+			//     cmd := exec.Command("ls", "-lah")
+			//     var stdout, stderr bytes.Buffer
+			//     cmd.Stdout = &stdout
+			//     cmd.Stderr = &stderr
+			//     err := cmd.Run()
+			//     if err != nil {
+			// 	log.Fatalf("cmd.Run() failed with %s\n", err)
+			//     }
+			//     outStr, errStr := string(stdout.Bytes()), string(stderr.Bytes())
+			//     fmt.Printf("out:\n%s\nerr:\n%s\n", outStr, errStr)
+			// }
+
+			// Overlay kropped subtitles on top of a transparent canvas.
+			// for subtitle_counter, subtitle_name := range files_str_slice {
+			// 	subtitle_trim_output, subtitle_trim_error = run_external_command([]string{"convert", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]", filepath.Join(subtitles_absolute_extract_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+			// 	// fmt.Println("convert", "-verbose", "-trim", filepath.Join(subtitles_absolute_extract_path, subtitle_name))
+			// 	// fmt.Println(subtitle_trim_output)
+			// 	fmt.Printf("\rProcessing image %d / %d", subtitle_counter, number_of_subtitle_files)
+			// }
+			// fmt.Println()
+
+
+			// if subtitle_trim_error != nil {
+
+			// 	fmt.Println("\n\n" + "convert"  + " reported error:", subtitle_trim_error, "\n")
+			// 	os.Exit(1)
+			// }
+
+			// if len(subtitle_trim_output) != 0 {
+			// 	fmt.Println("\n", subtitle_trim_output, "\n")
+			// }
 
 			os.Exit(0)
 
@@ -2446,6 +2508,12 @@ func main() {
 //
 // Tämä palauttaa kroppiarvot ja kroppaa : convert 290.png -trim -print "%[fx:w]x%[fx:h]+%[fx:page.x]+%[fx:page.y]\n" 290-kropattu.png
 // 1012x140+454+832
+//
+// mogrify -trim -print "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]\n" koe.png 
+// 720,576,457,66,132,429
+//
+// convert -trim -print "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]\n" koe.png kropattu.png
+// 720,576,457,66,132,429
 //
 // convert 290.png -trim -print "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]\n" 290-kropattu.png
 // KOE=`convert 290.png -trim -print "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]\n" 290-kropattu.png`
