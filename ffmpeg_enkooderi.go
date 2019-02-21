@@ -29,27 +29,12 @@ var Complete_file_info_slice [][][][]string
 
 func run_external_command(command_to_run_str_slice []string) (stdout_output []string, stderr_output string, error_code error) {
 
-	// https://blog.kowalczyk.info/article/wOYk/advanced-command-execution-in-go-with-osexec.html
-	// func main() {
-	//     cmd := exec.Command("ls", "-lah")
-	//     var stdout, stderr bytes.Buffer
-	//     cmd.Stdout = &stdout
-	//     cmd.Stderr = &stderr
-	//     err := cmd.Run()
-	//     if err != nil {
-	// 	log.Fatalf("cmd.Run() failed with %s\n", err)
-	//     }
-	//     outStr, errStr := string(stdout.Bytes()), string(stderr.Bytes())
-	//     fmt.Printf("out:\n%s\nerr:\n%s\n", outStr, errStr)
-	// }
-
 	command_output_str := ""
 
 	// Create the struct needed for running the external command
 	command_struct := exec.Command(command_to_run_str_slice[0], command_to_run_str_slice[1:]...)
 
 	// Run external command
-	// command_output, error_code := command_struct.CombinedOutput()
 	var stdout, stderr bytes.Buffer
 	command_struct.Stdout = &stdout
 	command_struct.Stderr = &stderr
@@ -58,9 +43,6 @@ func run_external_command(command_to_run_str_slice []string) (stdout_output []st
 
 	command_output_str = string(stdout.Bytes())
 	stderr_output = string(stderr.Bytes())
-
-
-	// command_output_str = string(command_output) // The output of the command is []byte convert it to a string
 
 	// Split the output of the command to lines and store in a slice
 	for _, line := range strings.Split(command_output_str, "\n") {
@@ -1008,6 +990,11 @@ func main() {
 	color_subsampling_options := []string{"-pix_fmt", "yuv420p"}
 	var ffmpeg_commandline_start []string
 
+	//////////////////////////
+	// Imagemagick Options //
+	//////////////////////////
+	picture_margin := 10
+
 	// Determine output file container
 	output_video_format := []string{"-f", "mp4"}
 	output_mp4_filename_extension := ".mp4"
@@ -1555,7 +1542,7 @@ func main() {
 			fmt.Println()
 
 			// Trimm extracted subtitles
-			fmt.Println("Fixing subtitle images. This might take a long time ...")
+			fmt.Println("Trimming subtitle images. This might take a long time ...")
 
 			// Read in subtitle file names
 			files_str_slice := read_filenames_in_a_dir(subtitles_absolute_extract_path)
@@ -1566,6 +1553,8 @@ func main() {
 			var subtitle_dimension_info []string
 
 			for subtitle_counter, subtitle_name := range files_str_slice {
+
+				fmt.Printf("\rProcessing image %d / %d", subtitle_counter + 1, number_of_subtitle_files)
 
 				subtitle_trim_output, subtitle_trim_error,_ := run_external_command([]string{"convert", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]", filepath.Join(subtitles_absolute_extract_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 
@@ -1587,16 +1576,98 @@ func main() {
 				// Original height
 				// Cropped width
 				// Cropped height
+				// Start of crop on x axis
+				// Start of crop on y axis
 
 				subtitle_dimension_info = strings.Split(subtitle_trim_output[0], ",")
 				subtitles_dimension_map[subtitle_name] = subtitle_dimension_info
 
-				fmt.Printf("\rProcessing image %d / %d", subtitle_counter, number_of_subtitle_files)
+			}
+
+			fmt.Println()
+			fmt.Println("\nAdjusting subtitle position on picture ...")
+
+			var subtitle_new_y int
+			number_of_keys := len(subtitles_dimension_map)
+			counter := 0
+
+			for subtitle_name := range subtitles_dimension_map {
+
+				counter++
+
+				fmt.Printf("\rProcessing image %d / %d", counter, number_of_keys)
+
+				orig_width ,_ := strconv.Atoi(subtitles_dimension_map[subtitle_name][0])
+				orig_height ,_:= strconv.Atoi(subtitles_dimension_map[subtitle_name][1])
+				cropped_width ,_:= strconv.Atoi(subtitles_dimension_map[subtitle_name][2])
+				cropped_height ,_:= strconv.Atoi(subtitles_dimension_map[subtitle_name][3])
+				// cropped_start_x ,_:= strconv.Atoi(subtitles_dimension_map[subtitle_name][4])
+				cropped_start_y ,_:= strconv.Atoi(subtitles_dimension_map[subtitle_name][5])
+
+				picture_center := orig_height
+				picture_center = picture_center / 2
+				subtitle_new_x := (orig_width / 2) - (cropped_width / 2) // This centers cropped subtitle on the x axis
+
+				if cropped_start_y > picture_center {
+
+					// Center subtitle on the bottom of the picure
+					subtitle_new_y = orig_height - cropped_height - picture_margin
+
+				} else {
+
+					// Center subtitle on top of the picure
+					subtitle_new_y = picture_margin
+				}
+
+				_, subtitle_trim_error, error_code := run_external_command([]string{"convert", "-colorspace", "gray", "-size", strconv.Itoa(orig_width) + "x" + strconv.Itoa(orig_height), "canvas:transparent", filepath.Join(fixed_subtitles_absolute_path, subtitle_name), "-geometry", "+" + strconv.Itoa(subtitle_new_x) + "+" + strconv.Itoa(subtitle_new_y), "-composite", "-compose", "over", filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+
+				if error_code != nil {
+					fmt.Println("ImageMagick convert reported error:", subtitle_trim_error)
+				}
+
 			}
 
 			fmt.Println()
 
-			fmt.Println(subtitles_dimension_map)
+			//subtitle-0000000358.png:[720 576 251 28 234 467]
+			// convert -trim -print "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]" subtitle-0000000358.png kropattu-358.png
+			// 720,576,251,28,234,467
+			//
+			// 720 = Alkuperäisen kuvan leveys
+			// 576 = Alkuperäisen kuvan korkeus
+			// 251 = Kropatun kuvan leveys
+			// 28 = Kropatun kuvan korkeus
+			// 234 = Kroppauksen alkupaikka x akselilla (vasemmasta laidasta laskien ?)
+			// 467 = Kroppauksen alkupaikka y akselilla ylhäältä laskien (Tämän perusteella voi keskittää tekstin yla- alasuunnassa: onko tämä arvo vähemmän vai enemmän kuin 540 (1080 / 2 = 540))
+			//
+			// ImageMagick kropatun tekstin keskittäminen läpinäkyvälle 1920x1080 pohjalle:
+			// ----------------------------------------------------------------------------
+			// mkdir subtitlet-kropattu
+			// cp subtitlet/*.png subtitlet-kropattu/
+			// mogrify -trim subtitlet-kropattu/*.png
+			//
+			// identify subtitlet-kropattu/270.png 
+			// subtitlet-kropattu/270.png PNG 202x51 1920x1080+859+98 8-bit Grayscale Gray 3384B 0.000u 0:00.00p
+			// Eli kropatun kuvan leveys on 202 ja korkeus 51.
+			// 
+			// (1920 / 2) - (202 / 2) = 859
+			// 10 = pixeliä yläreunasta alaspäin.
+			// convert -colorspace gray -size 1920x1080 xc:transparent subtitlet-kropattu/270.png -composite -compose over testi.png
+			// 
+			// Keskitys yläreunaan:
+			// --------------------
+			// convert -colorspace gray -size 1920x1080 xc:transparent subtitlet-kropattu/270.png -geometry +859+10 -composite -compose over testi.png
+			// tai:
+			// convert -colorspace gray -size 1920x1080 canvas:transparent subtitlet-kropattu/270.png -geometry +859+10 -composite -compose over testi.png
+			// 
+			// 
+			// Keskitys alareunaan:
+			// --------------------
+			// Vähennetään taustakuvan korkeudesta kropatun kuvan korkeus ja vielä 10 pixeliä lisää jottei teksti ole kiinni alalaidassa:
+			// 1080 - 10 - 51 = 1019
+			// 
+			// convert -colorspace gray -size 1920x1080 canvas:transparent subtitlet-kropattu/270.png -geometry +859+1019 -composite -compose over testi-2.png
+			// 
 
 			// Overlay kropped subtitles on top of a transparent canvas.
 			// for subtitle_counter, subtitle_name := range files_str_slice {
