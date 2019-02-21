@@ -12,10 +12,11 @@ import (
 	"strings"
 	"time"
 	"io/ioutil"
+	"bytes"
 )
 
 // Global variable definitions
-var version_number string = "1.41" // This is the version of this program
+var version_number string = "1.42" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -26,25 +27,47 @@ var wrapper_info_map = make(map[string]string)
 // There can be many audio and subtitle streams in a file.
 var Complete_file_info_slice [][][][]string
 
-func run_external_command(command_to_run_str_slice []string) ([]string, error) {
+func run_external_command(command_to_run_str_slice []string) (stdout_output []string, stderr_output string, error_code error) {
 
-	var command_output_str_slice []string
+	// https://blog.kowalczyk.info/article/wOYk/advanced-command-execution-in-go-with-osexec.html
+	// func main() {
+	//     cmd := exec.Command("ls", "-lah")
+	//     var stdout, stderr bytes.Buffer
+	//     cmd.Stdout = &stdout
+	//     cmd.Stderr = &stderr
+	//     err := cmd.Run()
+	//     if err != nil {
+	// 	log.Fatalf("cmd.Run() failed with %s\n", err)
+	//     }
+	//     outStr, errStr := string(stdout.Bytes()), string(stderr.Bytes())
+	//     fmt.Printf("out:\n%s\nerr:\n%s\n", outStr, errStr)
+	// }
+
 	command_output_str := ""
 
 	// Create the struct needed for running the external command
 	command_struct := exec.Command(command_to_run_str_slice[0], command_to_run_str_slice[1:]...)
 
 	// Run external command
-	command_output, error_message := command_struct.CombinedOutput()
+	// command_output, error_code := command_struct.CombinedOutput()
+	var stdout, stderr bytes.Buffer
+	command_struct.Stdout = &stdout
+	command_struct.Stderr = &stderr
 
-	command_output_str = string(command_output) // The output of the command is []byte convert it to a string
+	error_code = command_struct.Run()
+
+	command_output_str = string(stdout.Bytes())
+	stderr_output = string(stderr.Bytes())
+
+
+	// command_output_str = string(command_output) // The output of the command is []byte convert it to a string
 
 	// Split the output of the command to lines and store in a slice
 	for _, line := range strings.Split(command_output_str, "\n") {
-		command_output_str_slice = append(command_output_str_slice, line)
+		stdout_output = append(stdout_output, line)
 	}
 
-	return command_output_str_slice, error_message
+	return stdout_output, stderr_output, error_code
 }
 
 func find_executable_path(filename string) (file_path string) {
@@ -769,7 +792,7 @@ func main() {
 	var crop_values_width_offset int
 	var crop_values_height_offset int
 	var unsorted_ffprobe_information_str_slice []string
-	var error_message error
+	var error_code error
 	var error_messages []string
 	var file_counter int
 	var file_counter_str string
@@ -1034,16 +1057,12 @@ func main() {
 
 		command_to_run_str_slice = append(command_to_run_str_slice, file_name)
 
-		unsorted_ffprobe_information_str_slice, error_message = run_external_command(command_to_run_str_slice)
+		unsorted_ffprobe_information_str_slice, _, error_code = run_external_command(command_to_run_str_slice)
 
-		if error_message != nil {
+		if error_code != nil {
 
 			fmt.Println("\n\nFFprobe reported error:", unsorted_ffprobe_information_str_slice, "\n")
 			os.Exit(1)
-		}
-
-		if error_message != nil {
-			log.Fatal(error_message)
 		}
 
 		// Sort info about video and audio streams in the file to a map
@@ -1475,9 +1494,9 @@ func main() {
 					os.Exit(0)
 				}
 
-				file_split_output_temp, file_split_error := run_external_command(ffmpeg_file_split_commandline)
+				file_split_output_temp, _, error_code := run_external_command(ffmpeg_file_split_commandline)
 
-				if file_split_error != nil {
+				if error_code != nil {
 
 					fmt.Println("\n\nFFmpeg reported error:", file_split_output_temp, "\n")
 					os.Exit(1)
@@ -1498,8 +1517,7 @@ func main() {
 
 		if *subtitle_split == true && subtitle_number != -1 {
 
-			var subtitle_extract_output, subtitle_trim_output []string
-			var subtitle_extract_error, subtitle_trim_error error
+			var subtitle_extract_output []string
 
 			subtitle_extract_start_time = time.Now()
 
@@ -1519,11 +1537,12 @@ func main() {
 
 			fmt.Println("Extracting subtitle stream as png - images. This might take a long time ...")
 
-			subtitle_extract_output, subtitle_extract_error = run_external_command(ffmpeg_subtitle_extract_commandline)
+			error_code = nil
+			subtitle_extract_output, _, error_code = run_external_command(ffmpeg_subtitle_extract_commandline)
 
-			if subtitle_extract_error != nil {
+			if error_code != nil {
 
-				fmt.Println("\n\nFFmpeg reported error:", subtitle_extract_error, "\n")
+				fmt.Println("\n\nFFmpeg reported error:", subtitle_extract_output, "\n")
 				os.Exit(1)
 			}
 
@@ -1548,26 +1567,17 @@ func main() {
 
 			for subtitle_counter, subtitle_name := range files_str_slice {
 
-				subtitle_trim_output, subtitle_trim_error = run_external_command([]string{"convert", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]", filepath.Join(subtitles_absolute_extract_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
-
-				fmt.Println("subtitle_trim_error:", subtitle_trim_error)
-
-				// if subtitle_trim_error != nil {
-				// 	fmt.Println(subtitle_trim_error.Error())
-				// }
-
-				// if len(subtitle_trim_error.Error()) != 0 {
-				// 	fmt.Println(subtitle_trim_error.Error())
-				// } else {
-				// 	fmt.Println("   nil")
-				// }
-
+				subtitle_trim_output, subtitle_trim_error,_ := run_external_command([]string{"convert", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]", filepath.Join(subtitles_absolute_extract_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 
 				// If there is no subtitle in the image, then copy over the original image.
-				if subtitle_trim_error != nil {
+				if subtitle_trim_error != "" {
 
 					// Copy original empty image over
-					subtitle_trim_output, subtitle_trim_error = run_external_command([]string{"convert", filepath.Join(subtitles_absolute_extract_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+					_, subtitle_trim_error, error_code := run_external_command([]string{"convert", filepath.Join(subtitles_absolute_extract_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+
+					if error_code != nil {
+						fmt.Println("ImageMagick convert reported error:", subtitle_trim_error)
+					}
 					continue
 				}
 
@@ -1587,19 +1597,6 @@ func main() {
 			fmt.Println()
 
 			fmt.Println(subtitles_dimension_map)
-
-			// func main() {
-			//     cmd := exec.Command("ls", "-lah")
-			//     var stdout, stderr bytes.Buffer
-			//     cmd.Stdout = &stdout
-			//     cmd.Stderr = &stderr
-			//     err := cmd.Run()
-			//     if err != nil {
-			// 	log.Fatalf("cmd.Run() failed with %s\n", err)
-			//     }
-			//     outStr, errStr := string(stdout.Bytes()), string(stderr.Bytes())
-			//     fmt.Printf("out:\n%s\nerr:\n%s\n", outStr, errStr)
-			// }
 
 			// Overlay kropped subtitles on top of a transparent canvas.
 			// for subtitle_counter, subtitle_name := range files_str_slice {
@@ -1695,16 +1692,16 @@ func main() {
 						fmt.Println()
 					}
 
-					ffmpeg_crop_output, ffmpeg_crop_error := run_external_command(command_to_run_str_slice)
+					ffmpeg_crop_output, _, error_code := run_external_command(command_to_run_str_slice)
 
-					if ffmpeg_crop_error != nil {
+					if error_code != nil {
 
 						fmt.Println("\n\nFFmpeg reported error:", ffmpeg_crop_output, "\n")
 						os.Exit(1)
 					}
 
 					// Parse the crop value list to find the value that is most frequent, that is the value that can be applied without cropping too much or too little.
-					if ffmpeg_crop_error == nil {
+					if error_code == nil {
 
 						crop_value_counter := 0
 
@@ -1751,9 +1748,9 @@ func main() {
 					fmt.Println()
 				}
 
-				ffmpeg_crop_output, ffmpeg_crop_error := run_external_command(command_to_run_str_slice)
+				ffmpeg_crop_output, _, error_code := run_external_command(command_to_run_str_slice)
 
-				if ffmpeg_crop_error != nil {
+				if error_code != nil {
 
 					fmt.Println("\n\nFFmpeg reported error:", ffmpeg_crop_output, "\n")
 					os.Exit(1)
@@ -1761,7 +1758,7 @@ func main() {
 
 				// FFmpeg collects possible crop values across the first 1800 seconds of the file and outputs a list of how many times each possible crop values exists.
 				// Parse the list to find the value that is most frequent, that is the value that can be applied without cropping too musch or too little.
-				if ffmpeg_crop_error == nil {
+				if error_code == nil {
 
 					crop_value_counter := 0
 
@@ -1785,7 +1782,7 @@ func main() {
 				} else {
 					fmt.Println()
 					fmt.Println("Scanning inputfile with FFmpeg resulted in an error:")
-					fmt.Println(ffmpeg_crop_error)
+					fmt.Println(ffmpeg_crop_output)
 					os.Exit(1)
 				}
 			}
@@ -2169,9 +2166,9 @@ func main() {
 
 			pass_1_start_time = time.Now()
 
-			ffmpeg_pass_1_output_temp, ffmpeg_pass_1_error := run_external_command(ffmpeg_pass_1_commandline)
+			ffmpeg_pass_1_output_temp, _, error_code := run_external_command(ffmpeg_pass_1_commandline)
 
-			if ffmpeg_pass_1_error != nil {
+			if error_code != nil {
 
 				fmt.Println("\n\nFFmpeg reported error:", ffmpeg_pass_1_output_temp, "\n")
 				os.Exit(1)
@@ -2212,8 +2209,8 @@ func main() {
 					fmt.Println(ffmpeg_pass_1_output)
 				}
 
-				if ffmpeg_pass_1_error != nil {
-					fmt.Println(ffmpeg_pass_1_error)
+				if error_code != nil {
+					fmt.Println(ffmpeg_pass_1_output_temp)
 				}
 			}
 
@@ -2235,9 +2232,9 @@ func main() {
 
 				pass_2_start_time = time.Now()
 
-				ffmpeg_pass_2_output_temp, ffmpeg_pass_2_error := run_external_command(ffmpeg_pass_2_commandline)
+				ffmpeg_pass_2_output_temp, _, error_code := run_external_command(ffmpeg_pass_2_commandline)
 
-				if ffmpeg_pass_2_error != nil {
+				if error_code != nil {
 
 					fmt.Println("\n\nFFmpeg reported error:", ffmpeg_pass_2_output_temp, "\n")
 					os.Exit(1)
@@ -2288,8 +2285,8 @@ func main() {
 						fmt.Println(ffmpeg_pass_2_output)
 					}
 
-					if ffmpeg_pass_2_error != nil {
-						fmt.Println(ffmpeg_pass_2_error)
+					if ffmpeg_pass_2_output_temp != nil {
+						fmt.Println(ffmpeg_pass_2_output_temp)
 					}
 
 					fmt.Println()
