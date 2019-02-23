@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -11,12 +13,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"io/ioutil"
-	"bytes"
 )
 
 // Global variable definitions
-var version_number string = "1.42" // This is the version of this program
+var version_number string = "1.43" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -472,7 +472,7 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 		cut_list_positions_and_durations_seconds = append(cut_list_positions_and_durations_seconds, cut_list_seconds_str_slice[counter])
 		start_time_string = cut_list_seconds_str_slice[counter]
 
-		if len(cut_list_seconds_str_slice) - 1 > counter {
+		if len(cut_list_seconds_str_slice)-1 > counter {
 			stop_time_string = cut_list_seconds_str_slice[counter+1]
 
 		}
@@ -508,13 +508,13 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 		for counter := 0; counter < len(cut_list_seconds_str_slice); counter = counter + 2 {
 			start_time_str := cut_list_seconds_str_slice[counter]
 
-			duration_of_a_removed_file_part_str ,_ = custom_float_substraction(start_time_str, previous_stop_time_str)
+			duration_of_a_removed_file_part_str, _ = custom_float_substraction(start_time_str, previous_stop_time_str)
 			duration_of_all_removed_file_parts_str = custom_float_addition(duration_of_all_removed_file_parts_str, duration_of_a_removed_file_part_str)
 
 			if counter+1 < len(cut_list_seconds_str_slice) {
 				stop_time_str := cut_list_seconds_str_slice[counter+1]
 
-				new_edit_position ,_ := custom_float_substraction(start_time_str, duration_of_all_removed_file_parts_str)
+				new_edit_position, _ := custom_float_substraction(start_time_str, duration_of_all_removed_file_parts_str)
 				cut_positions_after_processing_seconds = append(cut_positions_after_processing_seconds, new_edit_position)
 				previous_stop_time_str = stop_time_str
 
@@ -523,7 +523,7 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 					break
 				}
 
-				duration_of_a_used_file_part_str ,_ = custom_float_substraction(stop_time_str, start_time_str)
+				duration_of_a_used_file_part_str, _ = custom_float_substraction(stop_time_str, start_time_str)
 				duration_of_all_used_file_parts_str = custom_float_addition(duration_of_all_used_file_parts_str, duration_of_a_used_file_part_str)
 			}
 		}
@@ -606,7 +606,7 @@ func custom_float_addition(value_1_str string, value_2_str string) (remaining_st
 		remaining_str = remaining_str + "." + remaining_milliseconds_str
 	}
 
-	remaining_float ,_ = strconv.ParseFloat(remaining_str, 64)
+	remaining_float, _ = strconv.ParseFloat(remaining_str, 64)
 
 	if remaining_float < 0.0 {
 		fmt.Println("\nError: Time addition rolled over and produced a negative number:", remaining_str, "\n")
@@ -679,7 +679,7 @@ func custom_float_substraction(value_1_str string, value_2_str string) (remainin
 		remaining_str = remaining_str + "." + remaining_milliseconds_str
 	}
 
-	remaining_float ,_ = strconv.ParseFloat(remaining_str, 64)
+	remaining_float, _ = strconv.ParseFloat(remaining_str, 64)
 
 	return remaining_str, remaining_float
 }
@@ -801,9 +801,9 @@ func main() {
 	subtitle_extract_elapsed_time := time.Since(subtitle_extract_start_time)
 
 	output_directory_name := "00-processed_files"
-	subtitle_extract_dir :="subtitles"
-	original_subtitles_dir :="original_subtitles"
-	fixed_subtitles_dir :="fixed_subtitles"
+	subtitle_extract_dir := "subtitles"
+	original_subtitles_dir := "original_subtitles"
+	fixed_subtitles_dir := "fixed_subtitles"
 
 	///////////////////////////////
 	// Parse commandline options //
@@ -1281,8 +1281,8 @@ func main() {
 		inputfile_path := filepath.Dir(inputfile_absolute_path)
 		inputfile_name := filepath.Base(file_name)
 		input_filename_extension := filepath.Ext(inputfile_name)
-		output_file_absolute_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension) + output_filename_extension)
-		subtitles_absolute_extract_path := filepath.Join(inputfile_path, output_directory_name, subtitle_extract_dir, inputfile_name + "-" + original_subtitles_dir)
+		output_file_absolute_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension)+output_filename_extension)
+		subtitles_absolute_extract_path := filepath.Join(inputfile_path, output_directory_name, subtitle_extract_dir, inputfile_name + "-"+original_subtitles_dir)
 		fixed_subtitles_absolute_path := filepath.Join(inputfile_path, output_directory_name, subtitle_extract_dir, inputfile_name + "-" + fixed_subtitles_dir)
 
 		if *debug_mode_on == true {
@@ -1468,7 +1468,7 @@ func main() {
 					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-t", cut_list_seconds_str_slice[counter+1])
 				}
 
-				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-vcodec", "utvideo", "-acodec", "flac", "-scodec", "copy", split_file_path)
+				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-vcodec", "utvideo", "-acodec", "flac", "-scodec", "copy", "-map", "0", split_file_path)
 
 				fmt.Println("Creating splitfile: " + splitfile_name)
 				log_messages_str_slice = append(log_messages_str_slice, strings.Join(ffmpeg_file_split_commandline, " "))
@@ -1517,12 +1517,12 @@ func main() {
 				os.MkdirAll(fixed_subtitles_absolute_path, 0777)
 			}
 
-			// Extract subtitle stream as on png for every frame of the movie.
+			// Extract subtitle stream as on tiff for every frame of the movie.
 			ffmpeg_subtitle_extract_commandline = nil
 			ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, ffmpeg_commandline_start...)
-			ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-i", file_name, "-vn", "-an", "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number) + "]copy[subtitle_processing_stream]", "-map", "[subtitle_processing_stream]", filepath.Join(subtitles_absolute_extract_path, "subtitle-%10d.png"))
+			ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-i", file_name, "-vn", "-an", "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number)+"]copy[subtitle_processing_stream]", "-map", "[subtitle_processing_stream]", filepath.Join(subtitles_absolute_extract_path, "subtitle-%10d.tiff"))
 
-			fmt.Println("Extracting subtitle stream as png - images. This might take a long time ...")
+			fmt.Println("Extracting subtitle stream as tiff - images. This might take a long time ...")
 
 			error_code = nil
 			subtitle_extract_output, _, error_code = run_external_command(ffmpeg_subtitle_extract_commandline)
@@ -1548,21 +1548,26 @@ func main() {
 			files_str_slice := read_filenames_in_a_dir(subtitles_absolute_extract_path)
 			number_of_subtitle_files := len(files_str_slice)
 
-			// var subtitle_dimensions_str_slice []string
 			var subtitles_dimension_map = make(map[string][]string)
 			var subtitle_dimension_info []string
 
 			for subtitle_counter, subtitle_name := range files_str_slice {
 
-				fmt.Printf("\rProcessing image %d / %d", subtitle_counter + 1, number_of_subtitle_files)
+				fmt.Printf("\rProcessing image %d / %d", subtitle_counter+1, number_of_subtitle_files)
 
-				subtitle_trim_output, subtitle_trim_error,_ := run_external_command([]string{"convert", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]", filepath.Join(subtitles_absolute_extract_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+				subtitle_trim_output, subtitle_trim_error, _ := run_external_command([]string{"convert", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]", filepath.Join(subtitles_absolute_extract_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 
 				// If there is no subtitle in the image, then copy over the original image.
 				if subtitle_trim_error != "" {
 
 					// Copy original empty image over
-					_, subtitle_trim_error, error_code := run_external_command([]string{"convert", filepath.Join(subtitles_absolute_extract_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+
+					// FIXME
+					// _, subtitle_trim_error, error_code := run_external_command([]string{"convert", filepath.Join(subtitles_absolute_extract_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+					_, subtitle_trim_error, error_code := run_external_command([]string{"convert", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on", filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+
+					// FIXME
+					// _, subtitle_trim_error, error_code := run_external_command([]string{"cp", "-f", filepath.Join(subtitles_absolute_extract_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 
 					if error_code != nil {
 						fmt.Println("ImageMagick convert reported error:", subtitle_trim_error)
@@ -1585,6 +1590,8 @@ func main() {
 			}
 
 			fmt.Println()
+
+			// Overlay cropped subtitles on a new position on a transparent canvas
 			fmt.Println("\nAdjusting subtitle position on picture ...")
 
 			var subtitle_new_y int
@@ -1597,21 +1604,22 @@ func main() {
 
 				fmt.Printf("\rProcessing image %d / %d", counter, number_of_keys)
 
-				orig_width ,_ := strconv.Atoi(subtitles_dimension_map[subtitle_name][0])
-				orig_height ,_:= strconv.Atoi(subtitles_dimension_map[subtitle_name][1])
-				cropped_width ,_:= strconv.Atoi(subtitles_dimension_map[subtitle_name][2])
-				cropped_height ,_:= strconv.Atoi(subtitles_dimension_map[subtitle_name][3])
+				// orig_width ,_ := strconv.Atoi(subtitles_dimension_map[subtitle_name][0])
+				// orig_height ,_:= strconv.Atoi(subtitles_dimension_map[subtitle_name][1])
+				cropped_width, _ := strconv.Atoi(subtitles_dimension_map[subtitle_name][2])
+				cropped_height, _ := strconv.Atoi(subtitles_dimension_map[subtitle_name][3])
 				// cropped_start_x ,_:= strconv.Atoi(subtitles_dimension_map[subtitle_name][4])
-				cropped_start_y ,_:= strconv.Atoi(subtitles_dimension_map[subtitle_name][5])
+				cropped_start_y, _ := strconv.Atoi(subtitles_dimension_map[subtitle_name][5])
 
-				picture_center := orig_height
-				picture_center = picture_center / 2
-				subtitle_new_x := (orig_width / 2) - (cropped_width / 2) // This centers cropped subtitle on the x axis
+				video_height_int, _ := strconv.Atoi(video_height)
+				video_width_int, _ := strconv.Atoi(video_width)
+				picture_center := video_height_int / 2
+				subtitle_new_x := (video_width_int / 2) - (cropped_width / 2) // This centers cropped subtitle on the x axis
 
 				if cropped_start_y > picture_center {
 
 					// Center subtitle on the bottom of the picure
-					subtitle_new_y = orig_height - cropped_height - picture_margin
+					subtitle_new_y = video_height_int - cropped_height - picture_margin
 
 				} else {
 
@@ -1619,7 +1627,9 @@ func main() {
 					subtitle_new_y = picture_margin
 				}
 
-				_, subtitle_trim_error, error_code := run_external_command([]string{"convert", "-colorspace", "gray", "-size", strconv.Itoa(orig_width) + "x" + strconv.Itoa(orig_height), "canvas:transparent", filepath.Join(fixed_subtitles_absolute_path, subtitle_name), "-geometry", "+" + strconv.Itoa(subtitle_new_x) + "+" + strconv.Itoa(subtitle_new_y), "-composite", "-compose", "over", filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+				// FIXME
+				// _, subtitle_trim_error, error_code := run_external_command([]string{"convert", "-colorspace", "gray", "-size", strconv.Itoa(orig_width) + "x" + strconv.Itoa(orig_height), "canvas:transparent", filepath.Join(fixed_subtitles_absolute_path, subtitle_name), "-geometry", "+" + strconv.Itoa(subtitle_new_x) + "+" + strconv.Itoa(subtitle_new_y), "-composite", "-compose", "over", filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+				_, subtitle_trim_error, error_code := run_external_command([]string{"convert", "-size", video_width + "x" + video_height, "canvas:transparent", filepath.Join(fixed_subtitles_absolute_path, subtitle_name), "-geometry", "+" + strconv.Itoa(subtitle_new_x) + "+" + strconv.Itoa(subtitle_new_y), "-composite", "-compose", "over", filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 
 				if error_code != nil {
 					fmt.Println("ImageMagick convert reported error:", subtitle_trim_error)
@@ -1628,78 +1638,6 @@ func main() {
 			}
 
 			fmt.Println()
-
-			//subtitle-0000000358.png:[720 576 251 28 234 467]
-			// convert -trim -print "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]" subtitle-0000000358.png kropattu-358.png
-			// 720,576,251,28,234,467
-			//
-			// 720 = Alkuperäisen kuvan leveys
-			// 576 = Alkuperäisen kuvan korkeus
-			// 251 = Kropatun kuvan leveys
-			// 28 = Kropatun kuvan korkeus
-			// 234 = Kroppauksen alkupaikka x akselilla (vasemmasta laidasta laskien ?)
-			// 467 = Kroppauksen alkupaikka y akselilla ylhäältä laskien (Tämän perusteella voi keskittää tekstin yla- alasuunnassa: onko tämä arvo vähemmän vai enemmän kuin 540 (1080 / 2 = 540))
-			//
-			// ImageMagick kropatun tekstin keskittäminen läpinäkyvälle 1920x1080 pohjalle:
-			// ----------------------------------------------------------------------------
-			// mkdir subtitlet-kropattu
-			// cp subtitlet/*.png subtitlet-kropattu/
-			// mogrify -trim subtitlet-kropattu/*.png
-			//
-			// identify subtitlet-kropattu/270.png 
-			// subtitlet-kropattu/270.png PNG 202x51 1920x1080+859+98 8-bit Grayscale Gray 3384B 0.000u 0:00.00p
-			// Eli kropatun kuvan leveys on 202 ja korkeus 51.
-			// 
-			// (1920 / 2) - (202 / 2) = 859
-			// 10 = pixeliä yläreunasta alaspäin.
-			// convert -colorspace gray -size 1920x1080 xc:transparent subtitlet-kropattu/270.png -composite -compose over testi.png
-			// 
-			// Keskitys yläreunaan:
-			// --------------------
-			// convert -colorspace gray -size 1920x1080 xc:transparent subtitlet-kropattu/270.png -geometry +859+10 -composite -compose over testi.png
-			// tai:
-			// convert -colorspace gray -size 1920x1080 canvas:transparent subtitlet-kropattu/270.png -geometry +859+10 -composite -compose over testi.png
-			// 
-			// 
-			// Keskitys alareunaan:
-			// --------------------
-			// Vähennetään taustakuvan korkeudesta kropatun kuvan korkeus ja vielä 10 pixeliä lisää jottei teksti ole kiinni alalaidassa:
-			// 1080 - 10 - 51 = 1019
-			// 
-			// convert -colorspace gray -size 1920x1080 canvas:transparent subtitlet-kropattu/270.png -geometry +859+1019 -composite -compose over testi-2.png
-			// 
-
-			// Overlay kropped subtitles on top of a transparent canvas.
-			// for subtitle_counter, subtitle_name := range files_str_slice {
-			// 	subtitle_trim_output, subtitle_trim_error = run_external_command([]string{"convert", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]", filepath.Join(subtitles_absolute_extract_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
-			// 	// fmt.Println("convert", "-verbose", "-trim", filepath.Join(subtitles_absolute_extract_path, subtitle_name))
-			// 	// fmt.Println(subtitle_trim_output)
-			// 	fmt.Printf("\rProcessing image %d / %d", subtitle_counter, number_of_subtitle_files)
-			// }
-			// fmt.Println()
-
-
-			// if subtitle_trim_error != nil {
-
-			// 	fmt.Println("\n\n" + "convert"  + " reported error:", subtitle_trim_error, "\n")
-			// 	os.Exit(1)
-			// }
-
-			// if len(subtitle_trim_output) != 0 {
-			// 	fmt.Println("\n", subtitle_trim_output, "\n")
-			// }
-
-			os.Exit(0)
-
-
-			// subtitle_extract_elapsed_time = time.Since(subtitle_extract_start_time)
-			// fmt.Printf("\nSubtitle split processing took %s\n", subtitle_extract_elapsed_time.Round(time.Millisecond))
-			// fmt.Println()
-
-
-			// subtitle_extract_elapsed_time = time.Since(subtitle_extract_start_time)
-			// fmt.Printf("\nSubtitle split processing took %s\n", subtitle_extract_elapsed_time.Round(time.Millisecond))
-			// fmt.Println()
 		}
 
 		/////////////////////////////////////////////////////////////
@@ -1944,8 +1882,15 @@ func main() {
 			}
 
 			if split_video == true {
+
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-f", "concat", "-safe", "0", "-i", split_info_file_absolute_path)
+
+			} else if *subtitle_split == true {
+
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name, "-f", "image2", "-i", filepath.Join(fixed_subtitles_absolute_path, "subtitle-%10d.tiff"))
+
 			} else {
+
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name)
 			}
 
@@ -1984,7 +1929,7 @@ func main() {
 
 			if *burn_timecode_bool == true {
 				timecode_burn_options = ",drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:text=%{pts \\\\: hms}:fontcolor=#ffc400:fontsize=" +
-				strconv.Itoa(timecode_font_size) + ":box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)"
+					strconv.Itoa(timecode_font_size) + ":box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)"
 			}
 
 			if subtitle_number == -1 || *subtitle_mux_bool == true {
@@ -2068,10 +2013,17 @@ func main() {
 					subtitle_processing_options = "scale=" + strconv.Itoa(crop_values_picture_width) + ":" + strconv.Itoa(crop_values_picture_height)
 				}
 
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number) +
+				subtitle_source_file := "[0:s:"
+
+				if *subtitle_split == true {
+
+					subtitle_source_file = "[1:v:"
+				}
+
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", subtitle_source_file + strconv.Itoa(subtitle_number) +
 					"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
 					"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=" + subtitle_horizontal_offset_str + ":main_h-overlay_h+" +
-					strconv.Itoa(*subtitle_vertical_offset_int) + timecode_burn_options + grayscale_options +
+					strconv.Itoa(*subtitle_vertical_offset_int) + timecode_burn_options+grayscale_options +
 					"[processed_combined_streams]", "-map", "[processed_combined_streams]")
 			}
 
@@ -2131,7 +2083,7 @@ func main() {
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, audio_compression_options...)
 
 			// Add audiomapping options on the commanline
-			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:a:"+strconv.Itoa(*audio_stream_number_int))
+			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(*audio_stream_number_int))
 
 			ffmpeg_2_pass_logfile_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension))
 
@@ -2440,13 +2392,21 @@ func main() {
 		}
 	}
 }
-// 
+
+//
 // // FIXME
 //
-// 
+// Lue -sp koodi vielä ajatuksella läpi, sinne on saattanut jäädä epäloogisuuksia ja sotkuja.
+// -sp toimii tiff formaatilla nyt dvd:n osalta, mutta nykii edelleen BluRayssä (RedDwarf). Tää on ehkä nyt korjattu.
+// -sp marginaali näytön ylä- tai alareunaa pitää skaalautua videon reson mukaa. BluRayssä 10 pixeliä on aika hyvä dvdssä sen pitäis olla pienempi.
+// Mitä taphtuu kun -sp ja -autocrop on päällä, mitä subtitleille tapahtuu ?
+// -sp subtitleprosessointia pitää saada nopeutettua: tunnista tyhjät slaidit ja tallenna vain yksi tyjä ja linkkaa muut siihen. Tunnista samat subtitlet ja tallenna vain yksi ja linkkaa muut siihen. Jos tämä ei toimi tee subtitlekäsittely samanaikaisesti säikeissä.
+// Tutki tukeeko ffmpeg jotain subtitleformaattia, jossa aikakoodit on tekstitiedostossa ja subtitlet kuvina. Jos tukee tee tuki tälle formaatille ja tallenna -sp - optiolla subtitlet kyseiseen formaattiin.
+//
+//
 // ffmpeg -y -i movie.mov -loop 1 -i overlay.png -loop 1 -i fademe.png \ -filter_complex '[0:v][1:v] overlay [V1]; \ [2:v] fade=out:25:25:alpha=1 [V2]; [V1][V2] overlay' \ faded.mp4
 // ffmpeg -i input -i logo1 -i logo2 -filter_complex 'overlay=x=10:y=H-h-10,overlay=x=W-w-10:y=H-h-10' output
-// 
+//
 // ffmpeg -i title_t03.mkv -vn -an -scodec xsub -f image2 out%03d.xsub
 //
 //
@@ -2504,71 +2464,71 @@ func main() {
 
 // Filename: Red_Dwarf-S11-E01-Twentica.mkv
 // -----------------------------------------
-// 
+//
 // Commandline options:
 // ---------------------
 // /opt/ffmpeg_enkooderi -s eng Red_Dwarf-S11-E01-Twentica.mkv Red_Dwarf-S11-E02-Samsara.mkv Red_Dwarf-S11-E03-Give_And_Take.mkv Red_Dwarf-S11-E04-Officer_Rimmer.mkv Red_Dwarf-S11-E05-Krysis.mkv Red_Dwarf-S11-E06-Can_Of_Worm
 // s.mkv
-// 
+//
 // FFmpeg Pass 1 Options:
 // -----------------------
 // ffmpeg -y -loglevel 8 -threads auto -i Red_Dwarf-S11-E01-Twentica.mkv -filter_complex '[0:s:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all[video_processing_stream];[video_processing_stream][subtitle_proc
 // essing_stream]overlay=0:main_h-overlay_h+0[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipist
 // e/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Red_Dwarf/00-processed_files/Red_Dwarf-S11-E01-Twentica -f mp4 -pass 1 /dev/null
-// 
+//
 // FFmpeg Pass 2 Options:
 // -----------------------
 // ffmpeg -y -loglevel 8 -threads auto -i Red_Dwarf-S11-E01-Twentica.mkv -filter_complex '[0:s:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all[video_processing_stream];[video_processing_stream][subtitle_proc
 // essing_stream]overlay=0:main_h-overlay_h+0[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipist
 // e/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Red_Dwarf/00-processed_files/Red_Dwarf-S11-E01-Twentica -f mp4 -pass 2 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Red_Dwarf/00-processed_files
 // /Red_Dwarf-S11-E01-Twentica.mp4
-// 
+//
 // Pass 1 took: 21m46.497s
 // Pass 2 took: 35m33.132s
 // Processing took: 57m19.684s
-// 
+//
 // ########################################################################################################################
-// 
-// 
+//
+//
 // Extract subtitlestream as video to png per frame: ffmpeg -i testi.mkv -vn -an -filter_complex '[0:s:0]copy[subtitle_processing_stream]' -map '[subtitle_processing_stream]' subtitlet/$subtitle%03d.png
-// 
+//
 // Tee kuvista video mustalla pohjalla: ffmpeg -r 24 -f image2 -i subtitlet/%03d.png -pix_fmt yuv420p -vf fps=24,cropdetect koe.webm
-// 
+//
 // Tee yhdestä kuvasta 10 freimin video ja mittaa siitä kroppiarvot: ffmpeg -r 1/1 -f image2 -i subtitlet/270.png -pix_fmt yuv420p -vf fps=10,cropdetect -f null -
 // Sama kuin yllä mutta etsi reunat jokaisessa fremissä uudestaan: ffmpeg -r 1/1 -f image2 -i subtitlet/290.png -pix_fmt yuv420p -vf fps=10,cropdetect=24:1:0 -f null -
-// 
+//
 // Freimi 270: lyhyt teksti ruudun yläosassa: crop=-1904:-1072:1914:1078
 // Freimi 285: tyhjä feimi, pelkkää läpinäkyvyyttä: crop=-1904:-1072:1914:1078
 // Freimi 290: pitkä teksti alhaalla: crop=-1904:112:1914:848
-// 
+//
 // Yllä korppiarvoissa on ongelmana se, että jostain syystä FFmpeg tulostaa negatiivisia arvoja, mutta hyväksyy vain positiivisia. Lisäksi ylä- alasuunnassa tunnistettu raja leikkaa tekstiä, ylärajaa pitää nostaa ja alarajaa laskea 20 pistettä.
-// 
+//
 // Tämä tuottaa freimille 290 oikean kroppauksen: ffmpeg -r 1/25 -f image2 -i subtitlet/290.png -pix_fmt yuv420p -vf fps=10,crop=1912:152:1918:828 koe2.webm
-// 
+//
 // ########################################################################################################################
-// 
+//
 // Tämä löytää paremmin reunat: ffmpeg -r 1/1 -f image2 -i subtitlet/270.png -vf fps=10,cropdetect=1:1:1 -f null -
-// 
+//
 // Freimi 270: lyhyt teksti ruudun yläosassa: crop=192:32:864:108
 // Freimi 285: tyhjä feimi, pelkkää läpinäkyvyyttä: crop=-1904:-1072:1914:1078
 // Freimi 290: pitkä teksti alhaalla: crop=976:128:464:836
-// 
+//
 // ffmpeg -r 1/5 -f image2 -i subtitlet/270.png -vf "fps=10,format=rgba,geq='r=if(gt(alpha(X,Y),128),255,0):g=if(gt(alpha(X,Y),128),255,0):b=if(gt(alpha(X,Y),128),255,0):a=if(gt(alpha(X,Y),250),255,0)',cropdetect=1:1:1" koe2.webm
-// 
+//
 // Tää taitaa olla paras rivi, mutta ylös ja alas pitää lisätä 20 ja reunoille 10 pixeliä: ffmpeg -r 1/1 -f image2 -i subtitlet/270.png -vf "fps=10,format=rgba,geq='r=if(gt(alpha(X,Y),0),255):g=if(gt(alpha(X,Y),0),255):b=if(gt(alpha(X,Y),0),255):a=0',cropdetect=1:2:1" -f null -
 // Yllä oleva tuottaa rivin: crop=200:46:860:102 ja kun lisää ylös ja alas 20 ja laidoille 10 pixeliä toimii tämä rivi hyvin: crop=220:86:850:82
-// 
+//
 // If lauseet toimii näin: jokaisella värikanavalla (r,g,b, alpha) testataan onko pixelien arvo suurempi kuin nolla ja pixelin arvoksi asetetaan 255, eli gt(alpha(X,Y),0) vertaa kaikkilal X:n ja Y:n koordinaateilla väriarvoa nollaan ja palauttaa 1 alpha(X,Y) on suurempi kuin 0. Tämä edellinen arvo (1 tai 0) on if lauseen evaluation, eli jos numero on 1 palauttaa if lause pilkun jälkeen olevan arvon 255 muussa tapauksessa palauttaa 0. If lauseen palauttama arvo päättyy muuttujiin r,g,b ja alpha.
-// 
+//
 // ImageMagic autocrop: https://www.imagemagick.org/discourse-server/viewtopic.php?t=23613
 // convert 270.png -fuzz 28% -trim +repage 270_kropattu.png
 //
 // Tämäkin toimii: convert 270.png -trim 270_kropattu-2.png
 // Jos -trim ei jätä jäljelle mitään, tulee herja:
-// 
+//
 // convert 285.png -trim 285_kropattu.png
 // convert: geometry does not contain image `285.png' @ warning/attribute.c/GetImageBoundingBox/240.
-// 
+//
 // Tämä palauttaa arvot, joilla ImageMagic tulee kroppaamaan kuvan, mutta ei tee varsinaista kropppia:
 //
 // convert 290.png -trim -print "%[fx:w]x%[fx:h]+%[fx:page.x]+%[fx:page.y]" null:
@@ -2577,7 +2537,7 @@ func main() {
 // Tämä palauttaa kroppiarvot ja kroppaa : convert 290.png -trim -print "%[fx:w]x%[fx:h]+%[fx:page.x]+%[fx:page.y]\n" 290-kropattu.png
 // 1012x140+454+832
 //
-// mogrify -trim -print "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]\n" koe.png 
+// mogrify -trim -print "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]\n" koe.png
 // 720,576,457,66,132,429
 //
 // convert -trim -print "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]\n" koe.png kropattu.png
@@ -2599,7 +2559,7 @@ func main() {
 //
 //
 //
-// Tämä kroppaa ja tulostaa siitä tietoja: convert -verbose 290.png -trim 290-kropattu.png 
+// Tämä kroppaa ja tulostaa siitä tietoja: convert -verbose 290.png -trim 290-kropattu.png
 // 290.png PNG 1920x1080 1920x1080+0+0 8-bit sRGB 25690B 0.110u 0:00.069
 // 290.png=>290-kropattu.png PNG 1920x1080=>1012x140 1920x1080+454+832 8-bit sRGB 25690B 0.070u 0:00.03
 //
@@ -2623,42 +2583,47 @@ func main() {
 // cp subtitlet/*.png subtitlet-kropattu/
 // mogrify -trim subtitlet-kropattu/*.png
 //
-// identify subtitlet-kropattu/270.png 
+// identify subtitlet-kropattu/270.png
 // subtitlet-kropattu/270.png PNG 202x51 1920x1080+859+98 8-bit Grayscale Gray 3384B 0.000u 0:00.00p
 // Eli kropatun kuvan leveys on 202 ja korkeus 51.
-// 
+//
 // (1920 / 2) - (202 / 2) = 859
 // 10 = pixeliä yläreunasta alaspäin.
 // convert -colorspace gray -size 1920x1080 xc:transparent subtitlet-kropattu/270.png -composite -compose over testi.png
-// 
+//
 // Keskitys yläreunaan:
 // --------------------
 // convert -colorspace gray -size 1920x1080 xc:transparent subtitlet-kropattu/270.png -geometry +859+10 -composite -compose over testi.png
 // tai:
 // convert -colorspace gray -size 1920x1080 canvas:transparent subtitlet-kropattu/270.png -geometry +859+10 -composite -compose over testi.png
-// 
-// 
+//
+//
 // Keskitys alareunaan:
 // --------------------
 // Vähennetään taustakuvan korkeudesta kropatun kuvan korkeus ja vielä 10 pixeliä lisää jottei teksti ole kiinni alalaidassa:
 // 1080 - 10 - 51 = 1019
-// 
+//
 // convert -colorspace gray -size 1920x1080 canvas:transparent subtitlet-kropattu/270.png -geometry +859+1019 -composite -compose over testi-2.png
-// 
-// 
+//
+//
 // https://video.stackexchange.com/questions/24330/how-to-have-an-overlay-move-to-specific-points-at-specific-frames-using-ffmpeg
 // ffmpeg -i C:\src\assets\video\base.mp4 -i C:\card.png -y -filter_complex "[0:v][1:v]overlay=x='if(eq(n,439),300,0)':y='if(eq(n,439),300,0)':enable='eq(n,438)+eq(n,439)'[out]" -map [out] -map 0:a -ss 17 C:\temp\j7kthb0v\composit.mp4
-// 
+//
 // Not really. The filter isn't meant for animation like that. You can simplify it somewhat like this: x='0*eq(n,438)+300*eq(n,439)+X*eq(n,567)+...' – Gyan
 // I've been playing around with the variable n, in overlay if I were to do: overlay=x='( 605 + -0.8023952095808383 * n)':y='( 406 + -0.4365269461077843 * n)':enable='between(t,438/25,605/25)', does this mean the n would equal 0 and incremented for every frame it's visible for ? (605 - 438) – Shannon Hochkins
-// 
-// 
-// 
-// 
-// 
+//
+//
+//
+//
+//
 // https://ffmpeg.org/ffmpeg-utils.html
-// 
+//
 // -filter_script TiedostoNimi  tai   -filter_complex_script TiedostoNimi lataa filtteriasetukset tiedostosta
-// 
+//
+// ffmpeg -y -hide_banner -threads auto -i dvd-testi.mkv -f image2 -i /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Red_Dwarf/subtitletesti/00-processed_files/subtitles/dvd-testi.mkv-fixed_subtitles/subtitle-%10d.png -filter_complex '[0:v:0]idet,yadif=0:deint=all[video_processing_stream];[video_processing_stream][1:v:0]overlay=0:main_h-overlay_h+0[processed_combined_streams]' -map '[processed_combined_streams]' -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -acodec copy -map 0:a:0 -f mp4 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Red_Dwarf/subtitletesti/00-processed_files/dvd-testi.mp4
+//
+// convert -size 720x576 canvas:transparent -colorspace gray -alpha on testi.png
+//
+//
 //
 //
