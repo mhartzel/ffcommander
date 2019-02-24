@@ -16,7 +16,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.43" // This is the version of this program
+var version_number string = "1.44" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -2018,6 +2018,7 @@ func main() {
 				if *subtitle_split == true {
 
 					subtitle_source_file = "[1:v:"
+					subtitle_number = 0
 				}
 
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", subtitle_source_file + strconv.Itoa(subtitle_number) +
@@ -2395,6 +2396,11 @@ func main() {
 
 //
 // // FIXME
+//
+// FFstarfish
+// FFqueen
+// FFpuppet / FFpuppetmaster
+//
 //
 // Lue -sp koodi vielä ajatuksella läpi, sinne on saattanut jäädä epäloogisuuksia ja sotkuja.
 // -sp toimii tiff formaatilla nyt dvd:n osalta, mutta nykii edelleen BluRayssä (RedDwarf). Tää on ehkä nyt korjattu.
