@@ -16,7 +16,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.44" // This is the version of this program
+var version_number string = "1.45" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -799,6 +799,10 @@ func main() {
 	pass_2_elapsed_time := time.Since(pass_2_start_time)
 	subtitle_extract_start_time := time.Now()
 	subtitle_extract_elapsed_time := time.Since(subtitle_extract_start_time)
+	subtitle_trim_start_time := time.Now()
+	subtitle_trim_elapsed_time := time.Since(subtitle_extract_start_time)
+	subtitle_adjust_start_time := time.Now()
+	subtitle_adjust_elapsed_time := time.Since(subtitle_extract_start_time)
 
 	output_directory_name := "00-processed_files"
 	subtitle_extract_dir := "subtitles"
@@ -989,11 +993,12 @@ func main() {
 	denoise_options := []string{"hqdn3d=3.0:3.0:2.0:3.0"}
 	color_subsampling_options := []string{"-pix_fmt", "yuv420p"}
 	var ffmpeg_commandline_start []string
+	subtitle_stream_image_format := "tiff" // FFmpeg png extract is 30x slower than tiff, thats why we default to tiff.
 
 	//////////////////////////
 	// Imagemagick Options //
 	//////////////////////////
-	picture_margin := 10
+	subtitle_margin := 5 // With -sp option the subtitle is positioned this many pixels from the top / bottom of the video
 
 	// Determine output file container
 	output_video_format := []string{"-f", "mp4"}
@@ -1282,8 +1287,9 @@ func main() {
 		inputfile_name := filepath.Base(file_name)
 		input_filename_extension := filepath.Ext(inputfile_name)
 		output_file_absolute_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension)+output_filename_extension)
-		subtitles_absolute_extract_path := filepath.Join(inputfile_path, output_directory_name, subtitle_extract_dir, inputfile_name + "-"+original_subtitles_dir)
-		fixed_subtitles_absolute_path := filepath.Join(inputfile_path, output_directory_name, subtitle_extract_dir, inputfile_name + "-" + fixed_subtitles_dir)
+		subtitle_extract_base_path := filepath.Join(inputfile_path, output_directory_name, subtitle_extract_dir)
+		original_subtitles_absolute_path := filepath.Join(subtitle_extract_base_path, inputfile_name + "-"+original_subtitles_dir)
+		fixed_subtitles_absolute_path := filepath.Join(subtitle_extract_base_path, inputfile_name + "-" + fixed_subtitles_dir)
 
 		if *debug_mode_on == true {
 			fmt.Println("inputfile_path:", inputfile_path)
@@ -1293,6 +1299,9 @@ func main() {
 			fmt.Println("video_height:", video_height)
 			fmt.Println("orig_subtitle_path", orig_subtitle_path)
 			fmt.Println("cropped_subtitle_path", cropped_subtitle_path)
+			fmt.Println("subtitle_extract_base_path", subtitle_extract_base_path)
+			fmt.Println("original_subtitles_absolute_path", original_subtitles_absolute_path)
+			fmt.Println("fixed_subtitles_absolute_path", fixed_subtitles_absolute_path)
 		}
 
 		// Add messages to processing log.
@@ -1509,20 +1518,27 @@ func main() {
 			subtitle_extract_start_time = time.Now()
 
 			// Create output subdirectories
-			if _, err := os.Stat(subtitles_absolute_extract_path); os.IsNotExist(err) {
-				os.MkdirAll(subtitles_absolute_extract_path, 0777)
+			if _, err := os.Stat(original_subtitles_absolute_path); os.IsNotExist(err) {
+				os.MkdirAll(original_subtitles_absolute_path, 0777)
 			}
 
 			if _, err := os.Stat(fixed_subtitles_absolute_path); os.IsNotExist(err) {
 				os.MkdirAll(fixed_subtitles_absolute_path, 0777)
 			}
 
-			// Extract subtitle stream as on tiff for every frame of the movie.
+			/////////////////////////////////////////////////////////////////////////////
+			// Extract subtitle stream as separate images for every frame of the movie //
+			/////////////////////////////////////////////////////////////////////////////
 			ffmpeg_subtitle_extract_commandline = nil
 			ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, ffmpeg_commandline_start...)
-			ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-i", file_name, "-vn", "-an", "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number)+"]copy[subtitle_processing_stream]", "-map", "[subtitle_processing_stream]", filepath.Join(subtitles_absolute_extract_path, "subtitle-%10d.tiff"))
+			ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-i", file_name, "-vn", "-an", "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number)+"]copy[subtitle_processing_stream]", "-map", "[subtitle_processing_stream]", filepath.Join(original_subtitles_absolute_path, "subtitle-%10d." + subtitle_stream_image_format))
 
-			fmt.Println("Extracting subtitle stream as tiff - images. This might take a long time ...")
+			log_messages_str_slice = append(log_messages_str_slice, "")
+			log_messages_str_slice = append(log_messages_str_slice, "FFmpeg Subtitle Extract Options:")
+			log_messages_str_slice = append(log_messages_str_slice, "--------------------------------")
+			log_messages_str_slice = append(log_messages_str_slice, strings.Join(ffmpeg_subtitle_extract_commandline, " "))
+
+			fmt.Println("Extracting subtitle stream as " + subtitle_stream_image_format + " - images. This might take a long time ...")
 
 			error_code = nil
 			subtitle_extract_output, _, error_code = run_external_command(ffmpeg_subtitle_extract_commandline)
@@ -1538,45 +1554,58 @@ func main() {
 			}
 
 			subtitle_extract_elapsed_time = time.Since(subtitle_extract_start_time)
-			fmt.Printf("\nSubtitle extract processing took %s\n", subtitle_extract_elapsed_time.Round(time.Millisecond))
+			fmt.Printf("Subtitle extract processing took %s\n", subtitle_extract_elapsed_time.Round(time.Millisecond))
 			fmt.Println()
 
-			// Trimm extracted subtitles
-			fmt.Println("Trimming subtitle images. This might take a long time ...")
+			//////////////////////////////////////
+			// Trimm (Crop) extracted subtitles //
+			//////////////////////////////////////
+			subtitle_trim_start_time = time.Now()
+			fmt.Println("Cropping subtitle images. This might take a long time ...")
 
 			// Read in subtitle file names
-			files_str_slice := read_filenames_in_a_dir(subtitles_absolute_extract_path)
+			files_str_slice := read_filenames_in_a_dir(original_subtitles_absolute_path)
 			number_of_subtitle_files := len(files_str_slice)
 
 			var subtitles_dimension_map = make(map[string][]string)
 			var subtitle_dimension_info []string
+			var subtitle_convert_commandline []string
+			var empty_subtitle_creation_commandline []string
 
 			for subtitle_counter, subtitle_name := range files_str_slice {
 
-				fmt.Printf("\rProcessing image %d / %d", subtitle_counter+1, number_of_subtitle_files)
+				fmt.Printf("\rProcessing image %d / %d", subtitle_counter + 1, number_of_subtitle_files)
 
-				subtitle_trim_output, subtitle_trim_error, _ := run_external_command([]string{"convert", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]", filepath.Join(subtitles_absolute_extract_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+				subtitle_convert_commandline = nil
+				subtitle_convert_commandline = append(subtitle_convert_commandline, "convert", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]", filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
+				// subtitle_trim_output, subtitle_trim_error, _ := run_external_command([]string{"gm", "convert", "-trim", filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 
-				// If there is no subtitle in the image, then copy over the original image.
+				subtitle_trim_output, subtitle_trim_error, _ := run_external_command(subtitle_convert_commandline)
+
+				///////////////////////////////////////////////////////////////////////////////////////////////////
+				// If there is no subtitle in the image, then create a subtitle file with an empty alpha channel //
+				///////////////////////////////////////////////////////////////////////////////////////////////////
 				if subtitle_trim_error != "" {
 
-					// Copy original empty image over
+					// FIXME
+					// _, subtitle_trim_error, error_code := run_external_command([]string{"convert", filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+					// _, subtitle_trim_error, error_code := run_external_command([]string{"gm", "convert", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on", filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+
+					empty_subtitle_creation_commandline = nil
+					empty_subtitle_creation_commandline = append(empty_subtitle_creation_commandline, "convert", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on", filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
+					_, subtitle_trim_error, error_code := run_external_command(empty_subtitle_creation_commandline)
 
 					// FIXME
-					// _, subtitle_trim_error, error_code := run_external_command([]string{"convert", filepath.Join(subtitles_absolute_extract_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
-					_, subtitle_trim_error, error_code := run_external_command([]string{"convert", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on", filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
-
-					// FIXME
-					// _, subtitle_trim_error, error_code := run_external_command([]string{"cp", "-f", filepath.Join(subtitles_absolute_extract_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+					// _, subtitle_trim_error, error_code := run_external_command([]string{"cp", "-f", filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 
 					if error_code != nil {
-						fmt.Println("ImageMagick convert reported error:", subtitle_trim_error)
+						fmt.Println("\n\nImageMagick convert reported error:", subtitle_trim_error)
 					}
 					continue
 				}
 
 				// Take image properties before and after crop and store them in a map.
-				// Image info n 'subtitle_dimension_info' is:
+				// Image info in 'subtitle_dimension_info' is:
 				// Original width
 				// Original height
 				// Cropped width
@@ -1586,17 +1615,36 @@ func main() {
 
 				subtitle_dimension_info = strings.Split(subtitle_trim_output[0], ",")
 				subtitles_dimension_map[subtitle_name] = subtitle_dimension_info
-
 			}
 
+			log_messages_str_slice = append(log_messages_str_slice, "")
+			log_messages_str_slice = append(log_messages_str_slice, "Subtitle Trim Commandline Example:")
+			log_messages_str_slice = append(log_messages_str_slice, "-----------------------------------")
+			log_messages_str_slice = append(log_messages_str_slice, strings.Join(subtitle_convert_commandline, " "))
+
+			log_messages_str_slice = append(log_messages_str_slice, "")
+			log_messages_str_slice = append(log_messages_str_slice, "Example Of Overlaying Cropped Subtitle On Empty Alpha Channel Canvas")
+			log_messages_str_slice = append(log_messages_str_slice, "--------------------------------------------------------------------")
+			log_messages_str_slice = append(log_messages_str_slice, strings.Join(empty_subtitle_creation_commandline, " "))
+
+			subtitle_trim_elapsed_time = time.Since(subtitle_trim_start_time)
+			fmt.Printf("\nSubtitle cropping took %s", subtitle_trim_elapsed_time.Round(time.Millisecond))
 			fmt.Println()
 
-			// Overlay cropped subtitles on a new position on a transparent canvas
-			fmt.Println("\nAdjusting subtitle position on picture ...")
+			/////////////////////////////////////////////////////////////////////////
+			// Overlay cropped subtitles on a new position on a transparent canvas //
+			/////////////////////////////////////////////////////////////////////////
+			subtitle_adjust_start_time = time.Now()
+			fmt.Println("\nOverlaying cropped subtitles on empty alpha canvases ...")
 
 			var subtitle_new_y int
 			number_of_keys := len(subtitles_dimension_map)
 			counter := 0
+
+			video_height_int, _ := strconv.Atoi(video_height)
+			video_width_int, _ := strconv.Atoi(video_width)
+
+			var subtitle_adjust_commandline []string
 
 			for subtitle_name := range subtitles_dimension_map {
 
@@ -1611,25 +1659,25 @@ func main() {
 				// cropped_start_x ,_:= strconv.Atoi(subtitles_dimension_map[subtitle_name][4])
 				cropped_start_y, _ := strconv.Atoi(subtitles_dimension_map[subtitle_name][5])
 
-				video_height_int, _ := strconv.Atoi(video_height)
-				video_width_int, _ := strconv.Atoi(video_width)
 				picture_center := video_height_int / 2
 				subtitle_new_x := (video_width_int / 2) - (cropped_width / 2) // This centers cropped subtitle on the x axis
 
 				if cropped_start_y > picture_center {
-
 					// Center subtitle on the bottom of the picure
-					subtitle_new_y = video_height_int - cropped_height - picture_margin
+					subtitle_new_y = video_height_int - cropped_height - subtitle_margin
 
 				} else {
-
 					// Center subtitle on top of the picure
-					subtitle_new_y = picture_margin
+					subtitle_new_y = subtitle_margin
 				}
 
 				// FIXME
 				// _, subtitle_trim_error, error_code := run_external_command([]string{"convert", "-colorspace", "gray", "-size", strconv.Itoa(orig_width) + "x" + strconv.Itoa(orig_height), "canvas:transparent", filepath.Join(fixed_subtitles_absolute_path, subtitle_name), "-geometry", "+" + strconv.Itoa(subtitle_new_x) + "+" + strconv.Itoa(subtitle_new_y), "-composite", "-compose", "over", filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
-				_, subtitle_trim_error, error_code := run_external_command([]string{"convert", "-size", video_width + "x" + video_height, "canvas:transparent", filepath.Join(fixed_subtitles_absolute_path, subtitle_name), "-geometry", "+" + strconv.Itoa(subtitle_new_x) + "+" + strconv.Itoa(subtitle_new_y), "-composite", "-compose", "over", filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+
+				subtitle_adjust_commandline = nil
+				subtitle_adjust_commandline = append(subtitle_adjust_commandline, "convert", "-size", video_width + "x" + video_height, "canvas:transparent", filepath.Join(fixed_subtitles_absolute_path, subtitle_name), "-geometry", "+" + strconv.Itoa(subtitle_new_x) + "+" + strconv.Itoa(subtitle_new_y), "-composite", "-compose", "over", filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
+
+				_, subtitle_trim_error, error_code := run_external_command(subtitle_adjust_commandline)
 
 				if error_code != nil {
 					fmt.Println("ImageMagick convert reported error:", subtitle_trim_error)
@@ -1637,6 +1685,13 @@ func main() {
 
 			}
 
+			log_messages_str_slice = append(log_messages_str_slice, "")
+			log_messages_str_slice = append(log_messages_str_slice, "Example Of Overlaying Cropped Subtitle On An Empty Alpha Layer Canvas")
+			log_messages_str_slice = append(log_messages_str_slice, "---------------------------------------------------------------------")
+			log_messages_str_slice = append(log_messages_str_slice, strings.Join(subtitle_adjust_commandline, " "))
+
+			subtitle_adjust_elapsed_time = time.Since(subtitle_adjust_start_time)
+			fmt.Printf("\nCreations of fixed subtitles took %s", subtitle_adjust_elapsed_time.Round(time.Millisecond))
 			fmt.Println()
 		}
 
@@ -1887,7 +1942,7 @@ func main() {
 
 			} else if *subtitle_split == true {
 
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name, "-f", "image2", "-i", filepath.Join(fixed_subtitles_absolute_path, "subtitle-%10d.tiff"))
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name, "-f", "image2", "-i", filepath.Join(fixed_subtitles_absolute_path, "subtitle-%10d." + subtitle_stream_image_format))
 
 			} else {
 
@@ -2343,8 +2398,19 @@ func main() {
 				}
 			}
 
+			if *subtitle_split == true {
+				if *debug_mode_on == true {
+					fmt.Println("\nImportant !!!!!!! Extracted subtitle images are not deleted in debug - mode.\n")
+				} else {
+					// Remove subtitle extract base directory and all its contents
+					if _, err := os.Stat(subtitle_extract_base_path); err == nil {
+						os.RemoveAll(subtitle_extract_base_path)
+					}
+				}
+			}
+
 			elapsed_time := time.Since(start_time)
-			fmt.Printf("Processing took %s", elapsed_time.Round(time.Millisecond))
+			fmt.Printf("All processing took %s", elapsed_time.Round(time.Millisecond))
 			fmt.Println()
 
 			// Add messages to processing log.
@@ -2354,7 +2420,7 @@ func main() {
 			total_elapsed_time := elapsed_time.Round(time.Millisecond)
 			log_messages_str_slice = append(log_messages_str_slice, "Pass 1 took: "+pass_1_elapsed_time.String())
 			log_messages_str_slice = append(log_messages_str_slice, "Pass 2 took: "+pass_2_elapsed_time.String())
-			log_messages_str_slice = append(log_messages_str_slice, "Processing took: "+total_elapsed_time.String())
+			log_messages_str_slice = append(log_messages_str_slice, "All processing took: "+total_elapsed_time.String())
 
 			if split_video == true {
 				log_messages_str_slice = append(log_messages_str_slice, "\nPlease check the following edit positions for video / audio glitches: ")
@@ -2400,8 +2466,28 @@ func main() {
 // FFstarfish
 // FFqueen
 // FFpuppet / FFpuppetmaster
+// FFcommander
+// FFpilot 
+//
+// convert -trim -print %[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y] subtitle-0000042239.tiff testi.tiff
+// 1920,1080,843,144,539,832
+//
+// gm convert -monitor -trim subtitle-0000042239.tiff testi.tiff
+// 100% [subtitle-0000042239.tiff] Loading image: 1920x1080...  
+// 100% [subtitle-0000042239.tiff] Get bounding box...
+// 100% [subtitle-0000042239.tiff] Crop: 843x144+539+832...
+// 100% [testi.tiff] Saving image: 843x144...  
+//
+// gm convert -verbose -trim -format %[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y] subtitle-0000042239.tiff testi.tiff
+// subtitle-0000042239.tiff TIFF 1920x1080=>843x144+0+0 DirectClass 8-bit 0.070u 0m:0.032909s (60.1Mi pixels/s)
+// subtitle-0000042239.tiff=>testi.tiff TIFF 1920x1080=>843x144+0+0 DirectClass 8-bit 475.0Ki 0.000u 0m:0.001796s (1.1Gi pixels/s)
+//
+// convert -verbose -trim -print %[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y] subtitle-0000042239.tiff testi.tiff
+// subtitle-0000042239.tiff TIFF 1920x1080 1920x1080+0+0 8-bit TrueColor sRGB 302186B 0.060u 0:00.060
+// subtitle-0000042239.tiff=>testi.tiff TIFF 1920x1080=>843x144 1920x1080+539+832 8-bit GrayscaleAlpha Gray 89562B 0.010u 0:00.009
 //
 //
+// export MAGICK_THREAD_LIMIT=1 nopeuttaa ImageMagick:iä n. 2x
 // Lue -sp koodi vielä ajatuksella läpi, sinne on saattanut jäädä epäloogisuuksia ja sotkuja.
 // -sp toimii tiff formaatilla nyt dvd:n osalta, mutta nykii edelleen BluRayssä (RedDwarf). Tää on ehkä nyt korjattu.
 // -sp marginaali näytön ylä- tai alareunaa pitää skaalautua videon reson mukaa. BluRayssä 10 pixeliä on aika hyvä dvdssä sen pitäis olla pienempi.
