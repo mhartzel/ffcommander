@@ -16,7 +16,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.45" // This is the version of this program
+var version_number string = "1.47" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
