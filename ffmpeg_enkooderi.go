@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"bufio"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -16,7 +17,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.47" // This is the version of this program
+var version_number string = "1.48" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -701,6 +702,43 @@ func read_filenames_in_a_dir(source_dir string) (files_str_slice []string) {
 
 	return files_str_slice
 }
+
+func subtitle_trim() () {
+}
+
+func subtitle_overlay() () {
+}
+
+func get_number_of_physical_processors () (int, error) {
+
+	/////////////////////////////////
+	// This is Linux specific code //
+	/////////////////////////////////
+
+	var number_of_physical_processors int
+
+	// Read in /proc/cpuinfo
+	file_handle, err := os.Open("/proc/cpuinfo")
+
+	if err != nil {
+		return 0, err
+	}
+
+	defer file_handle.Close()
+
+	scanner := bufio.NewScanner(file_handle)
+	scanner.Split(bufio.ScanLines)
+
+	for scanner.Scan() {
+
+		if strings.HasPrefix(scanner.Text(), "processor") {
+			number_of_physical_processors++
+		}
+	}
+
+	return number_of_physical_processors, err
+}
+
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1511,7 +1549,7 @@ func main() {
 		// Subtitle Split. Move subtitles that are above the center of the screen up to the top of the screen and subtitles below center down on the bottom of the screen //
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		if *subtitle_split == true && subtitle_number != -1 {
+		if *subtitle_split == true && subtitle_number > -1 {
 
 			var subtitle_extract_output []string
 
@@ -1541,7 +1579,9 @@ func main() {
 			fmt.Println("Extracting subtitle stream as " + subtitle_stream_image_format + " - images. This might take a long time ...")
 
 			error_code = nil
-			subtitle_extract_output, _, error_code = run_external_command(ffmpeg_subtitle_extract_commandline)
+
+			// FIXME poista kommentointi alta
+			// subtitle_extract_output, _, error_code = run_external_command(ffmpeg_subtitle_extract_commandline)
 
 			if error_code != nil {
 
@@ -1560,6 +1600,17 @@ func main() {
 			//////////////////////////////////////
 			// Trimm (Crop) extracted subtitles //
 			//////////////////////////////////////
+			number_of_physical_processors, err := get_number_of_physical_processors()
+
+			if number_of_physical_processors < 1 || err != nil {
+				number_of_physical_processors = 2
+
+				fmt.Println()
+				fmt.Println("ERROR, Could not find out the number of physical processors:", err)
+				fmt.Println("Using 2 threads for processing")
+				fmt.Println()
+			}
+
 			subtitle_trim_start_time = time.Now()
 			fmt.Println("Cropping subtitle images. This might take a long time ...")
 
@@ -1567,6 +1618,117 @@ func main() {
 			files_str_slice := read_filenames_in_a_dir(original_subtitles_absolute_path)
 			number_of_subtitle_files := len(files_str_slice)
 
+			subtitle_divider := (number_of_subtitle_files / number_of_physical_processors)
+			// type pointer_to_subtitle_slice interface{}
+			// var slice_of_subtitle_slices []pointer_to_subtitle_slice
+			var slice_of_subtitle_slices []*[]string // Slice of pointers to slices of strings :)
+			subtitle_slice := make([]string, 0, 0) // Make empty slice of strings
+			var subtitle_division_counter int
+
+			testi1 := make([]string,10)
+			fmt.Printf("&testi1: %p\n", &testi1)
+			testi1 = nil
+			testi1 = make([]string,10)
+			fmt.Printf("&testi1: %p\n", &testi1)
+			fmt.Printf("&testi1[0]: %p\n", &testi1[0])
+			koe2 := &testi1
+			fmt.Printf("koe2: %p\n",koe2)
+
+
+			empty_slice := make([]string, 0, 0)
+
+			for counter := 0 ; counter < number_of_subtitle_files ; counter++ {
+
+				// Create a new subtitle slice and store its pointer to a slice
+				if counter % subtitle_divider == 0 {
+					subtitle_slice = nil
+					// subtitle_slice = make([]string, subtitle_divider + number_of_physical_processors, subtitle_divider + number_of_physical_processors)
+					copy(subtitle_slice, empty_slice)
+					fmt.Printf("osoite: %p\n", subtitle_slice)
+					slice_of_subtitle_slices = append(slice_of_subtitle_slices, &subtitle_slice)
+					subtitle_division_counter = 0
+
+					fmt.Printf("Loin uuden slicen %p", &subtitle_slice)
+					fmt.Printf("   slice_of_subtitle_slices: ")
+
+					for counter_y ,_ := range slice_of_subtitle_slices {
+						fmt.Printf("%p, ", slice_of_subtitle_slices[counter_y])
+					}
+
+					fmt.Println("   len(slice_of_subtitle_slices)", len(slice_of_subtitle_slices))
+				}
+
+
+				subtitle_slice = append(subtitle_slice, files_str_slice[subtitle_division_counter])
+				subtitle_division_counter++
+			}
+
+			subtitle_slice = *slice_of_subtitle_slices[0]
+
+			for temp_counter_x ,_ := range subtitle_slice {
+				fmt.Printf("%s\n", subtitle_slice[temp_counter_x])
+			}
+
+			fmt.Println()
+
+			// FIXME
+
+
+			fmt.Println("############################################################################################")
+			fmt.Println("len(slice_of_subtitle_slices)", len(slice_of_subtitle_slices))
+			fmt.Printf("slice_of_subtitle_slices %p\n", slice_of_subtitle_slices)
+
+			for counter_x := 0 ; counter_x < len(slice_of_subtitle_slices) ; counter_x++ {
+				pointer_to_slice := slice_of_subtitle_slices[counter_x]
+				//fmt.Println(pointer_to_slice)
+				fmt.Printf("pointer_to_slice: %p\n", pointer_to_slice)
+			}
+
+			fmt.Println("############################################################################################")
+
+			var pointer_to_slice *[]string
+			pointer_to_slice = slice_of_subtitle_slices[0]
+			fmt.Printf("%p\n", pointer_to_slice)
+			fmt.Println("pointer_to_slice:", pointer_to_slice)
+			fmt.Println("pointer_to_slice:", pointer_to_slice)
+
+			// fmt.Println(pointer_to_slice[0])
+
+
+			// fmt.Printf("slice_of_subtitle_slices: ")
+
+			// for temp_counter_x := range slice_of_subtitle_slices {
+			// 	fmt.Printf("%p, ", slice_of_subtitle_slices[temp_counter_x])
+
+			// 	temp_slice := &slice_of_subtitle_slices[temp_counter_x]
+
+			// 	fmt.Println("temp_slice:", temp_slice)
+
+			// 	// for temp_counter_2 := 0 ; temp_counter_2 < len(temp_slice) ; temp_counter_2++ {
+			// 	// 	fmt.Println(temp_slice[temp_counter_2])
+			// 	// }
+			// }
+
+
+			// subtitle_slice_pointer := slice_of_subtitle_slices[0]
+			// fmt.Println()
+			// fmt.Println("len(slice_of_subtitle_slices)", len(slice_of_subtitle_slices))
+
+			// fmt.Println("subtitle_divider:", subtitle_divider)
+			// fmt.Printf("slice_of_subtitle_slices: %p\n", slice_of_subtitle_slices)
+			// fmt.Printf("subtitle_slice: %p\n", subtitle_slice)
+			// fmt.Printf("len(subtitle_slice): %d\n", len(subtitle_slice))
+
+			// for counter_y :=0 ; counter_y < len(subtitle_slice) ; counter_y++ {
+			// 	fmt.Printf("subtitle_slice: %s\n", subtitle_slice[counter_y])
+			// }
+
+			os.Exit(0)
+
+			// FIXME Tässä pitää lisätä viimeiseen slaissiin vikat jakojäännöstä jäljelle jääneet subtitlenimet
+
+
+			// FIXME muuta tämä mäppi slaissiksi, niin toimii luultavasti nopeemmin
 			var subtitles_dimension_map = make(map[string][]string)
 			var subtitle_dimension_info []string
 			var subtitle_convert_commandline []string
