@@ -17,7 +17,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.49" // This is the version of this program
+var version_number string = "1.50" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -710,19 +710,6 @@ func read_filenames_in_a_dir(source_dir string) (files_str_slice []string) {
 
 func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_absolute_path string, files_str_slice []string, video_width string, video_height string) {
 
-	// FIXME
-	fmt.Println("original_subtitles_absolute_path:", original_subtitles_absolute_path)
-	fmt.Println("fixed_subtitles_absolute_path:", fixed_subtitles_absolute_path)
-	fmt.Println("video_width:", video_width)
-	fmt.Println("video_height:", video_height)
-	fmt.Println()
-
-	for counter, subtile_name := range files_str_slice {
-		fmt.Println(counter, subtile_name)
-	}
-
-	return
-
 	var subtitle_dimension_info []string
 	var empty_subtitle_creation_commandline []string
 	// FIXME muuta tämä mäppi slaissiksi, niin toimii luultavasti nopeemmin ?
@@ -734,6 +721,7 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 
 	var empty_subtitle_creation_commandline_start []string
 	empty_subtitle_creation_commandline_start = append(empty_subtitle_creation_commandline_start, "convert", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on")
+	var empty_subtitle_path string
 
 	for _, subtitle_name := range files_str_slice {
 
@@ -753,15 +741,35 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 			// _, subtitle_trim_error, error_code := run_external_command([]string{"gm", "convert", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on", filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 
 			// FIXME tän pitää linkittää kaikki paitsi ekat tyhjä kuva
-			empty_subtitle_creation_commandline = nil
-			empty_subtitle_creation_commandline = append(empty_subtitle_creation_commandline_start, filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
-			_, subtitle_trim_error, error_code := run_external_command(empty_subtitle_creation_commandline)
+			if empty_subtitle_path == "" {
 
-			// FIXME
-			// _, subtitle_trim_error, error_code := run_external_command([]string{"cp", "-f", filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+				// Create an empty picture with nothing but transparency in it.
+				empty_subtitle_path = filepath.Join(fixed_subtitles_absolute_path, subtitle_name)
+				empty_subtitle_creation_commandline = nil
+				empty_subtitle_creation_commandline = append(empty_subtitle_creation_commandline_start,empty_subtitle_path)
+				_, subtitle_trim_error, error_code := run_external_command(empty_subtitle_creation_commandline)
 
-			if error_code != nil {
-				fmt.Println("\n\nImageMagick convert reported error:", subtitle_trim_error)
+				// FIXME
+				// _, subtitle_trim_error, error_code := run_external_command([]string{"cp", "-f", filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+
+				if error_code != nil {
+					fmt.Println("\n\nImageMagick convert reported error:", subtitle_trim_error)
+				}
+			} else {
+				// We already created an image with nothing but tranceparency in it,
+				// don't create a new one but create a synbolic link to the existing image.
+
+				err := os.Remove(filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
+
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				err = os.Symlink(empty_subtitle_path, filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
+
+				if err != nil {
+					log.Fatal(err)
+				}
 			}
 			continue
 		}
@@ -995,6 +1003,7 @@ func main() {
 	if *subtitle_split == true {
 		find_executable_path("convert")
 		find_executable_path("mogrify")
+		os.Setenv("MAGICK_THREAD_LIMIT", "1") // Disable ImageMagick multithreading it only makes processing slower. This sets an environment variable in the os.
 	}
 
 	// Test that user gave a string not a number for options -a and -s
@@ -1727,7 +1736,7 @@ func main() {
 			}
 
 			subtitle_processing_start_time = time.Now()
-			fmt.Println("Processing subtitle images in ", strconv.Itoa(number_of_physical_processors), "threads. This might take a long time ...")
+			fmt.Println("Processing subtitle images in", strconv.Itoa(number_of_physical_processors), "threads. This might take a long time ...")
 
 			// Read in subtitle file names
 			files_str_slice := read_filenames_in_a_dir(original_subtitles_absolute_path)
@@ -1741,10 +1750,6 @@ func main() {
 
 			subtitle_end_number := 0
 
-			// FIXME
-			fmt.Println("number_of_subtitle_files:", number_of_subtitle_files)
-			fmt.Println("subtitle_divider", subtitle_divider)
-
 			// Start goroutines
 			for subtitle_start_number := 0 ; subtitle_end_number < number_of_subtitle_files ; {
 
@@ -1753,9 +1758,6 @@ func main() {
 				if subtitle_end_number + 1 > number_of_subtitle_files {
 					subtitle_end_number = number_of_subtitle_files
 				}
-
-				// FIXME
-				fmt.Println("subtitle_start_number:", subtitle_start_number, "subtitle_end_number:", subtitle_end_number - 1) // Slaissi excluudaa vikan numeron, siksi tässä loppusolun numerosta vähennetään 1.
 
 				subtitle_trim(original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_str_slice[subtitle_start_number : subtitle_end_number], video_width, video_height)
 				subtitle_start_number =  subtitle_end_number
@@ -1766,9 +1768,6 @@ func main() {
 			subtitle_processing_elapsed_time = time.Since(subtitle_processing_start_time)
 			fmt.Printf("\nSubtitle processing took %s", subtitle_processing_elapsed_time.Round(time.Millisecond))
 			fmt.Println()
-
-			// FIXME
-			os.Exit(0)
 		}
 
 		/////////////////////////////////////////////////////////////
