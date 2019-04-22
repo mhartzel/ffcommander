@@ -17,7 +17,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.51" // This is the version of this program
+var version_number string = "1.52" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -33,9 +33,10 @@ var subtitle_margin int = 5  // With -sp option the subtitle is positioned this 
 // There can be many audio and subtitle streams in a file.
 var Complete_file_info_slice [][][][]string
 
-func run_external_command(command_to_run_str_slice []string) (stdout_output []string, stderr_output string, error_code error) {
+func run_external_command(command_to_run_str_slice []string) (stdout_output []string, stderr_output []string, error_code error) {
 
 	command_output_str := ""
+	stderror_output_str := ""
 
 	// Create the struct needed for running the external command
 	command_struct := exec.Command(command_to_run_str_slice[0], command_to_run_str_slice[1:]...)
@@ -48,11 +49,16 @@ func run_external_command(command_to_run_str_slice []string) (stdout_output []st
 	error_code = command_struct.Run()
 
 	command_output_str = string(stdout.Bytes())
-	stderr_output = string(stderr.Bytes())
+	stderror_output_str = string(stderr.Bytes())
 
 	// Split the output of the command to lines and store in a slice
 	for _, line := range strings.Split(command_output_str, "\n") {
 		stdout_output = append(stdout_output, line)
+	}
+
+	// Split the output of the stderr to lines and store in a slice
+	for _, line := range strings.Split(stderror_output_str, "\n") {
+		stderr_output = append(stderr_output, line)
 	}
 
 	return stdout_output, stderr_output, error_code
@@ -712,7 +718,6 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 
 	var subtitle_dimension_info []string
 	var empty_subtitle_creation_commandline []string
-	// FIXME muuta tämä mäppi slaissiksi, niin toimii luultavasti nopeemmin ?
 	var subtitles_dimension_map = make(map[string][]string)
 
 	var subtitle_trim_commandline_start []string
@@ -729,28 +734,24 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 		subtitle_trim_commandline = append(subtitle_trim_commandline_start, filepath.Join(original_subtitles_absolute_path, subtitle_name), "-compress", "rle", filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
 		// subtitle_trim_output, subtitle_trim_error, _ := run_external_command([]string{"gm", "convert", "-trim", filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 
-		subtitle_trim_output, subtitle_trim_error, _ := run_external_command(subtitle_trim_commandline)
+		subtitle_trim_output, subtitle_trim_error, trim_error_code := run_external_command(subtitle_trim_commandline)
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////
 		// If there is no subtitle in the image, then create a subtitle file with an empty alpha channel //
 		///////////////////////////////////////////////////////////////////////////////////////////////////
-		if subtitle_trim_error != "" {
+		if trim_error_code != nil {
 
 			// FIXME
 			// _, subtitle_trim_error, error_code := run_external_command([]string{"convert", filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 			// _, subtitle_trim_error, error_code := run_external_command([]string{"gm", "convert", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on", filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 
-			// FIXME tän pitää linkittää kaikki paitsi ekat tyhjä kuva
 			if empty_subtitle_path == "" {
 
 				// Create an empty picture with nothing but transparency in it.
 				empty_subtitle_path = filepath.Join(fixed_subtitles_absolute_path, subtitle_name)
 				empty_subtitle_creation_commandline = nil
 				empty_subtitle_creation_commandline = append(empty_subtitle_creation_commandline_start, empty_subtitle_path)
-				_, subtitle_trim_error, error_code := run_external_command(empty_subtitle_creation_commandline)
-
-				// FIXME
-				// _, subtitle_trim_error, error_code := run_external_command([]string{"cp", "-f", filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+				_, _, error_code := run_external_command(empty_subtitle_creation_commandline)
 
 				if error_code != nil {
 					fmt.Println("\n\nImageMagick convert reported error:", subtitle_trim_error)
@@ -1856,7 +1857,7 @@ func main() {
 						fmt.Println()
 					}
 
-					ffmpeg_crop_output, _, error_code := run_external_command(command_to_run_str_slice)
+					_, ffmpeg_crop_output, error_code := run_external_command(command_to_run_str_slice)
 
 					if error_code != nil {
 
@@ -1912,7 +1913,7 @@ func main() {
 					fmt.Println()
 				}
 
-				ffmpeg_crop_output, _, error_code := run_external_command(command_to_run_str_slice)
+				_, ffmpeg_crop_output, error_code := run_external_command(command_to_run_str_slice)
 
 				if error_code != nil {
 
@@ -2568,6 +2569,7 @@ func main() {
 // FFpuppet / FFpuppetmaster
 // FFcommander  Tätä ei löydy googlaamalla, valitse tämä :)
 // FFpilot 
+
 //
 // convert -trim -print %[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y] subtitle-0000042239.tiff testi.tiff
 // 1920,1080,843,144,539,832
