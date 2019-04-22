@@ -17,7 +17,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.50" // This is the version of this program
+var version_number string = "1.51" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -708,7 +708,7 @@ func read_filenames_in_a_dir(source_dir string) (files_str_slice []string) {
 	return files_str_slice
 }
 
-func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_absolute_path string, files_str_slice []string, video_width string, video_height string) {
+func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_absolute_path string, files_str_slice []string, video_width string, video_height string, process_number int, return_channel chan int) {
 
 	var subtitle_dimension_info []string
 	var empty_subtitle_creation_commandline []string
@@ -720,13 +720,13 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 	var subtitle_trim_commandline []string
 
 	var empty_subtitle_creation_commandline_start []string
-	empty_subtitle_creation_commandline_start = append(empty_subtitle_creation_commandline_start, "convert", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on")
+	empty_subtitle_creation_commandline_start = append(empty_subtitle_creation_commandline_start, "convert", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on", "-compress", "rle")
 	var empty_subtitle_path string
 
 	for _, subtitle_name := range files_str_slice {
 
 		subtitle_trim_commandline = nil
-		subtitle_trim_commandline = append(subtitle_trim_commandline_start, filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
+		subtitle_trim_commandline = append(subtitle_trim_commandline_start, filepath.Join(original_subtitles_absolute_path, subtitle_name), "-compress", "rle", filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
 		// subtitle_trim_output, subtitle_trim_error, _ := run_external_command([]string{"gm", "convert", "-trim", filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 
 		subtitle_trim_output, subtitle_trim_error, _ := run_external_command(subtitle_trim_commandline)
@@ -746,7 +746,7 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 				// Create an empty picture with nothing but transparency in it.
 				empty_subtitle_path = filepath.Join(fixed_subtitles_absolute_path, subtitle_name)
 				empty_subtitle_creation_commandline = nil
-				empty_subtitle_creation_commandline = append(empty_subtitle_creation_commandline_start,empty_subtitle_path)
+				empty_subtitle_creation_commandline = append(empty_subtitle_creation_commandline_start, empty_subtitle_path)
 				_, subtitle_trim_error, error_code := run_external_command(empty_subtitle_creation_commandline)
 
 				// FIXME
@@ -824,7 +824,7 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 		// _, subtitle_trim_error, error_code := run_external_command([]string{"convert", "-colorspace", "gray", "-size", strconv.Itoa(orig_width) + "x" + strconv.Itoa(orig_height), "canvas:transparent", filepath.Join(fixed_subtitles_absolute_path, subtitle_name), "-geometry", "+" + strconv.Itoa(subtitle_new_x) + "+" + strconv.Itoa(subtitle_new_y), "-composite", "-compose", "over", filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 
 		subtitle_adjust_commandline = nil
-		subtitle_adjust_commandline = append(subtitle_adjust_commandline, "convert", "-size", video_width + "x" + video_height, "canvas:transparent", filepath.Join(fixed_subtitles_absolute_path, subtitle_name), "-geometry", "+" + strconv.Itoa(subtitle_new_x) + "+" + strconv.Itoa(subtitle_new_y), "-composite", "-compose", "over", filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
+		subtitle_adjust_commandline = append(subtitle_adjust_commandline, "convert", "-size", video_width + "x" + video_height, "canvas:transparent", filepath.Join(fixed_subtitles_absolute_path, subtitle_name), "-geometry", "+" + strconv.Itoa(subtitle_new_x) + "+" + strconv.Itoa(subtitle_new_y), "-composite", "-compose", "over", "-compress", "rle", filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
 
 		_, subtitle_trim_error, error_code := run_external_command(subtitle_adjust_commandline)
 
@@ -832,6 +832,7 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 			fmt.Println("ImageMagick convert reported error:", subtitle_trim_error)
 		}
 	}
+	return_channel <- process_number
 }
 
 func get_number_of_physical_processors () (int, error) {
@@ -1736,7 +1737,7 @@ func main() {
 			}
 
 			subtitle_processing_start_time = time.Now()
-			fmt.Println("Processing subtitle images in", strconv.Itoa(number_of_physical_processors), "threads. This might take a long time ...")
+			fmt.Println("Processing subtitle images in multiple threads. This might take a long time ...")
 
 			// Read in subtitle file names
 			files_str_slice := read_filenames_in_a_dir(original_subtitles_absolute_path)
@@ -1751,6 +1752,9 @@ func main() {
 			subtitle_end_number := 0
 
 			// Start goroutines
+			return_channel := make(chan int, number_of_physical_processors + 1)
+			process_number := 1
+
 			for subtitle_start_number := 0 ; subtitle_end_number < number_of_subtitle_files ; {
 
 				subtitle_end_number = subtitle_start_number + subtitle_divider
@@ -1759,11 +1763,32 @@ func main() {
 					subtitle_end_number = number_of_subtitle_files
 				}
 
-				subtitle_trim(original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_str_slice[subtitle_start_number : subtitle_end_number], video_width, video_height)
+				go subtitle_trim(original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_str_slice[subtitle_start_number : subtitle_end_number], video_width, video_height, process_number, return_channel)
+
+				if *debug_mode_on == true {
+					fmt.Println("Process number:", process_number, "started. It processes subtitles:", subtitle_start_number + 1, "-", subtitle_end_number)
+				}
+
+				process_number++
 				subtitle_start_number =  subtitle_end_number
 			}
 
-			// FIXME Tästä puuttu chanelin luominen ja prosessien valmistumisen odotus. Yksittäisten prosessien valmistumisesta vois tulostaa jotain ?
+			// Wait for subtitle processing in goroutines to end
+			processes_stopped := 1
+
+			if *debug_mode_on == true {
+				fmt.Println()
+			}
+
+			for processes_stopped < process_number {
+				return_message := <- return_channel
+
+				if *debug_mode_on == true {
+					fmt.Println("Process number:", return_message, "ended.")
+				}
+
+				processes_stopped++
+			}
 
 			subtitle_processing_elapsed_time = time.Since(subtitle_processing_start_time)
 			fmt.Printf("\nSubtitle processing took %s", subtitle_processing_elapsed_time.Round(time.Millisecond))
