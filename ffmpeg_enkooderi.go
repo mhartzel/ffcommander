@@ -17,17 +17,12 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.52" // This is the version of this program
+var version_number string = "1.53" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
 var subtitle_stream_info_map = make(map[string]string)
 var wrapper_info_map = make(map[string]string)
-
-//////////////////////////
-// Imagemagick Options //
-//////////////////////////
-var subtitle_margin int = 5  // With -sp option the subtitle is positioned this many pixels from the top / bottom of the video
 
 // Create a slice for storing all video, audio and subtitle stream infos for each input file.
 // There can be many audio and subtitle streams in a file.
@@ -794,10 +789,20 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 
 	video_height_int, _ := strconv.Atoi(video_height)
 	video_width_int, _ := strconv.Atoi(video_width)
+	var subtitle_adjust_commandline []string
 	var subtitle_new_y int
 	counter := 0
 
-	var subtitle_adjust_commandline []string
+	// Define the the position of the subtitle to be 5 - 10 pixels from the top / bottom of picture depending on the video height.
+	var subtitle_margin int = video_height_int / 100
+
+	if subtitle_margin < 5 {
+		subtitle_margin = 5
+	}
+
+	if subtitle_margin > 10 {
+		subtitle_margin = 10
+	}
 
 	for subtitle_name := range subtitles_dimension_map {
 
