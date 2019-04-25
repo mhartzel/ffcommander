@@ -3,8 +3,10 @@ package main
 import (
 	"bytes"
 	"bufio"
+	"crypto/md5"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -17,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.53" // This is the version of this program
+var version_number string = "1.54" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -712,16 +714,21 @@ func read_filenames_in_a_dir(source_dir string) (files_str_slice []string) {
 func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_absolute_path string, files_str_slice []string, video_width string, video_height string, process_number int, return_channel chan int) {
 
 	var subtitle_dimension_info []string
-	var empty_subtitle_creation_commandline []string
 	var subtitles_dimension_map = make(map[string][]string)
 
 	var subtitle_trim_commandline_start []string
 	subtitle_trim_commandline_start = append(subtitle_trim_commandline_start, "convert", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]")
 	var subtitle_trim_commandline []string
 
-	var empty_subtitle_creation_commandline_start []string
-	empty_subtitle_creation_commandline_start = append(empty_subtitle_creation_commandline_start, "convert", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on", "-compress", "rle")
-	var empty_subtitle_path string
+	// FIXME
+	// var empty_subtitle_creation_commandline_start []string
+	// empty_subtitle_creation_commandline_start = append(empty_subtitle_creation_commandline_start, "convert", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on", "-compress", "rle")
+	// var empty_subtitle_creation_commandline []string
+	// var empty_subtitle_path string
+
+	///////////////////////////////////////////////////////////////////
+	// Trim subtitles, removing empty space around the subtitle text //
+	///////////////////////////////////////////////////////////////////
 
 	for _, subtitle_name := range files_str_slice {
 
@@ -740,33 +747,38 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 			// _, subtitle_trim_error, error_code := run_external_command([]string{"convert", filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 			// _, subtitle_trim_error, error_code := run_external_command([]string{"gm", "convert", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on", filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 
-			if empty_subtitle_path == "" {
+			// if empty_subtitle_path == "" {
 
-				// Create an empty picture with nothing but transparency in it.
-				empty_subtitle_path = filepath.Join(fixed_subtitles_absolute_path, subtitle_name)
-				empty_subtitle_creation_commandline = nil
-				empty_subtitle_creation_commandline = append(empty_subtitle_creation_commandline_start, empty_subtitle_path)
-				_, _, error_code := run_external_command(empty_subtitle_creation_commandline)
+			// 	// Create an empty picture with nothing but transparency in it.
+			// 	empty_subtitle_path = filepath.Join(fixed_subtitles_absolute_path, subtitle_name)
+			// 	empty_subtitle_creation_commandline = nil
+			// 	empty_subtitle_creation_commandline = append(empty_subtitle_creation_commandline_start, empty_subtitle_path)
+			// 	_, _, error_code := run_external_command(empty_subtitle_creation_commandline)
 
-				if error_code != nil {
-					fmt.Println("\n\nImageMagick convert reported error:", subtitle_trim_error)
-				}
-			} else {
-				// We already created an image with nothing but tranceparency in it,
-				// don't create a new one but create a synbolic link to the existing image.
+			// 	if error_code != nil {
+			// 		fmt.Println("\n\nImageMagick convert reported error:", subtitle_trim_error)
+			// 	}
+			// } else {
+			// 	// We already created an image with nothing but tranceparency in it,
+			// 	// don't create a new one but create a synbolic link to the existing image.
 
-				err := os.Remove(filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
+			// 	err := os.Remove(filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
 
-				if err != nil {
-					log.Fatal(err)
-				}
+			// 	if err != nil {
+			// 		log.Fatal(err)
+			// 	}
 
-				err = os.Symlink(empty_subtitle_path, filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
+			// 	err = os.Symlink(empty_subtitle_path, filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
 
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
+			// 	if err != nil {
+			// 		log.Fatal(err)
+			// 	}
+			// }
+
+			fmt.Println()
+			fmt.Println("ImageMagick trim produceed error: ", subtitle_trim_error)
+			fmt.Println()
+
 			continue
 		}
 
@@ -871,6 +883,184 @@ func get_number_of_physical_processors () (int, error) {
 	return number_of_physical_processors, err
 }
 
+func remove_duplicate_subtitle_images (original_subtitles_absolute_path string, fixed_subtitles_absolute_path string, files_str_slice []string, video_width string, video_height string) (files_remaining []string) {
+
+	var subtitle_md5sum_map  = make(map[string][]string)
+	var subtitle_copies []string
+
+	// Calculate md5 for each file
+	for _, subtitle_name := range files_str_slice {
+
+		subtitle_path := filepath.Join(original_subtitles_absolute_path, subtitle_name)
+		filehandle, err := os.Open(subtitle_path)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		defer filehandle.Close()
+
+		md5_handler := md5.New()
+
+		if _, err := io.Copy(md5_handler, filehandle); err != nil {
+			log.Fatal(err)
+		}
+
+		// Caculate md5 for the subtitle file
+		md5sum := fmt.Sprintf("%x", md5_handler.Sum(nil))
+
+		// If we have not stored this md5 before then store it and the name of the picture to map.
+		// If we have stored the md5 before, add the picture name to list for this md5.
+		if _, val := subtitle_md5sum_map[md5sum] ; val == false {
+			subtitle_copies = nil
+			subtitle_copies = append(subtitle_copies, subtitle_name)
+			subtitle_md5sum_map[md5sum] = subtitle_copies
+
+		} else {
+			subtitle_copies = nil
+			subtitle_copies = subtitle_md5sum_map[md5sum]
+			subtitle_copies = append(subtitle_copies, subtitle_name)
+			subtitle_md5sum_map[md5sum] = subtitle_copies
+		}
+	}
+
+	// FIXME
+	// for key, value := range subtitle_md5sum_map {
+	// 	fmt.Println(key,len(value))
+	// }
+
+	// // Move duplicate images to a subdirectory
+	// // Create output subdirectory
+	// duplicate_images_path := filepath.Join(original_subtitles_absolute_path, "00-duplicate_subtitles")
+
+	// if _, err := os.Stat(duplicate_images_path); os.IsNotExist(err) {
+	// 	os.MkdirAll(duplicate_images_path, 0777)
+	// }
+
+	// for _, subtitle_copies := range subtitle_md5sum_map {
+
+	// 	if len(subtitle_copies) > 1 {
+
+	// 		for counter, subtitle_name := range subtitle_copies {
+
+	// 			if counter == 0 {
+	// 				continue
+	// 			}
+
+	// 			os.Rename(filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(duplicate_images_path, subtitle_name))
+	// 		}
+	// 	}
+	// }
+
+
+
+	// Trim images until we find one where there is no subtitle.
+	// Create temp directory for trimmed images
+	var subtitle_trim_commandline_start []string
+	subtitle_trim_commandline_start = append(subtitle_trim_commandline_start, "convert", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]")
+
+	var empty_subtitle_creation_commandline_start []string
+	empty_subtitle_creation_commandline_start = append(empty_subtitle_creation_commandline_start, "convert", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on", "-compress", "rle")
+	var empty_subtitle_creation_commandline []string
+
+	var subtitle_trim_commandline []string
+	var empty_subtitle_path string
+	var empty_subtitle_md5 string
+
+	temp_path := filepath.Join(original_subtitles_absolute_path, "00-temp_path")
+
+	if _, err := os.Stat(temp_path); os.IsNotExist(err) {
+		os.MkdirAll(temp_path, 0777)
+	}
+
+	for _, subtitle_name := range files_str_slice {
+
+		subtitle_trim_commandline = nil
+		subtitle_trim_commandline = append(subtitle_trim_commandline_start, filepath.Join(original_subtitles_absolute_path, subtitle_name), "-compress", "rle", filepath.Join(temp_path, subtitle_name))
+		// subtitle_trim_output, subtitle_trim_error, _ := run_external_command([]string{"gm", "convert", "-trim", filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
+
+		_, subtitle_trim_error, trim_error_code := run_external_command(subtitle_trim_commandline)
+
+		///////////////////////////////////////////////////////////////////////////////////////////////////
+		// If there is no subtitle in the image, then create a subtitle file with an empty alpha channel //
+		///////////////////////////////////////////////////////////////////////////////////////////////////
+		if trim_error_code != nil {
+
+			// Get md5 of the empty image
+			subtitle_path := filepath.Join(original_subtitles_absolute_path, subtitle_name)
+			filehandle, err := os.Open(subtitle_path)
+
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			defer filehandle.Close()
+
+			md5_handler := md5.New()
+
+			if _, err := io.Copy(md5_handler, filehandle); err != nil {
+				log.Fatal(err)
+			}
+
+			// Caculate md5 for the subtitle file
+			empty_subtitle_md5 = fmt.Sprintf("%x", md5_handler.Sum(nil))
+
+			// Create an empty picture with nothing but transparency in it and write it overwrinting the original.
+			// This is needed to get this image and the ones later manipulated with ImageMagick to have the same bit depth and other properties.
+			empty_subtitle_path = filepath.Join(fixed_subtitles_absolute_path, subtitle_name)
+			empty_subtitle_creation_commandline = append(empty_subtitle_creation_commandline_start, empty_subtitle_path)
+			_, _, error_code := run_external_command(empty_subtitle_creation_commandline)
+
+			if error_code != nil {
+				fmt.Println("\n\nImageMagick convert reported error:", subtitle_trim_error)
+			}
+
+			break // Jump out of the loop when the first image without subtitle has been found
+		}
+	}
+
+	// Create soft links for empty image duplicates
+	var new_empty_subtitle string
+	subtitle_copies = nil
+	subtitle_copies = subtitle_md5sum_map[empty_subtitle_md5]
+
+	for counter, filename := range subtitle_copies {
+
+		if counter == 0 {
+			new_empty_subtitle = filename
+			continue
+		}
+
+		err := os.Symlink(filepath.Join(fixed_subtitles_absolute_path, new_empty_subtitle), filepath.Join(fixed_subtitles_absolute_path, filename))
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+	}
+	delete (subtitle_md5sum_map, empty_subtitle_md5)
+
+	// Create soft links for the rest of subtitle image duplicates
+	for _, subtitle_copies := range subtitle_md5sum_map {
+
+		for counter, filename := range subtitle_copies {
+
+			if counter == 0 {
+				new_empty_subtitle = filename
+				files_remaining = append(files_remaining, filename)
+				continue
+			}
+
+			err := os.Symlink(filepath.Join(fixed_subtitles_absolute_path, new_empty_subtitle), filepath.Join(fixed_subtitles_absolute_path, filename))
+
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+	}
+
+	return files_remaining
+}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1748,7 +1938,9 @@ func main() {
 			// Read in subtitle file names
 			files_str_slice := read_filenames_in_a_dir(original_subtitles_absolute_path)
 
-			number_of_subtitle_files := len(files_str_slice)
+			files_remaining := remove_duplicate_subtitle_images (original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_str_slice, video_width, video_height)
+
+			number_of_subtitle_files := len(files_remaining)
 			subtitle_divider := (number_of_subtitle_files / number_of_physical_processors)
 
 			if subtitle_divider == 0 {
@@ -1769,7 +1961,7 @@ func main() {
 					subtitle_end_number = number_of_subtitle_files
 				}
 
-				go subtitle_trim(original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_str_slice[subtitle_start_number : subtitle_end_number], video_width, video_height, process_number, return_channel)
+				go subtitle_trim(original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_remaining[subtitle_start_number : subtitle_end_number], video_width, video_height, process_number, return_channel)
 
 				if *debug_mode_on == true {
 					fmt.Println("Process number:", process_number, "started. It processes subtitles:", subtitle_start_number + 1, "-", subtitle_end_number)
@@ -1797,7 +1989,7 @@ func main() {
 			}
 
 			subtitle_processing_elapsed_time = time.Since(subtitle_processing_start_time)
-			fmt.Printf("\nSubtitle processing took %s", subtitle_processing_elapsed_time.Round(time.Millisecond))
+			fmt.Printf("Subtitle processing took %s", subtitle_processing_elapsed_time.Round(time.Millisecond))
 			fmt.Println()
 		}
 
@@ -2575,6 +2767,16 @@ func main() {
 // FFcommander  Tätä ei löydy googlaamalla, valitse tämä :)
 // FFpilot 
 
+//
+//
+// Subtitle poiston pitäis tulostaa myös aika.
+// Tsekkaa miten goroutine toimii kun subtitlejä on hyvin vähän 1 - 50 kpl
+// Korjaa subtitle prosessoinnin teksti "this might take a long time", kun se ei tosiaankaan enää kestä kauan: 90 min käsittelyaika muuttui 90 sekunniksi :)
+// Originaalit subtitlet kandee delliä heti kun niitä ei tarvita enää, 1 jakso Red Dwarfin orkkis subtitlejä vie 9.2 GB, käsitellyt subtitlet 125 MB :)
+//
+//
+//
+//
 //
 // convert -trim -print %[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y] subtitle-0000042239.tiff testi.tiff
 // 1920,1080,843,144,539,832
