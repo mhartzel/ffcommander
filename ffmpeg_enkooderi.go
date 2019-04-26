@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.54" // This is the version of this program
+var version_number string = "1.55" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1898,7 +1898,7 @@ func main() {
 			log_messages_str_slice = append(log_messages_str_slice, "--------------------------------")
 			log_messages_str_slice = append(log_messages_str_slice, strings.Join(ffmpeg_subtitle_extract_commandline, " "))
 
-			fmt.Println("Extracting subtitle stream as " + subtitle_stream_image_format + " - images. This might take a long time ...")
+			fmt.Printf("\nExtracting subtitle stream as %s - images ", subtitle_stream_image_format)
 
 			error_code = nil
 
@@ -1915,8 +1915,7 @@ func main() {
 			}
 
 			subtitle_extract_elapsed_time = time.Since(subtitle_extract_start_time)
-			fmt.Printf("Subtitle extract processing took %s\n", subtitle_extract_elapsed_time.Round(time.Millisecond))
-			fmt.Println()
+			fmt.Println("took", subtitle_extract_elapsed_time.Round(time.Millisecond))
 
 			//////////////////////////////////////////////////////////////////////////////////////////
 			// Process extracted subtitles in as many threads as there are physical processor cores //
@@ -1933,12 +1932,23 @@ func main() {
 			}
 
 			subtitle_processing_start_time = time.Now()
-			fmt.Println("Processing subtitle images in multiple threads. This might take a long time ...")
 
 			// Read in subtitle file names
 			files_str_slice := read_filenames_in_a_dir(original_subtitles_absolute_path)
 
+			duplicate_removal_start_time := time.Now()
+			fmt.Printf("Removing duplicate subtitle slides ")
+
 			files_remaining := remove_duplicate_subtitle_images (original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_str_slice, video_width, video_height)
+
+			duplicate_removal_elapsed_time := time.Since(duplicate_removal_start_time)
+			fmt.Println("took", duplicate_removal_elapsed_time.Round(time.Millisecond))
+
+			subtitle_trimming_start_time := time.Now()
+			fmt.Printf("Trimming subtitle images in multiple threads ")
+			if *debug_mode_on == true {
+				fmt.Println()
+			}
 
 			number_of_subtitle_files := len(files_remaining)
 			subtitle_divider := (number_of_subtitle_files / number_of_physical_processors)
@@ -1988,8 +1998,11 @@ func main() {
 				processes_stopped++
 			}
 
+			subtitle_trimming_elapsed_time := time.Since(subtitle_trimming_start_time)
+			fmt.Println("took", subtitle_trimming_elapsed_time.Round(time.Millisecond))
+
 			subtitle_processing_elapsed_time = time.Since(subtitle_processing_start_time)
-			fmt.Printf("Subtitle processing took %s", subtitle_processing_elapsed_time.Round(time.Millisecond))
+			fmt.Printf("Complete subtitle processing took %s", subtitle_processing_elapsed_time.Round(time.Millisecond))
 			fmt.Println()
 		}
 
@@ -2523,7 +2536,7 @@ func main() {
 
 			} else {
 				fmt.Println()
-				fmt.Println("Encoding with video bitrate:", video_bitrate)
+				fmt.Printf("Encoding with video bitrate: %s. ", video_bitrate)
 
 				if color_subsampling != "yuv420p" {
 					fmt.Println("Subsampling color:", color_subsampling, "---> yuv420p")
@@ -2531,7 +2544,7 @@ func main() {
 
 				if *audio_compression_ac3 == true {
 
-					fmt.Println("Encoding audio to ac3 with bitrate:", audio_compression_options[3])
+					fmt.Printf("Encoding audio to ac3 with bitrate: %s\n", audio_compression_options[3])
 
 				} else {
 
