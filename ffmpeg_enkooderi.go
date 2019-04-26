@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.55" // This is the version of this program
+var version_number string = "1.57" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -743,38 +743,6 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 		///////////////////////////////////////////////////////////////////////////////////////////////////
 		if trim_error_code != nil {
 
-			// FIXME
-			// _, subtitle_trim_error, error_code := run_external_command([]string{"convert", filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
-			// _, subtitle_trim_error, error_code := run_external_command([]string{"gm", "convert", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on", filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
-
-			// if empty_subtitle_path == "" {
-
-			// 	// Create an empty picture with nothing but transparency in it.
-			// 	empty_subtitle_path = filepath.Join(fixed_subtitles_absolute_path, subtitle_name)
-			// 	empty_subtitle_creation_commandline = nil
-			// 	empty_subtitle_creation_commandline = append(empty_subtitle_creation_commandline_start, empty_subtitle_path)
-			// 	_, _, error_code := run_external_command(empty_subtitle_creation_commandline)
-
-			// 	if error_code != nil {
-			// 		fmt.Println("\n\nImageMagick convert reported error:", subtitle_trim_error)
-			// 	}
-			// } else {
-			// 	// We already created an image with nothing but tranceparency in it,
-			// 	// don't create a new one but create a synbolic link to the existing image.
-
-			// 	err := os.Remove(filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
-
-			// 	if err != nil {
-			// 		log.Fatal(err)
-			// 	}
-
-			// 	err = os.Symlink(empty_subtitle_path, filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
-
-			// 	if err != nil {
-			// 		log.Fatal(err)
-			// 	}
-			// }
-
 			fmt.Println()
 			fmt.Println("ImageMagick trim produceed error: ", subtitle_trim_error)
 			fmt.Println()
@@ -812,8 +780,8 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 		subtitle_margin = 5
 	}
 
-	if subtitle_margin > 10 {
-		subtitle_margin = 10
+	if subtitle_margin > 20 {
+		subtitle_margin = 20
 	}
 
 	for subtitle_name := range subtitles_dimension_map {
@@ -826,7 +794,7 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 		// cropped_start_x ,_:= strconv.Atoi(subtitles_dimension_map[subtitle_name][4])
 		cropped_start_y, _ := strconv.Atoi(subtitles_dimension_map[subtitle_name][5])
 
-		picture_center := video_height_int / 2
+		picture_center := video_height_int / 2 // Divider to find out if the subtitle is located above or below this line at the center of the picture
 		subtitle_new_x := (video_width_int / 2) - (cropped_width / 2) // This centers cropped subtitle on the x axis
 
 		if cropped_start_y > picture_center {
@@ -923,36 +891,6 @@ func remove_duplicate_subtitle_images (original_subtitles_absolute_path string, 
 			subtitle_md5sum_map[md5sum] = subtitle_copies
 		}
 	}
-
-	// FIXME
-	// for key, value := range subtitle_md5sum_map {
-	// 	fmt.Println(key,len(value))
-	// }
-
-	// // Move duplicate images to a subdirectory
-	// // Create output subdirectory
-	// duplicate_images_path := filepath.Join(original_subtitles_absolute_path, "00-duplicate_subtitles")
-
-	// if _, err := os.Stat(duplicate_images_path); os.IsNotExist(err) {
-	// 	os.MkdirAll(duplicate_images_path, 0777)
-	// }
-
-	// for _, subtitle_copies := range subtitle_md5sum_map {
-
-	// 	if len(subtitle_copies) > 1 {
-
-	// 		for counter, subtitle_name := range subtitle_copies {
-
-	// 			if counter == 0 {
-	// 				continue
-	// 			}
-
-	// 			os.Rename(filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(duplicate_images_path, subtitle_name))
-	// 		}
-	// 	}
-	// }
-
-
 
 	// Trim images until we find one where there is no subtitle.
 	// Create temp directory for trimmed images
@@ -1867,145 +1805,6 @@ func main() {
 
 		}
 
-		////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// Subtitle Split. Move subtitles that are above the center of the screen up to the top of the screen and subtitles below center down on the bottom of the screen //
-		////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-		if *subtitle_split == true && subtitle_number > -1 {
-
-			var subtitle_extract_output []string
-
-			subtitle_extract_start_time = time.Now()
-
-			// Create output subdirectories
-			if _, err := os.Stat(original_subtitles_absolute_path); os.IsNotExist(err) {
-				os.MkdirAll(original_subtitles_absolute_path, 0777)
-			}
-
-			if _, err := os.Stat(fixed_subtitles_absolute_path); os.IsNotExist(err) {
-				os.MkdirAll(fixed_subtitles_absolute_path, 0777)
-			}
-
-			/////////////////////////////////////////////////////////////////////////////
-			// Extract subtitle stream as separate images for every frame of the movie //
-			/////////////////////////////////////////////////////////////////////////////
-			ffmpeg_subtitle_extract_commandline = nil
-			ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, ffmpeg_commandline_start...)
-			ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-i", file_name, "-vn", "-an", "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number)+"]copy[subtitle_processing_stream]", "-map", "[subtitle_processing_stream]", filepath.Join(original_subtitles_absolute_path, "subtitle-%10d." + subtitle_stream_image_format))
-
-			log_messages_str_slice = append(log_messages_str_slice, "")
-			log_messages_str_slice = append(log_messages_str_slice, "FFmpeg Subtitle Extract Options:")
-			log_messages_str_slice = append(log_messages_str_slice, "--------------------------------")
-			log_messages_str_slice = append(log_messages_str_slice, strings.Join(ffmpeg_subtitle_extract_commandline, " "))
-
-			fmt.Printf("\nExtracting subtitle stream as %s - images ", subtitle_stream_image_format)
-
-			error_code = nil
-
-			subtitle_extract_output, _, error_code = run_external_command(ffmpeg_subtitle_extract_commandline)
-
-			if error_code != nil {
-
-				fmt.Println("\n\nFFmpeg reported error:", subtitle_extract_output, "\n")
-				os.Exit(1)
-			}
-
-			if len(subtitle_extract_output) != 0 && strings.TrimSpace(subtitle_extract_output[0]) != "" {
-				fmt.Println("\n", subtitle_extract_output, "\n")
-			}
-
-			subtitle_extract_elapsed_time = time.Since(subtitle_extract_start_time)
-			fmt.Println("took", subtitle_extract_elapsed_time.Round(time.Millisecond))
-
-			//////////////////////////////////////////////////////////////////////////////////////////
-			// Process extracted subtitles in as many threads as there are physical processor cores //
-			//////////////////////////////////////////////////////////////////////////////////////////
-			number_of_physical_processors, err := get_number_of_physical_processors()
-
-			if number_of_physical_processors < 1 || err != nil {
-				number_of_physical_processors = 2
-
-				fmt.Println()
-				fmt.Println("ERROR, Could not find out the number of physical processors:", err)
-				fmt.Println("Using 2 threads for processing")
-				fmt.Println()
-			}
-
-			subtitle_processing_start_time = time.Now()
-
-			// Read in subtitle file names
-			files_str_slice := read_filenames_in_a_dir(original_subtitles_absolute_path)
-
-			duplicate_removal_start_time := time.Now()
-			fmt.Printf("Removing duplicate subtitle slides ")
-
-			files_remaining := remove_duplicate_subtitle_images (original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_str_slice, video_width, video_height)
-
-			duplicate_removal_elapsed_time := time.Since(duplicate_removal_start_time)
-			fmt.Println("took", duplicate_removal_elapsed_time.Round(time.Millisecond))
-
-			subtitle_trimming_start_time := time.Now()
-			fmt.Printf("Trimming subtitle images in multiple threads ")
-			if *debug_mode_on == true {
-				fmt.Println()
-			}
-
-			number_of_subtitle_files := len(files_remaining)
-			subtitle_divider := (number_of_subtitle_files / number_of_physical_processors)
-
-			if subtitle_divider == 0 {
-				subtitle_divider = number_of_subtitle_files
-			}
-
-			subtitle_end_number := 0
-
-			// Start goroutines
-			return_channel := make(chan int, number_of_physical_processors + 1)
-			process_number := 1
-
-			for subtitle_start_number := 0 ; subtitle_end_number < number_of_subtitle_files ; {
-
-				subtitle_end_number = subtitle_start_number + subtitle_divider
-
-				if subtitle_end_number + 1 > number_of_subtitle_files {
-					subtitle_end_number = number_of_subtitle_files
-				}
-
-				go subtitle_trim(original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_remaining[subtitle_start_number : subtitle_end_number], video_width, video_height, process_number, return_channel)
-
-				if *debug_mode_on == true {
-					fmt.Println("Process number:", process_number, "started. It processes subtitles:", subtitle_start_number + 1, "-", subtitle_end_number)
-				}
-
-				process_number++
-				subtitle_start_number =  subtitle_end_number
-			}
-
-			// Wait for subtitle processing in goroutines to end
-			processes_stopped := 1
-
-			if *debug_mode_on == true {
-				fmt.Println()
-			}
-
-			for processes_stopped < process_number {
-				return_message := <- return_channel
-
-				if *debug_mode_on == true {
-					fmt.Println("Process number:", return_message, "ended.")
-				}
-
-				processes_stopped++
-			}
-
-			subtitle_trimming_elapsed_time := time.Since(subtitle_trimming_start_time)
-			fmt.Println("took", subtitle_trimming_elapsed_time.Round(time.Millisecond))
-
-			subtitle_processing_elapsed_time = time.Since(subtitle_processing_start_time)
-			fmt.Printf("Complete subtitle processing took %s", subtitle_processing_elapsed_time.Round(time.Millisecond))
-			fmt.Println()
-		}
-
 		/////////////////////////////////////////////////////////////
 		// Find out autocrop parameters by scanning the input file //
 		/////////////////////////////////////////////////////////////
@@ -2216,6 +2015,170 @@ func main() {
 
 		}
 
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// Subtitle Split. Move subtitles that are above the center of the screen up to the top of the screen and subtitles below center down on the bottom of the screen //
+		////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+		if *subtitle_split == true && subtitle_number > -1 {
+
+			var subtitle_extract_output []string
+
+			subtitle_extract_start_time = time.Now()
+
+			// Create output subdirectories
+			if _, err := os.Stat(original_subtitles_absolute_path); os.IsNotExist(err) {
+				os.MkdirAll(original_subtitles_absolute_path, 0777)
+			}
+
+			if _, err := os.Stat(fixed_subtitles_absolute_path); os.IsNotExist(err) {
+				os.MkdirAll(fixed_subtitles_absolute_path, 0777)
+			}
+
+			/////////////////////////////////////////////////////////////////////////////
+			// Extract subtitle stream as separate images for every frame of the movie //
+			/////////////////////////////////////////////////////////////////////////////
+			subtitle_processing_start_time = time.Now()
+			ffmpeg_subtitle_extract_commandline = nil
+			ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, ffmpeg_commandline_start...)
+
+
+			// If the user wants to use the fast and inaccurate search, place the -ss option before the first -i on ffmpeg commandline.
+			if *search_start_str != "" && *fast_search_bool == true {
+				ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-ss", *search_start_str)
+			}
+
+			ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-i", file_name)
+
+			// The user wants to use the slow and accurate search, place the -ss option after the first -i on ffmpeg commandline.
+			if *search_start_str != "" && *fast_search_bool == false {
+				ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-ss", *search_start_str)
+			}
+
+			if *processing_time_str != "" {
+				ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-t", *processing_time_str)
+			}
+
+			ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-vn", "-an", "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_number)+"]copy[subtitle_processing_stream]", "-map", "[subtitle_processing_stream]", filepath.Join(original_subtitles_absolute_path, "subtitle-%10d." + subtitle_stream_image_format))
+
+			log_messages_str_slice = append(log_messages_str_slice, "")
+			log_messages_str_slice = append(log_messages_str_slice, "FFmpeg Subtitle Extract Options:")
+			log_messages_str_slice = append(log_messages_str_slice, "--------------------------------")
+			log_messages_str_slice = append(log_messages_str_slice, strings.Join(ffmpeg_subtitle_extract_commandline, " "))
+
+			fmt.Printf("\nExtracting subtitle stream as %s - images ", subtitle_stream_image_format)
+
+			error_code = nil
+
+			subtitle_extract_output, _, error_code = run_external_command(ffmpeg_subtitle_extract_commandline)
+
+			if error_code != nil {
+
+				fmt.Println("\n\nFFmpeg reported error:", subtitle_extract_output, "\n")
+				os.Exit(1)
+			}
+
+			if len(subtitle_extract_output) != 0 && strings.TrimSpace(subtitle_extract_output[0]) != "" {
+				fmt.Println("\n", subtitle_extract_output, "\n")
+			}
+
+			subtitle_extract_elapsed_time = time.Since(subtitle_extract_start_time)
+			fmt.Println("took", subtitle_extract_elapsed_time.Round(time.Millisecond))
+
+			//////////////////////////////////////////////////////////////////////////////////////////
+			// Process extracted subtitles in as many threads as there are physical processor cores //
+			//////////////////////////////////////////////////////////////////////////////////////////
+			number_of_physical_processors, err := get_number_of_physical_processors()
+
+			if number_of_physical_processors < 1 || err != nil {
+				number_of_physical_processors = 2
+
+				fmt.Println()
+				fmt.Println("ERROR, Could not find out the number of physical processors:", err)
+				fmt.Println("Using 2 threads for processing")
+				fmt.Println()
+			}
+
+			// Read in subtitle file names
+			files_str_slice := read_filenames_in_a_dir(original_subtitles_absolute_path)
+
+			duplicate_removal_start_time := time.Now()
+			fmt.Printf("Removing duplicate subtitle slides ")
+
+			v_height := video_height
+			v_width := video_width
+
+			if *autocrop_bool == true {
+				v_height = strconv.Itoa(crop_values_picture_height)
+				v_width = strconv.Itoa(crop_values_picture_width)
+			}
+
+			files_remaining := remove_duplicate_subtitle_images (original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_str_slice, v_width, v_height)
+
+			duplicate_removal_elapsed_time := time.Since(duplicate_removal_start_time)
+			fmt.Println("took", duplicate_removal_elapsed_time.Round(time.Millisecond))
+
+			subtitle_trimming_start_time := time.Now()
+			fmt.Printf("Trimming subtitle images in multiple threads ")
+			if *debug_mode_on == true {
+				fmt.Println()
+			}
+
+			number_of_subtitle_files := len(files_remaining)
+			subtitle_divider := (number_of_subtitle_files / number_of_physical_processors)
+
+			if subtitle_divider == 0 {
+				subtitle_divider = number_of_subtitle_files
+			}
+
+			subtitle_end_number := 0
+
+			// Start goroutines
+			return_channel := make(chan int, number_of_physical_processors + 1)
+			process_number := 1
+
+			for subtitle_start_number := 0 ; subtitle_end_number < number_of_subtitle_files ; {
+
+				subtitle_end_number = subtitle_start_number + subtitle_divider
+
+				if subtitle_end_number + 1 > number_of_subtitle_files {
+					subtitle_end_number = number_of_subtitle_files
+				}
+
+				go subtitle_trim(original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_remaining[subtitle_start_number : subtitle_end_number], v_width, v_height, process_number, return_channel)
+
+				if *debug_mode_on == true {
+					fmt.Println("Process number:", process_number, "started. It processes subtitles:", subtitle_start_number + 1, "-", subtitle_end_number)
+				}
+
+				process_number++
+				subtitle_start_number =  subtitle_end_number
+			}
+
+			// Wait for subtitle processing in goroutines to end
+			processes_stopped := 1
+
+			if *debug_mode_on == true {
+				fmt.Println()
+			}
+
+			for processes_stopped < process_number {
+				return_message := <- return_channel
+
+				if *debug_mode_on == true {
+					fmt.Println("Process number:", return_message, "ended.")
+				}
+
+				processes_stopped++
+			}
+
+			subtitle_trimming_elapsed_time := time.Since(subtitle_trimming_start_time)
+			fmt.Println("took", subtitle_trimming_elapsed_time.Round(time.Millisecond))
+
+			subtitle_processing_elapsed_time = time.Since(subtitle_processing_start_time)
+			fmt.Printf("Complete subtitle processing took %s", subtitle_processing_elapsed_time.Round(time.Millisecond))
+			fmt.Println()
+		}
+
 		/////////////////////////
 		// Encode video - mode //
 		/////////////////////////
@@ -2373,7 +2336,7 @@ func main() {
 				// Add video filter options to ffmpeg commanline
 				subtitle_processing_options = "copy"
 
-				// When cropping video widthwise shrink it to fit on top of the cropped video.
+				// When cropping video widthwise shrink subtitles to fit on top of the cropped video.
 				// This results in smaller subtitle font.
 				if *autocrop_bool == true && *subtitle_downscale == true {
 					subtitle_processing_options = "scale=" + strconv.Itoa(crop_values_picture_width) + ":" + strconv.Itoa(crop_values_picture_height)
@@ -2782,7 +2745,8 @@ func main() {
 
 //
 //
-// Subtitle poiston pitäis tulostaa myös aika.
+// Subtitledirri jää debug moodin jälkeen olemaan ja estää seuraavan daman failin enkoodauksen, dirri pitäis poistaa ohjelman käynnistyessä, ehkä se vois delliä nyt prosessoitavan failin dirrin, jos sellainen on olemassa.
+// Crop pitäis rajautua vain valittuun alueeseen jos se on rajattu -SS ja -t optioilla.
 // Tsekkaa miten goroutine toimii kun subtitlejä on hyvin vähän 1 - 50 kpl
 // Korjaa subtitle prosessoinnin teksti "this might take a long time", kun se ei tosiaankaan enää kestä kauan: 90 min käsittelyaika muuttui 90 sekunniksi :)
 // Originaalit subtitlet kandee delliä heti kun niitä ei tarvita enää, 1 jakso Red Dwarfin orkkis subtitlejä vie 9.2 GB, käsitellyt subtitlet 125 MB :)
