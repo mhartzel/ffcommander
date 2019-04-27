@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.57" // This is the version of this program
+var version_number string = "1.58" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -720,12 +720,6 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 	subtitle_trim_commandline_start = append(subtitle_trim_commandline_start, "convert", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]")
 	var subtitle_trim_commandline []string
 
-	// FIXME
-	// var empty_subtitle_creation_commandline_start []string
-	// empty_subtitle_creation_commandline_start = append(empty_subtitle_creation_commandline_start, "convert", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on", "-compress", "rle")
-	// var empty_subtitle_creation_commandline []string
-	// var empty_subtitle_path string
-
 	///////////////////////////////////////////////////////////////////
 	// Trim subtitles, removing empty space around the subtitle text //
 	///////////////////////////////////////////////////////////////////
@@ -805,9 +799,6 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 			// Center subtitle on top of the picure
 			subtitle_new_y = subtitle_margin
 		}
-
-		// FIXME
-		// _, subtitle_trim_error, error_code := run_external_command([]string{"convert", "-colorspace", "gray", "-size", strconv.Itoa(orig_width) + "x" + strconv.Itoa(orig_height), "canvas:transparent", filepath.Join(fixed_subtitles_absolute_path, subtitle_name), "-geometry", "+" + strconv.Itoa(subtitle_new_x) + "+" + strconv.Itoa(subtitle_new_y), "-composite", "-compose", "over", filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 
 		subtitle_adjust_commandline = nil
 		subtitle_adjust_commandline = append(subtitle_adjust_commandline, "convert", "-size", video_width + "x" + video_height, "canvas:transparent", filepath.Join(fixed_subtitles_absolute_path, subtitle_name), "-geometry", "+" + strconv.Itoa(subtitle_new_x) + "+" + strconv.Itoa(subtitle_new_y), "-composite", "-compose", "over", "-compress", "rle", filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
@@ -2023,6 +2014,23 @@ func main() {
 
 			var subtitle_extract_output []string
 
+			// Remove subtitle directories if they were left over from the previous run
+			if _, err := os.Stat(original_subtitles_absolute_path); err == nil {
+				fmt.Printf("Deleting original subtitle files left over from previous run. ")
+
+				os.RemoveAll(original_subtitles_absolute_path)
+
+				fmt.Println("Done.")
+			}
+
+			if _, err := os.Stat(fixed_subtitles_absolute_path); err == nil {
+				fmt.Printf("Deleting fixed subtitle files left over from previous run. ")
+
+				os.RemoveAll(fixed_subtitles_absolute_path)
+
+				fmt.Println("Done.")
+			}
+
 			subtitle_extract_start_time = time.Now()
 
 			// Create output subdirectories
@@ -2124,10 +2132,10 @@ func main() {
 			}
 
 			number_of_subtitle_files := len(files_remaining)
-			subtitle_divider := (number_of_subtitle_files / number_of_physical_processors)
+			subtitles_per_processor := number_of_subtitle_files / number_of_physical_processors
 
-			if subtitle_divider == 0 {
-				subtitle_divider = number_of_subtitle_files
+			if subtitles_per_processor < 2 {
+				subtitles_per_processor = 2
 			}
 
 			subtitle_end_number := 0
@@ -2138,7 +2146,7 @@ func main() {
 
 			for subtitle_start_number := 0 ; subtitle_end_number < number_of_subtitle_files ; {
 
-				subtitle_end_number = subtitle_start_number + subtitle_divider
+				subtitle_end_number = subtitle_start_number + subtitles_per_processor
 
 				if subtitle_end_number + 1 > number_of_subtitle_files {
 					subtitle_end_number = number_of_subtitle_files
@@ -2177,6 +2185,18 @@ func main() {
 			subtitle_processing_elapsed_time = time.Since(subtitle_processing_start_time)
 			fmt.Printf("Complete subtitle processing took %s", subtitle_processing_elapsed_time.Round(time.Millisecond))
 			fmt.Println()
+
+
+			if *debug_mode_on == false {
+
+				if _, err := os.Stat(original_subtitles_absolute_path); err == nil {
+					fmt.Printf("\nDeleting original subtitles to recover disk space ")
+
+					os.RemoveAll(original_subtitles_absolute_path)
+
+					fmt.Println("Done.")
+				}
+			}
 		}
 
 		/////////////////////////
@@ -2674,7 +2694,7 @@ func main() {
 
 			if *subtitle_split == true {
 				if *debug_mode_on == true {
-					fmt.Println("\nImportant !!!!!!! Extracted subtitle images are not deleted in debug - mode.\n")
+					fmt.Println("\nExtracted subtitle images are not deleted in debug - mode.\n")
 				} else {
 					// Remove subtitle extract base directory and all its contents
 					if _, err := os.Stat(subtitle_extract_base_path); err == nil {
@@ -2734,274 +2754,3 @@ func main() {
 	}
 }
 
-//
-// // FIXME
-//
-// FFstarfish
-// FFqueen
-// FFpuppet / FFpuppetmaster
-// FFcommander  Tätä ei löydy googlaamalla, valitse tämä :)
-// FFpilot 
-
-//
-//
-// Subtitledirri jää debug moodin jälkeen olemaan ja estää seuraavan daman failin enkoodauksen, dirri pitäis poistaa ohjelman käynnistyessä, ehkä se vois delliä nyt prosessoitavan failin dirrin, jos sellainen on olemassa.
-// Crop pitäis rajautua vain valittuun alueeseen jos se on rajattu -SS ja -t optioilla.
-// Tsekkaa miten goroutine toimii kun subtitlejä on hyvin vähän 1 - 50 kpl
-// Korjaa subtitle prosessoinnin teksti "this might take a long time", kun se ei tosiaankaan enää kestä kauan: 90 min käsittelyaika muuttui 90 sekunniksi :)
-// Originaalit subtitlet kandee delliä heti kun niitä ei tarvita enää, 1 jakso Red Dwarfin orkkis subtitlejä vie 9.2 GB, käsitellyt subtitlet 125 MB :)
-//
-//
-//
-//
-//
-// convert -trim -print %[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y] subtitle-0000042239.tiff testi.tiff
-// 1920,1080,843,144,539,832
-//
-// gm convert -monitor -trim subtitle-0000042239.tiff testi.tiff
-// 100% [subtitle-0000042239.tiff] Loading image: 1920x1080...  
-// 100% [subtitle-0000042239.tiff] Get bounding box...
-// 100% [subtitle-0000042239.tiff] Crop: 843x144+539+832...
-// 100% [testi.tiff] Saving image: 843x144...  
-//
-// gm convert -verbose -trim -format %[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y] subtitle-0000042239.tiff testi.tiff
-// subtitle-0000042239.tiff TIFF 1920x1080=>843x144+0+0 DirectClass 8-bit 0.070u 0m:0.032909s (60.1Mi pixels/s)
-// subtitle-0000042239.tiff=>testi.tiff TIFF 1920x1080=>843x144+0+0 DirectClass 8-bit 475.0Ki 0.000u 0m:0.001796s (1.1Gi pixels/s)
-//
-// convert -verbose -trim -print %[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y] subtitle-0000042239.tiff testi.tiff
-// subtitle-0000042239.tiff TIFF 1920x1080 1920x1080+0+0 8-bit TrueColor sRGB 302186B 0.060u 0:00.060
-// subtitle-0000042239.tiff=>testi.tiff TIFF 1920x1080=>843x144 1920x1080+539+832 8-bit GrayscaleAlpha Gray 89562B 0.010u 0:00.009
-//
-//
-// export MAGICK_THREAD_LIMIT=1 nopeuttaa ImageMagick:iä n. 2x
-// Lue -sp koodi vielä ajatuksella läpi, sinne on saattanut jäädä epäloogisuuksia ja sotkuja.
-// -sp toimii tiff formaatilla nyt dvd:n osalta, mutta nykii edelleen BluRayssä (RedDwarf). Tää on ehkä nyt korjattu.
-// -sp marginaali näytön ylä- tai alareunaa pitää skaalautua videon reson mukaa. BluRayssä 10 pixeliä on aika hyvä dvdssä sen pitäis olla pienempi.
-// Mitä taphtuu kun -sp ja -autocrop on päällä, mitä subtitleille tapahtuu ?
-// -sp subtitleprosessointia pitää saada nopeutettua: tunnista tyhjät slaidit ja tallenna vain yksi tyjä ja linkkaa muut siihen. Tunnista samat subtitlet ja tallenna vain yksi ja linkkaa muut siihen. Jos tämä ei toimi tee subtitlekäsittely samanaikaisesti säikeissä.
-// Tutki tukeeko ffmpeg jotain subtitleformaattia, jossa aikakoodit on tekstitiedostossa ja subtitlet kuvina. Jos tukee tee tuki tälle formaatille ja tallenna -sp - optiolla subtitlet kyseiseen formaattiin.
-//
-//
-// ffmpeg -y -i movie.mov -loop 1 -i overlay.png -loop 1 -i fademe.png \ -filter_complex '[0:v][1:v] overlay [V1]; \ [2:v] fade=out:25:25:alpha=1 [V2]; [V1][V2] overlay' \ faded.mp4
-// ffmpeg -i input -i logo1 -i logo2 -filter_complex 'overlay=x=10:y=H-h-10,overlay=x=W-w-10:y=H-h-10' output
-//
-// ffmpeg -i title_t03.mkv -vn -an -scodec xsub -f image2 out%03d.xsub
-//
-//
-// Pilko faili palasiksi jo ennen croppia ja tarkista sitten kaikista palasista kroppiarvot.
-// Splittaus käyttää flac audiota ja siksi pakottaa wrapperiksi mkv:n muista kirjata helppeihin
-//
-// Onks subtitle horizontal offset jo tehty ? Tsekkaa overlay - komentoja alta Avengers3:sta
-// Tsekkaa pitäiskö aina --filter_complexin kanssa käyttää audiossa oletus-delaytä (ehkä 40 ms).
-// Muuta nykyinen subtitle scale optio (-sd), joksin muuksi, esim. -scr (subtitle crop resize) tai -sca (subtitle crop adjust). Sitten tee uudet optiot: -ssd (subtitle scale down) -ssu (subtitle scale up), -shc (subtitle horizontal center). muuta nykyinen optio -so optioksi -svo (subtitle vertical offset) ja tee uusi optio: -sho (subtitle horizontal offset).
-// Tee -an optio, joka pakkaa ainoastaan videon ja jättää audio kokonaan pois.
-// Pitäiskö tehdä mahdollisuus muxata kohdetiedostoon useamman kielinen tekstitys ? Tässä tulis kohtuullisen isoja koodimuutoksia.
-//
-// Nimeä ffmpeg_enkooderi uudella nimellä (sl_encoder = starlight encoder) ja poista hakemisto: 00-vanhat jotta git repon voi julkaista
-//
-// Mites dts-hd ?:
-//
-// Tämä muuntaa Blurayn pgs - subtitlen dbdsub:iksi (laatu heikkenee jonkin verran):
-// ffmpeg -y -threads auto -fix_sub_duration -analyzeduration 20E6 -i extra-S11-02.mkv -scodec dvdsub -map 0:s:0 -map 0:v:0 -vf idet,yadif=0:deint=all -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -f mp4  testi.mp4
-// Kun teet PGS ---> DVDSUB muunnosoption, muista muuttaa option -sm help - teksti.
-// Bluray subtitleja (hdmv_pgs_subtitle) ei voi ympätä mp4 failiin, ne on tuettuja ilmeisesti vaan mkv ja .ts wrappereissa. Tsekkaa toimiiko alla olevassa linkissä oleva hdmv_pgs_subtitle muunnos dvd_subtitleksi.
-// https://trac.ffmpeg.org/ticket/1277
-// https://en.wikibooks.org/wiki/FFMPEG_An_Intermediate_Guide/subtitle_options
-// subtitle_palette pitää toimia vain subtitlen tyypeillä dvdsub ja dvbsub.
-//
-//
-// ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 00:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=0:main_h-overlay_h+140[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 1 /dev/null
-// ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 00:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=0:main_h-overlay_h+70[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 2 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War.mp4
-// ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 00:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=(main_w-overlay_w)/2:main_h-overlay_h+90[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 2 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War.mp4
-// ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 01:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=((main_w-overlay_w)/2)+30:main_h-overlay_h+90[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 1 /dev/null
-// ffmpeg -y -loglevel 8 -threads auto -i Avengers-3-Infinity_War.mkv -ss 01:05 -t 01:30 -filter_complex '[0:s:5]scale=w=iw/1.5:h=ih/1.5[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=((main_w-overlay_w)/2)+30:main_h-overlay_h+90[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War -f mp4 -pass 2 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Avengers-3-Infinity_War/00-processed_files/Avengers-3-Infinity_War.mp4
-
-// Jos ohjelmalle annetusta tiedostojoukosta puuttuu yksi failia, ohjelma exitoi eikä käsittele yhtään tiedostoa.
-// Jos kroppausarvot on nolla, poista kroppaysoptiot ffmpegin komentoriviltä ?
-// Tee enkoodauksen aikainen FFmpegin tulosteen tsekkaus, joka laskee koodauksen aika-arvion ja prosentit siitä kuinka paljon failia on jo käsitelty (fps ?) Tästä on esimerkkiohjelma muistiinpanoissa, mutta se jumittaa n. 90 sekuntia FFmpeg - enkoodauksen alkamisesta.
-// Pitäiskö laittaa optio, jolla vois rajoittaa käytettävien prosessorien lukumäärän ?
-//
-// start           - 00:00:30      alkaa 00:00:00          kesto 00:00:30
-// 00:02:00.800    - 01:02:30      alkaa 00:00:30          kesto 01:00:29.200
-// 01:03:00        - 01:33:30      alkaa 01:00:59.200      kesto 00:30:30
-// 01:40:00        - 02:00:00      alkaa 01:31:29.200
-//
-// split_times: start,00:00:30,00:02:00.800,01:02:30,01:03:00,01:33:30,01:40:00,02:00:00
-// split_times: start|00:00:30|00:02:00.800|01:02:30|01:03:00|01:33:30|01:40:00|02:00:00
-// split_times: start/00:00:30/00:02:00.800/01:02:30/01:03:00/01:33:30/01:40:00/02:00:00
-// split_times: start*00:00:30*00:02:00.800*01:02:30*01:03:00*01:33:30*01:40:00*02:00:00
-// split_times: start-00:00:30-00:02:00.800-01:02:30-01:03:00-01:33:30-01:40:00-02:00:00
-//
-// split_times: start,00:00:30,00:02:00.800,01:02:30,01:03:00,01:33:30,01:40:00,02:00:00
-// cut_list_positions_and_durations_seconds: [0 30 120.800 3629.200 3780 1830 6000 1200]
-// cut_positions_after_processing_seconds: [0 30 3659.200 5489.200]
-// cut_positions_as_timecodes: [00:00:30 01:00:59.200 01:31:29.200]
-//
-//
-// Extract each frame to png: ffmpeg -i testi.mkv subtitlet/$subtitle%03d.png
-
-// Filename: Red_Dwarf-S11-E01-Twentica.mkv
-// -----------------------------------------
-//
-// Commandline options:
-// ---------------------
-// /opt/ffmpeg_enkooderi -s eng Red_Dwarf-S11-E01-Twentica.mkv Red_Dwarf-S11-E02-Samsara.mkv Red_Dwarf-S11-E03-Give_And_Take.mkv Red_Dwarf-S11-E04-Officer_Rimmer.mkv Red_Dwarf-S11-E05-Krysis.mkv Red_Dwarf-S11-E06-Can_Of_Worm
-// s.mkv
-//
-// FFmpeg Pass 1 Options:
-// -----------------------
-// ffmpeg -y -loglevel 8 -threads auto -i Red_Dwarf-S11-E01-Twentica.mkv -filter_complex '[0:s:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all[video_processing_stream];[video_processing_stream][subtitle_proc
-// essing_stream]overlay=0:main_h-overlay_h+0[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipist
-// e/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Red_Dwarf/00-processed_files/Red_Dwarf-S11-E01-Twentica -f mp4 -pass 1 /dev/null
-//
-// FFmpeg Pass 2 Options:
-// -----------------------
-// ffmpeg -y -loglevel 8 -threads auto -i Red_Dwarf-S11-E01-Twentica.mkv -filter_complex '[0:s:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all[video_processing_stream];[video_processing_stream][subtitle_proc
-// essing_stream]overlay=0:main_h-overlay_h+0[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 -passlogfile /mounttipist
-// e/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Red_Dwarf/00-processed_files/Red_Dwarf-S11-E01-Twentica -f mp4 -pass 2 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Red_Dwarf/00-processed_files
-// /Red_Dwarf-S11-E01-Twentica.mp4
-//
-// Pass 1 took: 21m46.497s
-// Pass 2 took: 35m33.132s
-// Processing took: 57m19.684s
-//
-// ########################################################################################################################
-//
-//
-// Extract subtitlestream as video to png per frame: ffmpeg -i testi.mkv -vn -an -filter_complex '[0:s:0]copy[subtitle_processing_stream]' -map '[subtitle_processing_stream]' subtitlet/$subtitle%03d.png
-//
-// Tee kuvista video mustalla pohjalla: ffmpeg -r 24 -f image2 -i subtitlet/%03d.png -pix_fmt yuv420p -vf fps=24,cropdetect koe.webm
-//
-// Tee yhdestä kuvasta 10 freimin video ja mittaa siitä kroppiarvot: ffmpeg -r 1/1 -f image2 -i subtitlet/270.png -pix_fmt yuv420p -vf fps=10,cropdetect -f null -
-// Sama kuin yllä mutta etsi reunat jokaisessa fremissä uudestaan: ffmpeg -r 1/1 -f image2 -i subtitlet/290.png -pix_fmt yuv420p -vf fps=10,cropdetect=24:1:0 -f null -
-//
-// Freimi 270: lyhyt teksti ruudun yläosassa: crop=-1904:-1072:1914:1078
-// Freimi 285: tyhjä feimi, pelkkää läpinäkyvyyttä: crop=-1904:-1072:1914:1078
-// Freimi 290: pitkä teksti alhaalla: crop=-1904:112:1914:848
-//
-// Yllä korppiarvoissa on ongelmana se, että jostain syystä FFmpeg tulostaa negatiivisia arvoja, mutta hyväksyy vain positiivisia. Lisäksi ylä- alasuunnassa tunnistettu raja leikkaa tekstiä, ylärajaa pitää nostaa ja alarajaa laskea 20 pistettä.
-//
-// Tämä tuottaa freimille 290 oikean kroppauksen: ffmpeg -r 1/25 -f image2 -i subtitlet/290.png -pix_fmt yuv420p -vf fps=10,crop=1912:152:1918:828 koe2.webm
-//
-// ########################################################################################################################
-//
-// Tämä löytää paremmin reunat: ffmpeg -r 1/1 -f image2 -i subtitlet/270.png -vf fps=10,cropdetect=1:1:1 -f null -
-//
-// Freimi 270: lyhyt teksti ruudun yläosassa: crop=192:32:864:108
-// Freimi 285: tyhjä feimi, pelkkää läpinäkyvyyttä: crop=-1904:-1072:1914:1078
-// Freimi 290: pitkä teksti alhaalla: crop=976:128:464:836
-//
-// ffmpeg -r 1/5 -f image2 -i subtitlet/270.png -vf "fps=10,format=rgba,geq='r=if(gt(alpha(X,Y),128),255,0):g=if(gt(alpha(X,Y),128),255,0):b=if(gt(alpha(X,Y),128),255,0):a=if(gt(alpha(X,Y),250),255,0)',cropdetect=1:1:1" koe2.webm
-//
-// Tää taitaa olla paras rivi, mutta ylös ja alas pitää lisätä 20 ja reunoille 10 pixeliä: ffmpeg -r 1/1 -f image2 -i subtitlet/270.png -vf "fps=10,format=rgba,geq='r=if(gt(alpha(X,Y),0),255):g=if(gt(alpha(X,Y),0),255):b=if(gt(alpha(X,Y),0),255):a=0',cropdetect=1:2:1" -f null -
-// Yllä oleva tuottaa rivin: crop=200:46:860:102 ja kun lisää ylös ja alas 20 ja laidoille 10 pixeliä toimii tämä rivi hyvin: crop=220:86:850:82
-//
-// If lauseet toimii näin: jokaisella värikanavalla (r,g,b, alpha) testataan onko pixelien arvo suurempi kuin nolla ja pixelin arvoksi asetetaan 255, eli gt(alpha(X,Y),0) vertaa kaikkilal X:n ja Y:n koordinaateilla väriarvoa nollaan ja palauttaa 1 alpha(X,Y) on suurempi kuin 0. Tämä edellinen arvo (1 tai 0) on if lauseen evaluation, eli jos numero on 1 palauttaa if lause pilkun jälkeen olevan arvon 255 muussa tapauksessa palauttaa 0. If lauseen palauttama arvo päättyy muuttujiin r,g,b ja alpha.
-//
-// ImageMagic autocrop: https://www.imagemagick.org/discourse-server/viewtopic.php?t=23613
-// convert 270.png -fuzz 28% -trim +repage 270_kropattu.png
-//
-// Tämäkin toimii: convert 270.png -trim 270_kropattu-2.png
-// Jos -trim ei jätä jäljelle mitään, tulee herja:
-//
-// convert 285.png -trim 285_kropattu.png
-// convert: geometry does not contain image `285.png' @ warning/attribute.c/GetImageBoundingBox/240.
-//
-// Tämä palauttaa arvot, joilla ImageMagic tulee kroppaamaan kuvan, mutta ei tee varsinaista kropppia:
-//
-// convert 290.png -trim -print "%[fx:w]x%[fx:h]+%[fx:page.x]+%[fx:page.y]" null:
-// 1012x140+454+83
-//
-// Tämä palauttaa kroppiarvot ja kroppaa : convert 290.png -trim -print "%[fx:w]x%[fx:h]+%[fx:page.x]+%[fx:page.y]\n" 290-kropattu.png
-// 1012x140+454+832
-//
-// mogrify -trim -print "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]\n" koe.png
-// 720,576,457,66,132,429
-//
-// convert -trim -print "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]\n" koe.png kropattu.png
-// 720,576,457,66,132,429
-//
-// convert 290.png -trim -print "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]\n" 290-kropattu.png
-// KOE=`convert 290.png -trim -print "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]\n" 290-kropattu.png`
-// echo $KOE
-//
-// 1920,1080,1012,140,454,832
-//
-// 1920 = Alkuperäisen kuvan leveys
-// 1080 = Alkuperäisen kuvan korkeus
-// 1012 = Kropatun kuvan leveys
-// 140 = Kropatun kuvan korkeus
-// 454 = Kroppauksen alkupaikka x akselilla (vasemmasta laidasta laskien ?)
-// 832 = Kroppauksen alkupaikka y akselilla ylhäältä laskien (Tämän perusteella voi keskittää tekstin yla- alasuunnassa: onko tämä arvo vähemmän vai enemmän kuin 540 (1080 / 2 = 540))
-//
-//
-//
-//
-// Tämä kroppaa ja tulostaa siitä tietoja: convert -verbose 290.png -trim 290-kropattu.png
-// 290.png PNG 1920x1080 1920x1080+0+0 8-bit sRGB 25690B 0.110u 0:00.069
-// 290.png=>290-kropattu.png PNG 1920x1080=>1012x140 1920x1080+454+832 8-bit sRGB 25690B 0.070u 0:00.03
-//
-// Yllä tulosteessa 832 tarkoittaa sitä paljonko kuvan yläreunasta alaspäin on pistettu pixeleitäi, ja 454 taas sitä kuinka paljon vasemmasta laidasta oikealle on poistettu pixeleitä.
-// Yllä tulosteessa 1012 tarkoittaa kropatun kuvan leveyttä ja 140 korkeutta.
-//
-// ffmpeg -i testi.mkv -f image2 -i subtitlet_kropattu/%03d.png -filter_complex '[1:v:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=0:main_h-overlay_h+0[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 rendattu.mp4
-//
-// cp subtitlet/* subtitlet_kropattu/
-// mogrify -trim subtitlet_kropattu/*.png
-// Nykii aina kun subtitle vaihtuu: ffmpeg -i testi.mkv -f image2 -i subtitlet_kropattu/%03d.png -filter_complex '[0:v:0]idet,yadif=0:deint=all[video_processing_stream];[video_processing_stream][1:v:0]overlay=0:main_h-overlay_h+0[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 rendattu.mp4
-//
-// Nykii aina kun subtitle vaihtuu: ffmpeg -i testi.mkv -f image2 -i subtitlet_kropattu/%03d.png -filter_complex '[0:v:0]idet,yadif=0:deint=all[video_processing_stream];[video_processing_stream][1:v:0]overlay=0:main_h-overlay_h+0[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 rendattu.mp4
-//
-// Keskitetty, Nykii aina kun subtitle vaihtuu: ffmpeg -i testi.mkv -f image2 -i subtitlet_kropattu/%03d.png -filter_complex '[0:v:0]idet,yadif=0:deint=all[video_processing_stream];[video_processing_stream][1:v:0]overlay=(main_w-overlay_w)/2:main_h-overlay_h+0[processed_combined_streams]' -map [processed_combined_streams] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 8000k -acodec copy -map 0:a:0 rendattu.mp4
-//
-//
-// ImageMagick kropatun tekstin keskittäminen läpinäkyvälle 1920x1080 pohjalle:
-// ----------------------------------------------------------------------------
-// mkdir subtitlet-kropattu
-// cp subtitlet/*.png subtitlet-kropattu/
-// mogrify -trim subtitlet-kropattu/*.png
-//
-// identify subtitlet-kropattu/270.png
-// subtitlet-kropattu/270.png PNG 202x51 1920x1080+859+98 8-bit Grayscale Gray 3384B 0.000u 0:00.00p
-// Eli kropatun kuvan leveys on 202 ja korkeus 51.
-//
-// (1920 / 2) - (202 / 2) = 859
-// 10 = pixeliä yläreunasta alaspäin.
-// convert -colorspace gray -size 1920x1080 xc:transparent subtitlet-kropattu/270.png -composite -compose over testi.png
-//
-// Keskitys yläreunaan:
-// --------------------
-// convert -colorspace gray -size 1920x1080 xc:transparent subtitlet-kropattu/270.png -geometry +859+10 -composite -compose over testi.png
-// tai:
-// convert -colorspace gray -size 1920x1080 canvas:transparent subtitlet-kropattu/270.png -geometry +859+10 -composite -compose over testi.png
-//
-//
-// Keskitys alareunaan:
-// --------------------
-// Vähennetään taustakuvan korkeudesta kropatun kuvan korkeus ja vielä 10 pixeliä lisää jottei teksti ole kiinni alalaidassa:
-// 1080 - 10 - 51 = 1019
-//
-// convert -colorspace gray -size 1920x1080 canvas:transparent subtitlet-kropattu/270.png -geometry +859+1019 -composite -compose over testi-2.png
-//
-//
-// https://video.stackexchange.com/questions/24330/how-to-have-an-overlay-move-to-specific-points-at-specific-frames-using-ffmpeg
-// ffmpeg -i C:\src\assets\video\base.mp4 -i C:\card.png -y -filter_complex "[0:v][1:v]overlay=x='if(eq(n,439),300,0)':y='if(eq(n,439),300,0)':enable='eq(n,438)+eq(n,439)'[out]" -map [out] -map 0:a -ss 17 C:\temp\j7kthb0v\composit.mp4
-//
-// Not really. The filter isn't meant for animation like that. You can simplify it somewhat like this: x='0*eq(n,438)+300*eq(n,439)+X*eq(n,567)+...' – Gyan
-// I've been playing around with the variable n, in overlay if I were to do: overlay=x='( 605 + -0.8023952095808383 * n)':y='( 406 + -0.4365269461077843 * n)':enable='between(t,438/25,605/25)', does this mean the n would equal 0 and incremented for every frame it's visible for ? (605 - 438) – Shannon Hochkins
-//
-//
-//
-//
-//
-// https://ffmpeg.org/ffmpeg-utils.html
-//
-// -filter_script TiedostoNimi  tai   -filter_complex_script TiedostoNimi lataa filtteriasetukset tiedostosta
-//
-// ffmpeg -y -hide_banner -threads auto -i dvd-testi.mkv -f image2 -i /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Red_Dwarf/subtitletesti/00-processed_files/subtitles/dvd-testi.mkv-fixed_subtitles/subtitle-%10d.png -filter_complex '[0:v:0]idet,yadif=0:deint=all[video_processing_stream];[video_processing_stream][1:v:0]overlay=0:main_h-overlay_h+0[processed_combined_streams]' -map '[processed_combined_streams]' -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1600k -acodec copy -map 0:a:0 -f mp4 /mounttipiste/Elokuvat-TV-Ohjelmat-Musiikki/00-tee_h264/rippaukset/Red_Dwarf/subtitletesti/00-processed_files/dvd-testi.mp4
-//
-// convert -size 720x576 canvas:transparent -colorspace gray -alpha on testi.png
-//
-//
-//
-//
