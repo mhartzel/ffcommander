@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.58" // This is the version of this program
+var version_number string = "1.59" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -67,9 +67,15 @@ func find_executable_path(filename string) (file_path string) {
 	// Test if executable can be found in the path //
 	/////////////////////////////////////////////////
 
-	if _, error := exec.LookPath("ffmpeg"); error != nil {
+	if _, error := exec.LookPath(filename); error != nil {
 		fmt.Println()
-		fmt.Println("Error, cant find FFmpeg in path, can't continue.")
+		fmt.Println("Error, cant find program: " + filename + " in path, can't continue.")
+
+
+		if filename == "convert" || filename == "mogrify" {
+			fmt.Println(filename, "is part of package ImageMagick and is needed by the -sp functionality.")
+		}
+
 		fmt.Println()
 		os.Exit(1)
 	}
@@ -857,8 +863,6 @@ func remove_duplicate_subtitle_images (original_subtitles_absolute_path string, 
 			log.Fatal(err)
 		}
 
-		defer filehandle.Close()
-
 		md5_handler := md5.New()
 
 		if _, err := io.Copy(md5_handler, filehandle); err != nil {
@@ -867,6 +871,7 @@ func remove_duplicate_subtitle_images (original_subtitles_absolute_path string, 
 
 		// Caculate md5 for the subtitle file
 		md5sum := fmt.Sprintf("%x", md5_handler.Sum(nil))
+		filehandle.Close()
 
 		// If we have not stored this md5 before then store it and the name of the picture to map.
 		// If we have stored the md5 before, add the picture name to list for this md5.
@@ -2073,7 +2078,7 @@ func main() {
 			log_messages_str_slice = append(log_messages_str_slice, "--------------------------------")
 			log_messages_str_slice = append(log_messages_str_slice, strings.Join(ffmpeg_subtitle_extract_commandline, " "))
 
-			fmt.Printf("\nExtracting subtitle stream as %s - images ", subtitle_stream_image_format)
+			fmt.Printf("Extracting subtitle stream as %s - images ", subtitle_stream_image_format)
 
 			error_code = nil
 
@@ -2190,7 +2195,7 @@ func main() {
 			if *debug_mode_on == false {
 
 				if _, err := os.Stat(original_subtitles_absolute_path); err == nil {
-					fmt.Printf("\nDeleting original subtitles to recover disk space ")
+					fmt.Printf("Deleting original subtitles to recover disk space. ")
 
 					os.RemoveAll(original_subtitles_absolute_path)
 
