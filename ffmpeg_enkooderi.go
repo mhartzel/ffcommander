@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.70" // This is the version of this program
+var version_number string = "1.71" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1059,8 +1059,8 @@ func main() {
 	var subtitle_vertical_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up).")
 	var subtitle_mux_bool = flag.Bool("sm", false, "Mux subtitle into the target file. This only works with dvd, dvb and bluray bitmap based subtitles. If this option is not set then subtitles will be burned into the video. This option can not be used by itself, it must be used with -s or -sn. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file.")
 	var subtitle_palette = flag.String("palette", "", "Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: -palette f,0,f")
-	var subtitle_split = flag.Bool("sp", false, "Subtitle Split. Move subtitles that are above the center of the screen up to the top of the screen and subtitles below center down on the bottom of the screen")
-	var subtitle_resize = flag.String("sr", "", "Subtitle Resize Value. Values less than 1 makes subtitles smaller, values bigger than 1 makes subtitle larger. This option can only be user with the -sp option. Example: make subtitle 25% smaller: -sr 0.75   make subtitle 50% smaller: -sr 0.50   make subtitle 50% larger: -sr 1.50")
+	var subtitle_split = flag.Bool("sp", false, "Subtitle Split. Move subtitles that are above the center of the screen up to the top of the screen and subtitles below center down on the bottom of the screen. Distance from the screen edge will be picture height divided by 100 and rounded down to nearest integer. Minimum distance is 5 pixels and max 20 pixels. Subtitles will be automatically centered horizontally. You can resize subtitles with the -sr option when usind Subtitle Split. This option requires installing ImageMacick.")
+	var subtitle_resize = flag.String("sr", "", "Subtitle Resize. Values less than 1 makes subtitles smaller, values bigger than 1 makes subtitle larger. This option can only be user with the -sp option. Example: make subtitle 25% smaller: -sr 0.75   make subtitle 50% smaller: -sr 0.50   make subtitle 75% larger: -sr 1.75")
 
 	// Scan options
 	var fast_bool = flag.Bool("f", false, "This is the same as using options -fs and -fe at the same time.")
@@ -2180,7 +2180,16 @@ func main() {
 			fmt.Println("took", duplicate_removal_elapsed_time.Round(time.Millisecond))
 
 			subtitle_trimming_start_time := time.Now()
-			fmt.Printf("Trimming subtitle images in multiple threads ")
+
+			if *subtitle_resize != "" {
+
+				fmt.Printf("Trimming and resizing subtitle images in multiple threads ")
+
+			} else {
+
+				fmt.Printf("Trimming subtitle images in multiple threads ")
+			}
+
 			if *debug_mode_on == true {
 				fmt.Println()
 			}
