@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.59" // This is the version of this program
+var version_number string = "1.70" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -717,13 +717,17 @@ func read_filenames_in_a_dir(source_dir string) (files_str_slice []string) {
 	return files_str_slice
 }
 
-func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_absolute_path string, files_str_slice []string, video_width string, video_height string, process_number int, return_channel chan int) {
+func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_absolute_path string, files_str_slice []string, video_width string, video_height string, process_number int, return_channel chan int, subtitle_resize string) {
 
 	var subtitle_dimension_info []string
+	var subtitle_resize_info []string
 	var subtitles_dimension_map = make(map[string][]string)
 
 	var subtitle_trim_commandline_start []string
+	var subtitle_resize_commandline []string
+
 	subtitle_trim_commandline_start = append(subtitle_trim_commandline_start, "convert", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]")
+
 	var subtitle_trim_commandline []string
 
 	///////////////////////////////////////////////////////////////////
@@ -733,8 +737,8 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 	for _, subtitle_name := range files_str_slice {
 
 		subtitle_trim_commandline = nil
+
 		subtitle_trim_commandline = append(subtitle_trim_commandline_start, filepath.Join(original_subtitles_absolute_path, subtitle_name), "-compress", "rle", filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
-		// subtitle_trim_output, subtitle_trim_error, _ := run_external_command([]string{"gm", "convert", "-trim", filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
 
 		subtitle_trim_output, subtitle_trim_error, trim_error_code := run_external_command(subtitle_trim_commandline)
 
@@ -744,22 +748,45 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 		if trim_error_code != nil {
 
 			fmt.Println()
-			fmt.Println("ImageMagick trim produceed error: ", subtitle_trim_error)
+			fmt.Println("ImageMagick trim reported error: ", subtitle_trim_error)
 			fmt.Println()
 
 			continue
 		}
 
+		subtitle_resize_commandline = nil
+
+		subtitle_resize_commandline = append(subtitle_resize_commandline, "mogrify", "+distort", "SRT", subtitle_resize + ",0", "+repage", "-print", "%[fx:w],%[fx:h]", "-compress", "rle", filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
+		subtitle_resize_output, subtitle_resize_error, resize_error_code := run_external_command(subtitle_resize_commandline)
+
+		if resize_error_code != nil {
+			fmt.Println("Subtitle resize reported error:", subtitle_resize_error)
+		}
+
 		// Take image properties before and after crop and store them in a map.
+		//
 		// Image info in 'subtitle_dimension_info' is:
-		// Original width
-		// Original height
+		// Original width before crop (not used at the moment)
+		// Original height before crop (not used at the moment)
 		// Cropped width
 		// Cropped height
 		// Start of crop on x axis
-		// Start of crop on y axis
+		// Start of crop on y axis (not used at the moment)
+		// Subtitle width after resize
+		// Subtitle height after resize
 
 		subtitle_dimension_info = strings.Split(subtitle_trim_output[0], ",")
+
+		if subtitle_resize != "" {
+
+			subtitle_resize_info = strings.Split(subtitle_resize_output[0], ",")
+			subtitle_dimension_info = append(subtitle_dimension_info, subtitle_resize_info...)
+
+		} else {
+
+			subtitle_dimension_info = append(subtitle_dimension_info, "0", "0")
+		}
+
 		subtitles_dimension_map[subtitle_name] = subtitle_dimension_info
 	}
 
@@ -773,7 +800,7 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 	var subtitle_new_y int
 	counter := 0
 
-	// Define the the position of the subtitle to be 5 - 10 pixels from the top / bottom of picture depending on the video height.
+	// Define the the position of the subtitle to be 5 - 20 pixels from the top / bottom of picture depending on the video height.
 	var subtitle_margin int = video_height_int / 100
 
 	if subtitle_margin < 5 {
@@ -793,6 +820,11 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 		cropped_height, _ := strconv.Atoi(subtitles_dimension_map[subtitle_name][3])
 		// cropped_start_x ,_:= strconv.Atoi(subtitles_dimension_map[subtitle_name][4])
 		cropped_start_y, _ := strconv.Atoi(subtitles_dimension_map[subtitle_name][5])
+
+		if subtitle_resize != "" {
+			cropped_width, _ = strconv.Atoi(subtitles_dimension_map[subtitle_name][6])
+			cropped_height, _ = strconv.Atoi(subtitles_dimension_map[subtitle_name][7])
+		}
 
 		picture_center := video_height_int / 2 // Divider to find out if the subtitle is located above or below this line at the center of the picture
 		subtitle_new_x := (video_width_int / 2) - (cropped_width / 2) // This centers cropped subtitle on the x axis
@@ -1028,6 +1060,7 @@ func main() {
 	var subtitle_mux_bool = flag.Bool("sm", false, "Mux subtitle into the target file. This only works with dvd, dvb and bluray bitmap based subtitles. If this option is not set then subtitles will be burned into the video. This option can not be used by itself, it must be used with -s or -sn. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file.")
 	var subtitle_palette = flag.String("palette", "", "Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: -palette f,0,f")
 	var subtitle_split = flag.Bool("sp", false, "Subtitle Split. Move subtitles that are above the center of the screen up to the top of the screen and subtitles below center down on the bottom of the screen")
+	var subtitle_resize = flag.String("sr", "", "Subtitle Resize Value. Values less than 1 makes subtitles smaller, values bigger than 1 makes subtitle larger. This option can only be user with the -sp option. Example: make subtitle 25% smaller: -sr 0.75   make subtitle 50% smaller: -sr 0.50   make subtitle 50% larger: -sr 1.50")
 
 	// Scan options
 	var fast_bool = flag.Bool("f", false, "This is the same as using options -fs and -fe at the same time.")
@@ -1150,6 +1183,22 @@ func main() {
 		fmt.Println("The option -s requires a language code like: eng, fin, ita not a number.")
 		fmt.Println()
 		os.Exit(0)
+	}
+
+	if *subtitle_resize != "" && *subtitle_split == false {
+		fmt.Println("Subtitle resize can only be used with the -sp option, not alone.")
+	}
+
+	// Test if user gave a valid float on the commandline
+	if *subtitle_resize != "" {
+
+		subtitle_resize_float, float_parse_error := strconv.ParseFloat(*subtitle_resize, 64)
+
+		if  float_parse_error != nil || subtitle_resize_float == 0.0 {
+
+			fmt.Println("Error:", *subtitle_resize, "is not a valid number.")
+			os.Exit(1)
+		}
 	}
 
 	// Convert time values used in splitting the inputfile to seconds
@@ -2157,7 +2206,7 @@ func main() {
 					subtitle_end_number = number_of_subtitle_files
 				}
 
-				go subtitle_trim(original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_remaining[subtitle_start_number : subtitle_end_number], v_width, v_height, process_number, return_channel)
+				go subtitle_trim(original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_remaining[subtitle_start_number : subtitle_end_number], v_width, v_height, process_number, return_channel, *subtitle_resize)
 
 				if *debug_mode_on == true {
 					fmt.Println("Process number:", process_number, "started. It processes subtitles:", subtitle_start_number + 1, "-", subtitle_end_number)
