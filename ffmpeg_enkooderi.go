@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.71" // This is the version of this program
+var version_number string = "1.72" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -300,7 +300,7 @@ func convert_timecode_to_seconds(timestring string) (string, string) {
 
 	if strings.ContainsAny(timestring, ".") {
 		milliseconds_str = strings.Split(timestring, ".")[1]
-		timestring = strings.Replace(timestring, "."+milliseconds_str, "", 1)
+		timestring = strings.Replace(timestring, "." + milliseconds_str, "", 1)
 
 		// Truncate milliseconds to 3 digits
 		if len(milliseconds_str) > 3 {
@@ -1225,6 +1225,12 @@ func main() {
 		*fast_encode_bool = true
 	}
 
+	if *subtitle_split == true && *search_start_str != "" && *fast_bool == false {
+		fmt.Println("\nOptions -ss and 2-pass encoding won't work correctly with subtitle split (-sp)")
+		fmt.Println("You options are: disable 2-pass encoding with the -f option or don't use the -ss option.")
+		os.Exit(1)
+	}
+
 	// Check dvd palette hacking option string correctness.
 	if *subtitle_palette != "" {
 		temp_slice := strings.Split(*subtitle_palette, ",")
@@ -1365,6 +1371,10 @@ func main() {
 		ffmpeg_commandline_start = append(ffmpeg_commandline_start, "ffmpeg", "-y", "-hide_banner", "-threads", "auto")
 	} else {
 		ffmpeg_commandline_start = append(ffmpeg_commandline_start, "ffmpeg", "-y", "-loglevel", "8", "-threads", "auto")
+	}
+
+	if *subtitle_split == true && *search_start_str != "" {
+		ffmpeg_commandline_start = append(ffmpeg_commandline_start, "-fflags", "+genpts")
 	}
 
 	subtitle_number := *subtitle_int
@@ -1884,11 +1894,107 @@ func main() {
 
 			// Clear crop value storage map by creating a new map with the same name.
 			var crop_value_map = make(map[string]int)
+			var crop_start_seconds_str string
+			var crop_start_seconds_int int
+			var conversion_error string
+			var crop_scan_duration_int int
 
 			video_duration_int, _ := strconv.Atoi(strings.Split(video_duration, ".")[0])
 
+			// Option -t is active but not -ss
+			if *processing_time_str != "" && *search_start_str == "" {
+
+				if strings.Contains(*processing_time_str, ":") || strings.Contains(*processing_time_str, ".") {
+					duration_in_seconds, conversion_error := convert_timecode_to_seconds(*processing_time_str)
+
+					if conversion_error !="" {
+						fmt.Println("Error converting value:", *processing_time_str, "to seconds.")
+						os.Exit(1)
+					}
+
+					video_duration_temp ,_ := strconv.Atoi(duration_in_seconds)
+
+					if video_duration_temp > video_duration_int {
+						fmt.Println("Option -t ", video_duration_temp, "cannot be longer than video duration", video_duration_int)
+						os.Exit(1)
+					}
+
+					crop_scan_duration_int = video_duration_temp
+				}
+			}
+
+			// Option -ss is active but not -t
+			if *search_start_str != "" && *processing_time_str == "" {
+
+				if strings.Contains(*search_start_str, ":") || strings.Contains(*search_start_str, ".") {
+					crop_start_seconds_str, conversion_error = convert_timecode_to_seconds(*search_start_str)
+
+					if conversion_error !="" {
+						fmt.Println("Error converting value:", crop_start_seconds_str, "to seconds.")
+						os.Exit(1)
+					}
+
+					crop_start_seconds_int ,_ = strconv.Atoi(crop_start_seconds_str)
+
+					if crop_start_seconds_int >= video_duration_int {
+						fmt.Println("Option -ss ", crop_start_seconds_int, "cannot start ouside video duration", video_duration_int)
+						os.Exit(1)
+					}
+
+					crop_scan_duration_int = video_duration_int - crop_start_seconds_int
+				}
+			}
+
+			// Both options -t and -ss are active
+			if *processing_time_str != "" && *search_start_str != "" {
+
+				var video_duration_temp int
+
+				if strings.Contains(*processing_time_str, ":") || strings.Contains(*processing_time_str, ".") {
+					duration_in_seconds, conversion_error := convert_timecode_to_seconds(*processing_time_str)
+
+					if conversion_error !="" {
+						fmt.Println("Error converting value:", *processing_time_str, "to seconds.")
+						os.Exit(1)
+					}
+
+					video_duration_temp ,_ = strconv.Atoi(duration_in_seconds)
+
+				}
+
+				if strings.Contains(*search_start_str, ":") || strings.Contains(*search_start_str, ".") {
+
+					crop_start_seconds_str, conversion_error = convert_timecode_to_seconds(*search_start_str)
+
+					if conversion_error !="" {
+						fmt.Println("Error converting value:", crop_start_seconds_str, "to seconds.")
+						os.Exit(1)
+					}
+
+					crop_start_seconds_int ,_ = strconv.Atoi(crop_start_seconds_str)
+
+					if crop_start_seconds_int >= video_duration_int {
+						fmt.Println("Option -ss ", crop_start_seconds_int, "cannot start ouside video duration", video_duration_int)
+						os.Exit(1)
+					}
+
+					if crop_start_seconds_int + video_duration_temp > video_duration_int {
+						fmt.Println("Times from options -ss", crop_start_seconds_int, "and -tt", video_duration_temp, "combined caanot be longer than video duration", video_duration_int)
+						os.Exit(1)
+					}
+
+					crop_scan_duration_int = video_duration_temp
+				}
+			}
+
+			if *debug_mode_on == true {
+				fmt.Println("video_duration_int:", video_duration_int)
+				fmt.Println("crop_start_seconds_int:", crop_start_seconds_int)
+				fmt.Println("crop_scan_duration_int:", crop_scan_duration_int)
+			}
+
 			// For long videos take short snapshots of crop values spanning the whole file. This is "quick scan mode".
-			if video_duration_int > 300 {
+			if crop_scan_duration_int > 300 {
 
 				spotcheck_interval := video_duration_int / 10 // How many spot checks will be made across the duration of the video (default = 10)
 				scan_duration_str := "10"                     // How many seconds of video to scan for each spot (default = 10 seconds)
@@ -1899,7 +2005,7 @@ func main() {
 				}
 
 				// Repeat spot checks
-				for time_to_jump_to := scan_duration_int; time_to_jump_to+scan_duration_int < video_duration_int; time_to_jump_to = time_to_jump_to + spotcheck_interval {
+				for time_to_jump_to := crop_start_seconds_int + scan_duration_int ; time_to_jump_to + scan_duration_int < video_duration_int ; time_to_jump_to = time_to_jump_to + spotcheck_interval {
 
 					// Create the ffmpeg command to scan for crop values
 					command_to_run_str_slice = nil
@@ -1952,10 +2058,14 @@ func main() {
 			}
 
 			// Scan the file for crop values.
-			if video_duration_int < 300 || quick_scan_failed == true || len(crop_value_map) == 0 {
+			if crop_scan_duration_int < 300 || quick_scan_failed == true || len(crop_value_map) == 0 {
+
+				if quick_scan_failed == true {
+					crop_scan_duration_int = 1800
+				}
 
 				command_to_run_str_slice = nil
-				command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-t", "1800", "-i", file_name, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:8:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
+				command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-t", strconv.Itoa(crop_scan_duration_int), "-i", file_name, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:8:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
 
 				if *debug_mode_on == false {
 					fmt.Printf("Finding crop values for: " + inputfile_name + "   ")
