@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.72" // This is the version of this program
+var version_number string = "1.73" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1226,8 +1226,8 @@ func main() {
 	}
 
 	if *subtitle_split == true && *search_start_str != "" && *fast_bool == false {
-		fmt.Println("\nOptions -ss and 2-pass encoding won't work correctly with subtitle split (-sp)")
-		fmt.Println("You options are: disable 2-pass encoding with the -f option or don't use the -ss option.")
+		fmt.Println("\nOptions -ss -sp and 2-pass encoding won't work correctly together.")
+		fmt.Println("You options are: disable 2-pass encoding with the -f option or don't use the -ss option.\n")
 		os.Exit(1)
 	}
 
