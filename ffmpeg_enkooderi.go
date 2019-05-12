@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.74" // This is the version of this program
+var version_number string = "1.75" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -2597,7 +2597,7 @@ func main() {
 
 			if *no_audio == true {
 				audio_compression_options = nil
-				audio_compression_options = append(audio_compression_options, "-na")
+				audio_compression_options = append(audio_compression_options, "-an")
 			}
 
 			// Add video compression options to ffmpeg commandline
@@ -2706,7 +2706,7 @@ func main() {
 
 				if *no_audio == true {
 
-					fmt.Printf("Audio processing is off")
+					fmt.Println("Audio processing is off")
 
 				} else if *audio_compression_ac3 == true {
 
