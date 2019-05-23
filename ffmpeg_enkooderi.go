@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.77" // This is the version of this program
+var version_number string = "1.78" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1314,6 +1314,7 @@ func main() {
 		fmt.Println("(C) Mikael Hartzell 2018.")
 		fmt.Println()
 		fmt.Println("FFmpeg version 3 or higher is required to use this program.")
+		fmt.Println("Subtitle processing with the -sp option requires ImageMagick.")
 		fmt.Println()
 		fmt.Println("This program is distributed under the GNU General Public License, version 3 (GPLv3)")
 		fmt.Println("Check the license here: http://www.gnu.org/licenses/gpl.txt")
@@ -1368,10 +1369,31 @@ func main() {
 		deinterlace_options = "idet,yadif=0:deint=all"
 	}
 
+	number_of_physical_processors, err := get_number_of_physical_processors()
+
+	if number_of_physical_processors < 1 || err != nil {
+		number_of_physical_processors = 2
+
+		fmt.Println()
+		fmt.Println("ERROR, Could not find out the number of physical processors:", err)
+		fmt.Println("Using 2 threads for processing")
+		fmt.Println()
+	}
+
+	number_of_threads_to_use_for_video_compression := "auto"
+
+	// Don't use more than 8 threads to process a single video because it is claimed that video quality goes down when using more than 10 cores with x264 encoder.
+	// Also processing go sligthly faster when ffmpeg is using max 8 cores.
+	// The user may process files in 4 simultaneously by dividing videos to 4 dirs and processing each simultaneously.
+	// It seems the sweet spot for ffmpeg compression is to use 2 x threads compared to physical cores, for examply with 16 cores run 4 simultaneus runs where each run uses 8 threads (8 x 4 = 24 threads).
+	if number_of_physical_processors > 8 {
+		number_of_threads_to_use_for_video_compression = "8"
+	}
+
 	if *debug_mode_on == true {
-		ffmpeg_commandline_start = append(ffmpeg_commandline_start, "ffmpeg", "-y", "-hide_banner", "-threads", "auto")
+		ffmpeg_commandline_start = append(ffmpeg_commandline_start, "ffmpeg", "-y", "-hide_banner", "-threads", number_of_threads_to_use_for_video_compression)
 	} else {
-		ffmpeg_commandline_start = append(ffmpeg_commandline_start, "ffmpeg", "-y", "-loglevel", "8", "-threads", "auto")
+		ffmpeg_commandline_start = append(ffmpeg_commandline_start, "ffmpeg", "-y", "-loglevel", "8", "-threads", number_of_threads_to_use_for_video_compression)
 	}
 
 	if *subtitle_split == true && *search_start_str != "" {
@@ -2270,16 +2292,6 @@ func main() {
 			//////////////////////////////////////////////////////////////////////////////////////////
 			// Process extracted subtitles in as many threads as there are physical processor cores //
 			//////////////////////////////////////////////////////////////////////////////////////////
-			number_of_physical_processors, err := get_number_of_physical_processors()
-
-			if number_of_physical_processors < 1 || err != nil {
-				number_of_physical_processors = 2
-
-				fmt.Println()
-				fmt.Println("ERROR, Could not find out the number of physical processors:", err)
-				fmt.Println("Using 2 threads for processing")
-				fmt.Println()
-			}
 
 			// Read in subtitle file names
 			files_str_slice := read_filenames_in_a_dir(original_subtitles_absolute_path)
