@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.78" // This is the version of this program
+var version_number string = "1.79" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -2192,8 +2192,11 @@ func main() {
 			// Prepare offset for possible subtitle burn in
 			// Subtitle placement is always relative to the left side of the picture,
 			// if left is cropped then the subtitle needs to be moved left the same amount of pixels
-			subtitle_horizontal_offset_int = crop_values_width_offset * -1
-			subtitle_horizontal_offset_str = strconv.Itoa(subtitle_horizontal_offset_int)
+			// Don't use subtitle offset if option -sp is active because it will center subtitles automatically.
+			if *subtitle_split == false {
+				subtitle_horizontal_offset_int = crop_values_width_offset * -1
+				subtitle_horizontal_offset_str = strconv.Itoa(subtitle_horizontal_offset_int)
+			}
 
 			fmt.Println("Top:", crop_values_height_offset, ", Bottom:", strconv.Itoa(cropped_height), ", Left:", crop_values_width_offset, ", Right:", strconv.Itoa(cropped_width))
 
