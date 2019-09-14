@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.79" // This is the version of this program
+var version_number string = "1.80" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1036,9 +1036,9 @@ func main() {
 	// Define and parse commandline options //
 	//////////////////////////////////////////
 	// Audio options
-	var audio_language_str = flag.String("a", "", "Audio language: -a fin or -a eng or -a ita  Only use option -an or -a not both.")
-	var audio_stream_number_int = flag.Int("an", 0, "Audio stream number, -a 1 (Use audio stream number 1 from the source file).")
-	var audio_compression_ac3 = flag.Bool("ac3", false, "Compress audio as ac3. Channel count adjusts compression bitrate automatically. Stereo uses 256k and 3 - 6 channels uses 640k bitrate.")
+	var audio_language_str = flag.String("a", "", "Audio language: -a fin or -a eng or -a ita  Find audio stream corresponding the language code. Only use option -an or -a not both.")
+	var audio_stream_number_int = flag.Int("an", 0, "Audio stream number, -a 1. Only use option -an or -a not both.")
+	var audio_compression_ac3 = flag.Bool("ac3", false, "Compress audio as ac3. Channel count adjusts compression bitrate automatically. Stereo uses 256k and 3 - 6 channels uses 640k bitrate. By default the original audiostream is copied without conversion.")
 	var no_audio = flag.Bool("na", false, "Disable audio processing. The resulting file will have no audio, only video.")
 
 	// Video options
@@ -2723,7 +2723,7 @@ func main() {
 
 			} else {
 				fmt.Println()
-				fmt.Printf("Encoding with video bitrate: %s. ", video_bitrate)
+				fmt.Printf("Encoding video with video bitrate: %s. ", video_bitrate)
 
 				if color_subsampling != "yuv420p" {
 					fmt.Println("Subsampling color:", color_subsampling, "---> yuv420p")
