@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.80" // This is the version of this program
+var version_number string = "1.81" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1187,7 +1187,10 @@ func main() {
 	}
 
 	if *subtitle_resize != "" && *subtitle_split == false {
+		fmt.Println()
 		fmt.Println("Subtitle resize can only be used with the -sp option, not alone.")
+		fmt.Println()
+		os.Exit(0)
 	}
 
 	// Test if user gave a valid float on the commandline
@@ -2904,9 +2907,14 @@ func main() {
 				if *debug_mode_on == true {
 					fmt.Println("\nExtracted subtitle images are not deleted in debug - mode.\n")
 				} else {
-					// Remove subtitle extract base directory and all its contents
-					if _, err := os.Stat(subtitle_extract_base_path); err == nil {
-						os.RemoveAll(subtitle_extract_base_path)
+
+					// Remove subtitle directories.
+					if _, err := os.Stat(original_subtitles_absolute_path); err == nil {
+						os.RemoveAll(original_subtitles_absolute_path)
+					}
+
+					if _, err := os.Stat(fixed_subtitles_absolute_path); err == nil {
+						os.RemoveAll(fixed_subtitles_absolute_path)
 					}
 				}
 			}
