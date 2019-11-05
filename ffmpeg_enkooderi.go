@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.81" // This is the version of this program
+var version_number string = "1.82" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1076,6 +1076,7 @@ func main() {
 	var use_matroska_container = flag.Bool("mkv", false, "Use matroska (mkv) as the output file wrapper format.")
 	var show_program_version_short = flag.Bool("v", false, "Show the version of this program.")
 	var show_program_version_long = flag.Bool("version", false, "Show the version of this program.")
+	var temp_file_directory = flag.String("td", "", "Path to directory for temporary files, example_ -td PathToDir. This option directs temporary files created with 2-pass encoding and subtitle processing with the -sp switch to a separate directory. If the temp dir is a ram or a fast ssd disk then it speeds up processing with the -sp switch. Processing files with the -sp switch extracts every frame of the movie as a picture, so you need to have lots of space in the temp directory. For a FullHD movie you need to have 20 GB or more free storage. If you run multiple instances of this program simultaneously each instance processing one FullHD movie then you need 20 GB or more free storage for each movie that is processed at the same time. -sp switch extracts movie subtitle frames with FFmpeg and FFmpeg fails silently if it runs out of storage space. If this happens then some of the last subtitles won't be available when the video is compressed and this results the last available subtitle to be 'stuck' on top of video to the end of the movie.")
 
 	//////////////////////
 	// Define variables //
@@ -1306,6 +1307,17 @@ func main() {
 					*subtitle_palette = *subtitle_palette + ","
 				}
 			}
+		}
+	}
+
+	// Check if user given path to temp folder exists
+	if *temp_file_directory != "" {
+
+		if _, err := os.Stat(*temp_file_directory); os.IsNotExist(err) {
+			fmt.Println()
+			fmt.Println("Path to temp file dir: ", *temp_file_directory, " does not exist.")
+			fmt.Println()
+			os.Exit(0)
 		}
 	}
 
@@ -1667,6 +1679,11 @@ func main() {
 		input_filename_extension := filepath.Ext(inputfile_name)
 		output_file_absolute_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension)+output_filename_extension)
 		subtitle_extract_base_path := filepath.Join(inputfile_path, output_directory_name, subtitle_extract_dir)
+
+		if *temp_file_directory != "" {
+			subtitle_extract_base_path = filepath.Join(*temp_file_directory, output_directory_name, subtitle_extract_dir)
+		}
+
 		original_subtitles_absolute_path := filepath.Join(subtitle_extract_base_path, inputfile_name + "-" + original_subtitles_dir)
 		fixed_subtitles_absolute_path := filepath.Join(subtitle_extract_base_path, inputfile_name + "-" + fixed_subtitles_dir)
 
@@ -2643,6 +2660,10 @@ func main() {
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(*audio_stream_number_int))
 
 			ffmpeg_2_pass_logfile_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension))
+
+			if *temp_file_directory != "" {
+				ffmpeg_2_pass_logfile_path = filepath.Join(*temp_file_directory, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension))
+			}
 
 			if *fast_encode_bool == false {
 				// Add 2 - pass logfile path to ffmpeg commandline
