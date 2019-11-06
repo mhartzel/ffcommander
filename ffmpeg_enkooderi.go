@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.82" // This is the version of this program
+var version_number string = "1.83" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1144,8 +1144,10 @@ func main() {
 	// The unparsed options left on the commandline are filenames, store them in a slice.
 	for _, file_name := range flag.Args() {
 
+		fileinfo, err := os.Stat(file_name)
+
 		// Test if input files exist
-		if _, err := os.Stat(file_name); os.IsNotExist(err) {
+		if os.IsNotExist(err) == true {
 
 			fmt.Println()
 			fmt.Println("Error !!!!!!!")
@@ -1153,11 +1155,21 @@ func main() {
 			fmt.Println()
 
 			os.Exit(1)
-
-		} else {
-			// Add all existing input file names to a slice
-			input_filenames = append(input_filenames, file_name)
 		}
+
+		// Test if name is a directory
+		if fileinfo.IsDir() == true {
+
+			fmt.Println()
+			fmt.Println("Error !!!!!!!")
+			fmt.Println(file_name + " is not a file it is a directory.")
+			fmt.Println()
+
+			os.Exit(1)
+		}
+
+		// Add all existing input file names to a slice
+		input_filenames = append(input_filenames, file_name)
 	}
 
 	/////////////////////////////////////////////////////////
@@ -1398,9 +1410,11 @@ func main() {
 	number_of_threads_to_use_for_video_compression := "auto"
 
 	// Don't use more than 8 threads to process a single video because it is claimed that video quality goes down when using more than 10 cores with x264 encoder.
-	// Also processing go sligthly faster when ffmpeg is using max 8 cores.
+	// https://streaminglearningcenter.com/blogs/ffmpeg-command-threads-how-it-affects-quality-and-performance.html
+	// Yllä mainitun sivun screenshot löytyy koodin hakemistosta '00-vanhat' nimellä: 'FFmpeg Threads Command How it Affects Quality and Performance.jpg'
+	// It is said that this is caused by the fact that the processing threads can't use the results from other threads to optimize compression.
+	// Also processing goes sligthly faster when ffmpeg is using max 8 cores.
 	// The user may process files in 4 simultaneously by dividing videos to 4 dirs and processing each simultaneously.
-	// It seems the sweet spot for ffmpeg compression is to use 2 x threads compared to physical cores, for examply with 16 cores run 4 simultaneus runs where each run uses 8 threads (8 x 4 = 24 threads).
 	if number_of_physical_processors > 8 {
 		number_of_threads_to_use_for_video_compression = "8"
 	}
