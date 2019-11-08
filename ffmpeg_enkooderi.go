@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.84" // This is the version of this program
+var version_number string = "1.85" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1106,7 +1106,7 @@ func main() {
 	var crop_values_height_offset int
 	var unsorted_ffprobe_information_str_slice []string
 	var error_code error
-	var error_messages []string
+	var error_messages_map = make (map[string][]string)
 	var file_counter int
 	var file_counter_str string
 	var files_to_process_str string
@@ -1553,11 +1553,21 @@ func main() {
 		video_height := video_slice[2]
 
 		audio_slice := file_info_slice[1]
+		audio_stream_found := false
 
 		subtitle_slice := file_info_slice[2]
 
 		if video_width == "0" || video_height == "0" {
-			error_messages = append(error_messages, "File: '" + file_name + "' does not have a video stream.")
+
+			var error_messages []string
+
+			if _, item_found := error_messages_map[file_name]; item_found == true {
+				error_messages = error_messages_map[file_name]
+			}
+
+			error_messages = append(error_messages, "File does not have a video stream.")
+			error_messages_map[file_name] = error_messages
+
 			break
 		}
 
@@ -1566,8 +1576,6 @@ func main() {
 		// If no matching audio is found stop the program.                                                //
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		if *audio_language_str != "" {
-
-			audio_stream_found := false
 
 			for audio_stream_number, audio_info := range audio_slice {
 				audio_language = audio_info[0]
@@ -1579,13 +1587,18 @@ func main() {
 					audio_stream_found = true
 					break
 				}
-
 			}
 
 			if audio_stream_found == false {
-				error_messages = append(error_messages, "Error, file: '" + file_name + "' does not have audio language: " + *audio_language_str)
-				error_messages = append(error_messages, "Scan the file for possible audio languages with the -scan option.")
-				error_messages = append(error_messages, "")
+
+				var error_messages []string
+
+				if _, item_found := error_messages_map[file_name]; item_found == true {
+					error_messages = error_messages_map[file_name]
+				}
+
+				error_messages = append(error_messages, "Error, file does not have audio language: " + *audio_language_str)
+				error_messages_map[file_name] = error_messages
 			}
 
 			if *debug_mode_on == true {
@@ -1598,14 +1611,25 @@ func main() {
 
 			if len(audio_slice) - 1 < *audio_stream_number_int {
 
-				error_messages = append(error_messages, "Error, file: '" + file_name + "' does not have an audio stream number: " + strconv.Itoa(*audio_stream_number_int))
+				var error_messages []string
+
+				if _, item_found := error_messages_map[file_name]; item_found == true {
+					error_messages = error_messages_map[file_name]
+				}
+
+				error_messages = append(error_messages, "Error, file does not have an audio stream number: " + strconv.Itoa(*audio_stream_number_int))
+				error_messages_map[file_name] = error_messages
 
 			} else {
 
 				audio_info := audio_slice[*audio_stream_number_int]
 				number_of_audio_channels = audio_info[2]
-				audio_codec = audio_info[4]
+				audio_codec = strings.ToLower(audio_info[4])
 			}
+		}
+
+		if audio_codec == "ac-3" {
+			audio_codec = "ac3"
 		}
 
 		if *audio_compression_aac == true {
@@ -1627,28 +1651,68 @@ func main() {
 		number_of_audio_channels_int, _ := strconv.Atoi(number_of_audio_channels)
 
 		if audio_codec == "ac3" && number_of_audio_channels_int > 6 {
-			error_messages = append(error_messages, "Error, file: '" + file_name + "' has "  + number_of_audio_channels + " audio channels, but AC3 supports max 6 channels")
+
+			var error_messages []string
+
+			if _, item_found := error_messages_map[file_name]; item_found == true {
+				error_messages = error_messages_map[file_name]
+			}
+
+			error_messages = append(error_messages, "Error, file has " + number_of_audio_channels + " audio channels, but AC3 supports max 6 channels")
+			error_messages_map[file_name] = error_messages
 		}
 
 		if audio_codec == "flac" && number_of_audio_channels_int > 8 {
-			error_messages = append(error_messages, "Error, file: '" + file_name + "' has "  + number_of_audio_channels + " audio channels, but FLAC supports max 8 channels")
+
+			var error_messages []string
+
+			if _, item_found := error_messages_map[file_name]; item_found == true {
+				error_messages = error_messages_map[file_name]
+			}
+
+			error_messages = append(error_messages, "Error, file has " + number_of_audio_channels + " audio channels, but FLAC supports max 8 channels")
+			error_messages_map[file_name] = error_messages
 		}
 
 		if audio_codec == "aac" && number_of_audio_channels_int > 48 {
-			error_messages = append(error_messages, "Error, file: '" + file_name + "' has "  + number_of_audio_channels + " audio channels, but AAC supports max 48 channels")
+
+			var error_messages []string
+
+			if _, item_found := error_messages_map[file_name]; item_found == true {
+				error_messages = error_messages_map[file_name]
+			}
+
+			error_messages = append(error_messages, "Error, file has " + number_of_audio_channels + " audio channels, but AAC supports max 48 channels")
+			error_messages_map[file_name] = error_messages
 		}
 
 		if audio_codec == "opus" && number_of_audio_channels_int > 255 {
-			error_messages = append(error_messages, "Error, file: '" + file_name + "' has "  + number_of_audio_channels + " audio channels, but Opus supports max 255 channels")
+
+			var error_messages []string
+
+			if _, item_found := error_messages_map[file_name]; item_found == true {
+				error_messages = error_messages_map[file_name]
+			}
+
+			error_messages = append(error_messages, "Error, file has " + number_of_audio_channels + " audio channels, but Opus supports max 255 channels")
+			error_messages_map[file_name] = error_messages
 		}
 
 		// Test if output audio codec is compatible with the mp4 wrapper format
-		if *use_matroska_container == false {
+		if *use_matroska_container == false && audio_stream_found == true {
 
 			if audio_codec != "aac" && audio_codec != "ac3" && audio_codec != "mp2" && audio_codec != "mp3" && audio_codec != "dts" && audio_codec != "opus" {
-				error_messages = append(error_messages, "Error, audio codec: " + audio_codec + " in file: " + file_name + " is not compatible with the mp4 wrapper format.")
+
+				var error_messages []string
+
+				if _, item_found := error_messages_map[file_name]; item_found == true {
+					error_messages = error_messages_map[file_name]
+				}
+
+				error_messages = append(error_messages, "Error, audio codec: " + audio_codec + " in file is not compatible with the mp4 wrapper format.")
 				error_messages = append(error_messages, "Either use a compatible audio format (aac, ac3, mp2, mp3, dts) or the -mkv switch to export to a matroska file.")
 				error_messages = append(error_messages, "")
+				error_messages_map[file_name] = error_messages
 			}
 		}
 
@@ -1673,7 +1737,14 @@ func main() {
 			}
 
 			if subtitle_found == false {
-				error_messages = append(error_messages, "Error, file: '" + file_name + "' does not have subtitle language: " + *subtitle_language_str)
+				var error_messages []string
+
+				if _, item_found := error_messages_map[file_name]; item_found == true {
+					error_messages = error_messages_map[file_name]
+				}
+
+				error_messages = append(error_messages, "Error, file does not have subtitle language: " + *subtitle_language_str)
+				error_messages_map[file_name] = error_messages
 			}
 
 			if *debug_mode_on == true {
@@ -1685,115 +1756,55 @@ func main() {
 		} else {
 			// If user gave subtitle stream number, check that we have at least that much subtitle streams in the source file.
 			if len(subtitle_slice) - 1 < subtitle_number {
-				error_messages = append(error_messages, "Error, file: '" + file_name + "' does not have an subtitle stream number: " + strconv.Itoa(subtitle_number))
+
+				var error_messages []string
+
+				if _, item_found := error_messages_map[file_name]; item_found == true {
+					error_messages = error_messages_map[file_name]
+				}
+
+				error_messages = append(error_messages, "Error, file does not have an subtitle stream number: " + strconv.Itoa(subtitle_number))
+				error_messages_map[file_name] = error_messages
 			}
 		}
 
 		// Store info about selected video  always stream 0), audio and subtitle streams.
-		if len(error_messages) == 0 {
+		if len(error_messages_map) == 0 {
 			var selected_streams_temp []string
 			selected_streams_temp = append(selected_streams_temp, "0", strconv.Itoa(*audio_stream_number_int), strconv.Itoa(subtitle_number))
 			selected_streams[file_name] = selected_streams_temp
-
-			// FIXME
-			// *audio_stream_number_int = 0
-			// subtitle_number = -1
 		}
 	}
 
 	// If there were error messages then we can't process all files that the user gave on the commandline, inform the user and exit.
-	if len(error_messages) > 0 {
+	if len(error_messages_map) > 0 {
 
-		fmt.Println()
+		// Sort file names
+		var filenames []string
 
-		for _, item := range error_messages {
-			fmt.Println(item)
+		for key := range error_messages_map {
+			filenames = append(filenames, key)
+		}
+
+		sort.Strings(filenames)
+
+		// Print error messages for each file.
+		for _, file_name := range filenames {
+
+			error_messages := error_messages_map[file_name]
+
+			fmt.Println()
+			fmt.Println(file_name)
+			fmt.Println(strings.Repeat("-", len(file_name) + 1 ))
+
+			for _, text_line := range error_messages {
+				fmt.Println(text_line)
+			}
 		}
 
 		fmt.Println()
 		os.Exit(1)
 	}
-
-	// FIXME
-	////////////////////////////////////////////////////////////////////////////////////////////////////
-	// If user gave us the audio language (fin, eng, ita), find the corresponding audio stream number //
-	// If no matching audio is found stop the program.                                                //
-	////////////////////////////////////////////////////////////////////////////////////////////////////
-	// if *audio_language_str != "" {
-
-	// 	for _, file_info_slice := range Complete_file_info_slice {
-
-	// 		video_slice_temp := file_info_slice[0]
-	// 		video_slice := video_slice_temp[0]
-	// 		file_name := video_slice[0]
-	// 		audio_slice := file_info_slice[1]
-	// 		audio_stream_found := false
-
-	// 		for _, audio_info := range audio_slice {
-	// 			audio_language = audio_info[0]
-
-	// 			if *audio_language_str == audio_language {
-	// 				audio_stream_found = true
-	// 				break // Continue searching the next file when the first matching audio language has been found.
-	// 			}
-
-	// 		}
-	// 		if audio_stream_found == false {
-	// 			fmt.Println()
-	// 			fmt.Printf("Error, could not find audio language: %s in file: %s\n", *audio_language_str, file_name)
-	// 			fmt.Println("Scan the file for possible audio languages with the -scan option.")
-	// 			fmt.Println()
-	// 			os.Exit(0)
-	// 		}
-
-	// 		if *debug_mode_on == true {
-	// 			fmt.Println()
-	// 			fmt.Printf("Audio: %s was found in file %s\n", *audio_language_str, file_name)
-	// 			fmt.Println()
-	// 		}
-	// 	}
-
-	// }
-
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// If user gave us the subtitle language (fin, eng, ita), find the corresponding subtitle stream number //
-	// If no matching subtitle is found stop the program.                                                   //
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// if *subtitle_language_str != "" {
-
-	// 	for _, file_info_slice := range Complete_file_info_slice {
-
-	// 		video_slice_temp := file_info_slice[0]
-	// 		video_slice := video_slice_temp[0]
-	// 		file_name := video_slice[0]
-	// 		subtitle_slice := file_info_slice[2]
-	// 		subtitle_found := false
-
-	// 		for _, subtitle_info := range subtitle_slice {
-	// 			subtitle_language = subtitle_info[0]
-
-	// 			if *subtitle_language_str == subtitle_language {
-	// 				subtitle_found = true
-	// 				break // Continue searching the next file when the first matching subtitle has been found.
-	// 			}
-
-	// 		}
-
-	// 		if subtitle_found == false {
-	// 			fmt.Println()
-	// 			fmt.Printf("Error, could not find subtitle language: '%s' in file: %s\n", *subtitle_language_str, file_name)
-	// 			fmt.Println("Scan the file for possible subtitle languages with the -scan option.")
-	// 			fmt.Println()
-	// 			os.Exit(0)
-	// 		}
-
-	// 		if *debug_mode_on == true {
-	// 			fmt.Println()
-	// 			fmt.Printf("Subtitle: %s was found in file %s\n", *subtitle_language_str, file_name)
-	// 			fmt.Println()
-	// 		}
-	// 	}
-	// }
 
 	/////////////////////////////////////////
 	// Main loop that processess all files //
@@ -1877,120 +1888,6 @@ func main() {
 		selected_streams_slice := selected_streams[file_name]
 		*audio_stream_number_int, _ = strconv.Atoi(selected_streams_slice[1])
 		subtitle_number, _ = strconv.Atoi(selected_streams_slice[2])
-
-		// FIXME
-		// /////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// // Find stream audio number corresponding to the audio language name (eng, fin, ita) user possibly gave us //
-		// /////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// if *audio_language_str != "" {
-
-		// 	audio_slice := file_info_slice[1]
-		// 	audio_stream_found := false
-
-		// 	for audio_stream_number, audio_info := range audio_slice {
-		// 		audio_language = audio_info[0]
-
-		// 		if *audio_language_str == audio_language {
-		// 			*audio_stream_number_int = audio_stream_number
-		// 			number_of_audio_channels = audio_info[2]
-		// 			audio_stream_found = true
-		// 			break // Break out of the loop when the first matching audio has been found.
-		// 		}
-		// 	}
-
-		// 	if audio_stream_found == false {
-		// 		fmt.Println()
-		// 		fmt.Printf("Error, could not find audio language: %s in file: %s\n", *audio_language_str, file_name)
-		// 		fmt.Println("Scan the file for possible audio languages with the -scan option.")
-		// 		fmt.Println()
-		// 		os.Exit(0)
-		// 	}
-
-		// 	if *debug_mode_on == true {
-		// 		fmt.Println()
-		// 		fmt.Printf("Audio: %s was found in audio stream number: %d\n", *audio_language_str, *audio_stream_number_int)
-		// 		fmt.Println()
-		// 	}
-
-		// } else {
-		// 	audio_slice := file_info_slice[1]
-		// 	audio_info := audio_slice[*audio_stream_number_int]
-		// 	number_of_audio_channels = audio_info[2]
-		// }
-
-		// Test if output audio codec is compatible with the mp4 wrapper format
-		// audio_slice := file_info_slice[1]
-		// audio_info := audio_slice[*audio_stream_number_int]
-		// audio_codec = audio_info[4]
-
-		// FIXME
-		// if *audio_compression_aac == true {
-		// 	audio_codec = "aac"
-		// }
-
-		// if *audio_compression_opus == true {
-		// 	audio_codec = "opus"
-		// }
-
-		// if *audio_compression_ac3 == true {
-		// 	audio_codec = "ac3"
-		// }
-
-		// if split_video == true {
-		// 	audio_codec = "flac"
-		// }
-
-		// if *use_matroska_container == false {
-
-		// 	if audio_codec != "aac" && audio_codec != "ac3" && audio_codec != "mp2" && audio_codec != "mp3" && audio_codec != "dts" && audio_codec != "opus" {
-		// 		fmt.Println()
-		// 		fmt.Printf("Error, audio codec: '%s' in file: %s is not compatible with the mp4 wrapper format.\n", audio_codec, file_name)
-		// 		fmt.Println("The compatible audio formats are: aac, ac3, mp2, mp3, dts.")
-		// 		fmt.Println("")
-		// 		fmt.Println("You have these options:")
-		// 		fmt.Println("1. Use the -scan option to find which input files have incompatible audio and process these files separately.")
-		// 		fmt.Println("2. Use the -aac option to compress audio to aac.")
-		// 		fmt.Println("3. Use the -ac3 option to compress audio to ac3.")
-		// 		fmt.Println("4. Use the -opus option to compress audio to opus. Opus support in mp4 container is experimental as of FFmpeg vesion 4.2.1.")
-		// 		fmt.Println("5. Use the -mkv option to use matroska as the output file wrapper format.")
-		// 		fmt.Println()
-		// 		os.Exit(0)
-		// 	}
-		// }
-
-		// ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// // Find subtitle stream number corresponding to the subtitle language name (eng, fin, ita) user possibly gave us //
-		// ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// if *subtitle_language_str != "" {
-
-		// 	subtitle_slice := file_info_slice[2]
-		// 	subtitle_found := false
-
-		// 	for subtitle_stream_number, subtitle_info := range subtitle_slice {
-		// 		subtitle_language = subtitle_info[0]
-
-		// 		if *subtitle_language_str == subtitle_language {
-		// 			subtitle_number = subtitle_stream_number
-		// 			subtitle_found = true
-		// 			break // Stop searching when the first matching subtitle has been found.
-		// 		}
-
-		// 	}
-
-		// 	if subtitle_found == false {
-		// 		fmt.Println()
-		// 		fmt.Printf("Error, could not find subtitle language: '%s' in file: %s\n", *subtitle_language_str, file_name)
-		// 		fmt.Println("Scan the file for possible subtitle languages with the -scan option.")
-		// 		fmt.Println()
-		// 		os.Exit(0)
-		// 	}
-
-		// 	if *debug_mode_on == true {
-		// 		fmt.Println()
-		// 		fmt.Printf("Subtitle: %s was found in subtitle stream number: %d\n", *subtitle_language_str, subtitle_number)
-		// 		fmt.Println()
-		// 	}
-		// }
 
 		////////////////////////////////////////////////////
 		// Split out and use only some parts of the video //
