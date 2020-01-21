@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.85" // This is the version of this program
+var version_number string = "1.87" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1948,13 +1948,27 @@ func main() {
 					os.Exit(0)
 				}
 
-				file_split_output_temp, _, error_code := run_external_command(ffmpeg_file_split_commandline)
+				file_split_output_temp, file_split_error_output_temp, error_code := run_external_command(ffmpeg_file_split_commandline)
 
 				if error_code != nil {
 
-					fmt.Println("\n\nFFmpeg reported error:", file_split_output_temp, "\n")
+					fmt.Println("\n\nFFmpeg reported error:", "\n")
+
+					if len(file_split_output_temp) != 0 {
+						for _, textline := range file_split_output_temp {
+							fmt.Println(textline)
+						}
+					}
+
+					if len(file_split_error_output_temp) != 0 {
+						for _, textline := range file_split_error_output_temp {
+							fmt.Println(textline)
+						}
+					}
+
 					os.Exit(1)
 				}
+
 			}
 
 			file_split_elapsed_time = time.Since(file_split_start_time)
@@ -2127,11 +2141,24 @@ func main() {
 						fmt.Println()
 					}
 
-					_, ffmpeg_crop_output, error_code := run_external_command(command_to_run_str_slice)
+					ffmpeg_crop_output, ffmpeg_crop_error_output, error_code := run_external_command(command_to_run_str_slice)
 
 					if error_code != nil {
 
-						fmt.Println("\n\nFFmpeg reported error:", ffmpeg_crop_output, "\n")
+						fmt.Println("\n\nFFmpeg reported error:", "\n")
+
+						if len(ffmpeg_crop_output) != 0 {
+							for _, textline := range ffmpeg_crop_output {
+								fmt.Println(textline)
+							}
+						}
+
+						if len(ffmpeg_crop_error_output) != 0 {
+							for _, textline := range ffmpeg_crop_error_output {
+								fmt.Println(textline)
+							}
+						}
+
 						os.Exit(1)
 					}
 
@@ -2140,7 +2167,7 @@ func main() {
 
 						crop_value_counter := 0
 
-						for _, slice_item := range ffmpeg_crop_output {
+						for _, slice_item := range ffmpeg_crop_error_output {
 
 							for _, item := range strings.Split(slice_item, "\n") {
 
@@ -2192,11 +2219,24 @@ func main() {
 					fmt.Println()
 				}
 
-				_, ffmpeg_crop_output, error_code := run_external_command(command_to_run_str_slice)
+				ffmpeg_crop_output, ffmpeg_crop_error_output, error_code := run_external_command(command_to_run_str_slice)
 
 				if error_code != nil {
 
-					fmt.Println("\n\nFFmpeg reported error:", ffmpeg_crop_output, "\n")
+					fmt.Println("\n\nFFmpeg reported error:", "\n")
+
+					if len(ffmpeg_crop_output) != 0 {
+						for _, textline := range ffmpeg_crop_output {
+							fmt.Println(textline)
+						}
+					}
+
+					if len(ffmpeg_crop_error_output) != 0 {
+						for _, textline := range ffmpeg_crop_error_output {
+							fmt.Println(textline)
+						}
+					}
+
 					os.Exit(1)
 				}
 
@@ -2206,7 +2246,7 @@ func main() {
 
 					crop_value_counter := 0
 
-					for _, slice_item := range ffmpeg_crop_output {
+					for _, slice_item := range ffmpeg_crop_error_output {
 
 						for _, item := range strings.Split(slice_item, "\n") {
 
@@ -2226,7 +2266,19 @@ func main() {
 				} else {
 					fmt.Println()
 					fmt.Println("Scanning inputfile with FFmpeg resulted in an error:")
-					fmt.Println(ffmpeg_crop_output)
+
+					if len(ffmpeg_crop_output) != 0 {
+						for _, textline := range ffmpeg_crop_output {
+							fmt.Println(textline)
+						}
+					}
+
+					if len(ffmpeg_crop_error_output) != 0 {
+						for _, textline := range ffmpeg_crop_error_output {
+							fmt.Println(textline)
+						}
+					}
+
 					os.Exit(1)
 				}
 			}
@@ -2295,6 +2347,7 @@ func main() {
 		if *subtitle_split == true && subtitle_number > -1 {
 
 			var subtitle_extract_output []string
+			var subtitle_extract_error_output []string
 
 			// Remove subtitle directories if they were left over from the previous run
 			if _, err := os.Stat(original_subtitles_absolute_path); err == nil {
@@ -2359,11 +2412,24 @@ func main() {
 
 			error_code = nil
 
-			subtitle_extract_output, _, error_code = run_external_command(ffmpeg_subtitle_extract_commandline)
+			subtitle_extract_output, subtitle_extract_error_output, error_code = run_external_command(ffmpeg_subtitle_extract_commandline)
 
 			if error_code != nil {
 
-				fmt.Println("\n\nFFmpeg reported error:", subtitle_extract_output, "\n")
+				fmt.Println("\n\nFFmpeg reported error:", "\n")
+
+				if len(subtitle_extract_output) != 0 {
+					for _, textline := range subtitle_extract_output {
+						fmt.Println(textline)
+					}
+				}
+
+				if len(subtitle_extract_error_output) != 0 {
+					for _, textline := range subtitle_extract_error_output {
+						fmt.Println(textline)
+					}
+				}
+
 				os.Exit(1)
 			}
 
@@ -2863,11 +2929,24 @@ func main() {
 
 			pass_1_start_time = time.Now()
 
-			ffmpeg_pass_1_output_temp, _, error_code := run_external_command(ffmpeg_pass_1_commandline)
+			ffmpeg_pass_1_output_temp, ffmpeg_pass_1_error_output_temp, error_code := run_external_command(ffmpeg_pass_1_commandline)
 
 			if error_code != nil {
 
-				fmt.Println("\n\nFFmpeg reported error:", ffmpeg_pass_1_output_temp, "\n")
+				fmt.Println("\n\nFFmpeg reported error:", "\n")
+
+				if len(ffmpeg_pass_1_output_temp) != 0 {
+					for _, textline := range ffmpeg_pass_1_output_temp {
+						fmt.Println(textline)
+					}
+				}
+
+				if len(ffmpeg_pass_1_error_output_temp) != 0 {
+					for _, textline := range ffmpeg_pass_1_error_output_temp {
+						fmt.Println(textline)
+					}
+				}
+
 				os.Exit(1)
 			}
 
@@ -2929,11 +3008,24 @@ func main() {
 
 				pass_2_start_time = time.Now()
 
-				ffmpeg_pass_2_output_temp, _, error_code := run_external_command(ffmpeg_pass_2_commandline)
+				ffmpeg_pass_2_output_temp, ffmpeg_pass_2_error_output_temp, error_code := run_external_command(ffmpeg_pass_2_commandline)
 
 				if error_code != nil {
 
-					fmt.Println("\n\nFFmpeg reported error:", ffmpeg_pass_2_output_temp, "\n")
+					fmt.Println("\n\nFFmpeg reported error:", "\n")
+
+					if len(ffmpeg_pass_2_output_temp) != 0 {
+						for _, textline := range ffmpeg_pass_2_output_temp {
+							fmt.Println(textline)
+						}
+					}
+
+					if len(ffmpeg_pass_2_error_output_temp) != 0 {
+						for _, textline := range ffmpeg_pass_2_error_output_temp {
+							fmt.Println(textline)
+						}
+					}
+
 					os.Exit(1)
 				}
 
