@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.87" // This is the version of this program
+var version_number string = "1.88" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -2241,7 +2241,7 @@ func main() {
 				}
 
 				// FFmpeg collects possible crop values across the first 1800 seconds of the file and outputs a list of how many times each possible crop values exists.
-				// Parse the list to find the value that is most frequent, that is the value that can be applied without cropping too musch or too little.
+				// Parse the list to find the value that is most frequent, that is the value that can be applied without cropping too much or too little.
 				if error_code == nil {
 
 					crop_value_counter := 0
@@ -2614,13 +2614,7 @@ func main() {
 
 			} else {
 
-				if subtitle_number == -1 {
-					grayscale_options = "lut=u=128:v=128"
-				}
-
-				if subtitle_number >= 0 {
-					grayscale_options = ",lut=u=128:v=128"
-				}
+				grayscale_options = "lut=u=128:v=128"
 			}
 
 			if *burn_timecode_bool == true {
