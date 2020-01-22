@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.88" // This is the version of this program
+var version_number string = "1.89" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1056,14 +1056,14 @@ func main() {
 	var force_lossless_bool = flag.Bool("ls", false, "Force encoding to use lossless 'utvideo' compression for video and 'flac' compression for audio. This also turns on -fe")
 
 	// Subtitle options
-	var subtitle_language_str = flag.String("s", "", "Subtitle language: -s fin or -s eng -s ita  Only use option -sn or -s not both.")
-	var subtitle_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font.")
-	var subtitle_int = flag.Int("sn", -1, "Subtitle stream `number, -sn 1` Use subtitle number 1 from the source file. Only use option -sn or -s not both.")
-	var subtitle_vertical_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up).")
+	var subtitle_language_str = flag.String("s", "", "Subtitle language: -s fin or -s eng -s ita  Only use option -sn or -s not both. This option affects only subtitle burned on top of video.")
+	var subtitle_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font. This option affects only subtitle burned on top of video.")
+	var subtitle_int = flag.Int("sn", -1, "Subtitle stream `number, -sn 1` Use subtitle number 1 from the source file. Only use option -sn or -s not both. This option affects only subtitle burned on top of video.")
+	var subtitle_vertical_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up). This option affects only subtitle burned on top of video.")
 	var subtitle_mux_bool = flag.Bool("sm", false, "Mux subtitle into the target file. This only works with dvd, dvb and bluray bitmap based subtitles. If this option is not set then subtitles will be burned into the video. This option can not be used by itself, it must be used with -s or -sn. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file.")
-	var subtitle_palette = flag.String("palette", "", "Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: -palette f,0,f")
-	var subtitle_split = flag.Bool("sp", false, "Subtitle Split. Move subtitles that are above the center of the screen up to the top of the screen and subtitles below center down on the bottom of the screen. Distance from the screen edge will be picture height divided by 100 and rounded down to nearest integer. Minimum distance is 5 pixels and max 20 pixels. Subtitles will be automatically centered horizontally. You can resize subtitles with the -sr option when usind Subtitle Split. This option requires installing ImageMacick.")
-	var subtitle_resize = flag.String("sr", "", "Subtitle Resize. Values less than 1 makes subtitles smaller, values bigger than 1 makes subtitle larger. This option can only be user with the -sp option. Example: make subtitle 25% smaller: -sr 0.75   make subtitle 50% smaller: -sr 0.50   make subtitle 75% larger: -sr 1.75")
+	var subtitle_palette = flag.String("palette", "", "Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: -palette f,0,f  This option affects only subtitle burned on top of video.")
+	var subtitle_split = flag.Bool("sp", false, "Subtitle Split. Move subtitles that are above the center of the screen up to the top of the screen and subtitles below center down on the bottom of the screen. Distance from the screen edge will be picture height divided by 100 and rounded down to nearest integer. Minimum distance is 5 pixels and max 20 pixels. Subtitles will be automatically centered horizontally. You can resize subtitles with the -sr option when usind Subtitle Split. This option requires installing ImageMacick. This option affects only subtitle burned on top of video.")
+	var subtitle_resize = flag.String("sr", "", "Subtitle Resize. Values less than 1 makes subtitles smaller, values bigger than 1 makes subtitle larger. This option can only be user with the -sp option. Example: make subtitle 25% smaller: -sr 0.75   make subtitle 50% smaller: -sr 0.50   make subtitle 75% larger: -sr 1.75. This option affects only subtitle burned on top of video.")
 
 	// Scan options
 	var fast_bool = flag.Bool("f", false, "This is the same as using options -fs and -fe at the same time.")
@@ -1463,10 +1463,10 @@ func main() {
 			os.Exit(1)
 		}
 
-		// Sort info about video and audio streams in the file to a map
+		// Sort info about video and audio streams in the file to a map. This funtion stores data in global variable: Complete_stream_info_map
 		sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice)
 
-		// Get specific video and audio stream information
+		// Get specific video and audio stream information. This function stores data in global variable: Complete_file_info_slice
 		get_video_and_audio_stream_information(file_name)
 
 	}
@@ -2600,6 +2600,7 @@ func main() {
 			}
 
 			ffmpeg_filter_options := ""
+			ffmpeg_filter_options_2 := ""
 
 			/////////////////////////////////////////////////////////////////////////////////////////////////////////
 			// If there is no subtitle to process or we are just muxing dvd, dvb or bluray subtitle to target file //
@@ -2614,11 +2615,19 @@ func main() {
 
 			} else {
 
+				// if subtitle_number == -1 {
+				// 	grayscale_options = "lut=u=128:v=128"
+				// }
+
+				// if subtitle_number >= 0 {
+				// 	grayscale_options = ",lut=u=128:v=128"
+				// }
+
 				grayscale_options = "lut=u=128:v=128"
 			}
 
 			if *burn_timecode_bool == true {
-				timecode_burn_options = ",drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:text=%{pts \\\\: hms}:fontcolor=#ffc400:fontsize=" +
+				timecode_burn_options = "drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:text=%{pts \\\\: hms}:fontcolor=#ffc400:fontsize=" +
 					strconv.Itoa(timecode_font_size) + ":box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)"
 			}
 
@@ -2656,7 +2665,7 @@ func main() {
 					if ffmpeg_filter_options != "" {
 						ffmpeg_filter_options = ffmpeg_filter_options + ","
 					}
-					ffmpeg_filter_options = ffmpeg_filter_options + timecode_burn_options[1:]
+					ffmpeg_filter_options = ffmpeg_filter_options + timecode_burn_options
 				}
 
 				// Add grayscale options to ffmpeg commandline
@@ -2694,6 +2703,16 @@ func main() {
 					ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(denoise_options, "")
 				}
 
+				// Add timecode burn in options
+				if *burn_timecode_bool == true {
+					ffmpeg_filter_options_2 = ffmpeg_filter_options_2 + "," + timecode_burn_options
+				}
+
+				// Add grayscale options to ffmpeg commandline
+				if *grayscale_bool == true {
+					ffmpeg_filter_options_2 = ffmpeg_filter_options_2 + "," + grayscale_options
+				}
+
 				// Add video filter options to ffmpeg commanline
 				subtitle_processing_options = "copy"
 
@@ -2714,7 +2733,7 @@ func main() {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", subtitle_source_file + strconv.Itoa(subtitle_number) +
 					"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
 					"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=" + subtitle_horizontal_offset_str + ":main_h-overlay_h+" +
-					strconv.Itoa(*subtitle_vertical_offset_int) + timecode_burn_options+grayscale_options +
+					strconv.Itoa(*subtitle_vertical_offset_int) + ffmpeg_filter_options_2 +
 					"[processed_combined_streams]", "-map", "[processed_combined_streams]")
 			}
 
