@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.90" // This is the version of this program
+var version_number string = "1.91" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -341,7 +341,8 @@ func convert_timecode_to_seconds(timestring string) (string, string) {
 	return seconds_total_str, error_happened
 }
 
-func convert_seconds_to_timecode(cut_positions_after_processing_seconds []string) []string {
+func convert_cut_positions_to_timecode(cut_positions_after_processing_seconds []string) []string {
+
 	var cut_positions_as_timecodes []string
 
 	for counter, item := range cut_positions_after_processing_seconds {
@@ -351,59 +352,66 @@ func convert_seconds_to_timecode(cut_positions_after_processing_seconds []string
 			continue
 		}
 
-		item_str := item
-		milliseconds_str := ""
-
-		if strings.ContainsAny(item, ".") {
-			item_str = strings.Split(item, ".")[0]
-			milliseconds_str = strings.Split(item, ".")[1]
-		}
-
-		item_int, _ := strconv.Atoi(item_str)
-		hours_int := 0
-		minutes_int := 0
-		seconds_int := 0
-		timecode := ""
-
-		if item_int/3600 > 0 {
-			hours_int = item_int / 3600
-			item_int = item_int - (hours_int * 3600)
-		}
-
-		if item_int/60 > 0 {
-			minutes_int = item_int / 60
-			item_int = item_int - (minutes_int * 60)
-		}
-		seconds_int = item_int
-
-		hours_str := strconv.Itoa(hours_int)
-
-		if len(hours_str) < 2 {
-			hours_str = "0" + hours_str
-		}
-
-		minutes_str := strconv.Itoa(minutes_int)
-
-		if len(minutes_str) < 2 {
-			minutes_str = "0" + minutes_str
-		}
-
-		seconds_str := strconv.Itoa(seconds_int)
-
-		if len(seconds_str) < 2 {
-			seconds_str = "0" + seconds_str
-		}
-
-		timecode = hours_str + ":" + minutes_str + ":" + seconds_str
-
-		if len(milliseconds_str) > 0 {
-			timecode = timecode + "." + milliseconds_str
-		}
+		timecode := convert_seconds_to_timecode(item)
 
 		cut_positions_as_timecodes = append(cut_positions_as_timecodes, timecode)
 	}
 
 	return cut_positions_as_timecodes
+}
+
+func convert_seconds_to_timecode(item string) string {
+
+	item_str := item
+	milliseconds_str := ""
+
+	if strings.ContainsAny(item, ".") {
+		item_str = strings.Split(item, ".")[0]
+		milliseconds_str = strings.Split(item, ".")[1]
+	}
+
+	item_int, _ := strconv.Atoi(item_str)
+	hours_int := 0
+	minutes_int := 0
+	seconds_int := 0
+	timecode := ""
+
+	if item_int/3600 > 0 {
+		hours_int = item_int / 3600
+		item_int = item_int - (hours_int * 3600)
+	}
+
+	if item_int/60 > 0 {
+		minutes_int = item_int / 60
+		item_int = item_int - (minutes_int * 60)
+	}
+	seconds_int = item_int
+
+	hours_str := strconv.Itoa(hours_int)
+
+	if len(hours_str) < 2 {
+		hours_str = "0" + hours_str
+	}
+
+	minutes_str := strconv.Itoa(minutes_int)
+
+	if len(minutes_str) < 2 {
+		minutes_str = "0" + minutes_str
+	}
+
+	seconds_str := strconv.Itoa(seconds_int)
+
+	if len(seconds_str) < 2 {
+		seconds_str = "0" + seconds_str
+	}
+
+	timecode = hours_str + ":" + minutes_str + ":" + seconds_str
+
+	if len(milliseconds_str) > 0 {
+		timecode = timecode + "." + milliseconds_str
+	}
+
+	return timecode
 }
 
 func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []string) {
@@ -462,7 +470,7 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 		if remaining_float < 0.0 {
 			var temp_str_slice []string
 			temp_str_slice = append(temp_str_slice, previous_item, current_item)
-			temp_2_str_slice := convert_seconds_to_timecode(temp_str_slice)
+			temp_2_str_slice := convert_cut_positions_to_timecode(temp_str_slice)
 
 			if *debug_mode_on == true {
 				fmt.Println("process_split_times: temp_str_slice:", temp_str_slice, "process_split_times: temp_2_str_slice:", temp_2_str_slice)
@@ -545,7 +553,7 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 	}
 
 	// Convert second to timecode values
-	cut_positions_as_timecodes = convert_seconds_to_timecode(cut_positions_after_processing_seconds)
+	cut_positions_as_timecodes = convert_cut_positions_to_timecode(cut_positions_after_processing_seconds)
 
 	if *debug_mode_on == true {
 		fmt.Println("process_split_times: split_times:", *split_times)
@@ -1049,7 +1057,7 @@ func main() {
 	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.")
 	var force_hd_bool = flag.Bool("hd", false, "Force video encoding to use HD bitrate and profile (Profile = High, Level = 4.1, Bitrate = 8000k) By default this program decides video encoding profile and bitrate automatically depending on the vertical resolution of the picture.")
 	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.")
-	var split_times = flag.String("st", "", "Split out parts of the file. Give colon separated start and stop times for the parts of the file to use, for example: -st 0,10:00,01:35:12.800,01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mean the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.")
+	var split_times = flag.String("sf", "", "Split out parts of the file. Give colon separated start and stop times for the parts of the file to use, for example: -sf 0,10:00,01:35:12.800,01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.")
 	var burn_timecode_bool = flag.Bool("tc", false, "Burn timecode on top of the video. Timecode can be used to look for exact edit points for the file split feature")
 
 	// Options that affect both video and audio
@@ -1069,10 +1077,11 @@ func main() {
 	// Scan options
 	var fast_bool = flag.Bool("f", false, "This is the same as using options -fs and -fe at the same time.")
 	var fast_encode_bool = flag.Bool("fe", false, "Fast encoding mode. Encode video using 1-pass encoding.")
-	var fast_search_bool = flag.Bool("fs", false, "Fast seek mode. When using the -fs option with -ss do not decode video before the point we are trying to locate, but instead try to jump directly to it. This search method might or might not be accurate depending on the file format.")
+	var fast_search_bool = flag.Bool("fs", false, "Fast seek mode. When using the -fs option with -st do not decode video before the point we are trying to locate, but instead try to jump directly to it. This search method might or might not be accurate depending on the file format.")
 	var scan_mode_only_bool = flag.Bool("scan", false, "Only scan input file and print video and audio stream info.")
-	var search_start_str = flag.String("ss", "", "Seek to time position before starting processing. This option is given to FFmpeg as it is. Example -ss 01:02:10 Seeks to 1 hour two minutes and 10 seconds.")
-	var processing_time_str = flag.String("t", "", "Duration of video to process. This option is given to FFmpeg as it is. Example -t 01:02 process 1 minuntes and 2 seconds of the file.")
+	var search_start_str = flag.String("st", "", "Start time. Start video processing from this timecode. Example -st 30:00 starts processing from 30 minutes from the start of the file.")
+	var processing_stop_time_str = flag.String("et", "", "End time. Stop video processing to this timecode. Example -et 01:30:00 stops processing at 1 hour 30 minutes. You can define a time range like this: -st 10:09 -et 01:22:49.500 This results in a video file that starts at 10 minutes 9 seconds and stops at 1 hour 22 minutes, 49 seconds and 500 milliseconds.")
+	var processing_time_str = flag.String("d", "", "Duration of video to process. Example -d 01:02 process 1 minutes and 2 seconds of the file. Use either -et or -d option not both.")
 
 	// Misc options
 	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables and the FFmpeg commandlines used.")
@@ -1235,7 +1244,54 @@ func main() {
 		*fast_encode_bool = true
 	}
 
-	// Disable -ss and -t options if user did use the -st option and input some edit times
+	// Convert processing end time to duration and store it in variable used with -d option (duration).
+	// FFmpeg does not understarnd end times, only start time + duration.
+	if *processing_stop_time_str != "" {
+
+		start_time := ""
+		end_time := ""
+		error_happened := ""
+
+		if *search_start_str != "" {
+			start_time, error_happened = convert_timecode_to_seconds(*search_start_str)
+
+			if error_happened != "" {
+				fmt.Println("\nError when converting start time to seconds: " + error_happened + "\n")
+				os.Exit(1)
+			}
+		}
+
+		start_time_int, atoi_error := strconv.Atoi(start_time)
+
+		if atoi_error != nil {
+			fmt.Println()
+			fmt.Println("Error converting start time", *search_start_str, "to integer")
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		end_time, error_happened = convert_timecode_to_seconds(*processing_stop_time_str)
+
+		if error_happened != "" {
+			fmt.Println("\nError when converting end time to seconds: " + error_happened + "\n")
+			os.Exit(1)
+		}
+
+		end_time_int, atoi_error := strconv.Atoi(end_time)
+
+		if atoi_error != nil {
+			fmt.Println()
+			fmt.Println("Error converting end time", *processing_stop_time_str, "to integer")
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		duration_int := end_time_int - start_time_int
+		*processing_time_str = convert_seconds_to_timecode(strconv.Itoa(duration_int))
+	}
+
+
+	// Disable -st and -d options if user did use the -sf option and input some edit times
 	if split_video == true {
 		*search_start_str = ""
 		*processing_time_str = ""
@@ -1247,8 +1303,8 @@ func main() {
 	}
 
 	if *subtitle_burn_split == true && *search_start_str != "" && *fast_bool == false {
-		fmt.Println("\nOptions -ss -sp and 2-pass encoding won't work correctly together.")
-		fmt.Println("You options are: disable 2-pass encoding with the -f option or don't use the -ss option.\n")
+		fmt.Println("\nOptions -st -sp and 2-pass encoding won't work correctly together.")
+		fmt.Println("You options are: disable 2-pass encoding with the -f option or don't use the -st option.\n")
 		os.Exit(1)
 	}
 
@@ -2209,7 +2265,7 @@ func main() {
 				}
 
 				if user_defined_search_start_seconds_int >= video_duration_int {
-					fmt.Println("Option -ss ", user_defined_search_start_seconds_int, "cannot start ouside video duration", video_duration_int)
+					fmt.Println("Option -st ", user_defined_search_start_seconds_int, "cannot start ouside video duration", video_duration_int)
 					os.Exit(1)
 				}
 			}
@@ -2237,12 +2293,12 @@ func main() {
 				}
 
 				if user_defined_video_duration_seconds_int > video_duration_int {
-					fmt.Println("Option -t ", user_defined_video_duration_seconds_int, "cannot be longer than video duration", video_duration_int)
+					fmt.Println("Option -d ", user_defined_video_duration_seconds_int, "cannot be longer than video duration", video_duration_int)
 					os.Exit(1)
 				}
 
 				if user_defined_search_start_seconds_int + user_defined_video_duration_seconds_int > video_duration_int {
-					fmt.Println("Times given with options -t and -ss combined:", user_defined_search_start_seconds_int + user_defined_video_duration_seconds_int, "are outside video duration", video_duration_int)
+					fmt.Println("Times given with options -d and -st combined:", user_defined_search_start_seconds_int + user_defined_video_duration_seconds_int, "are outside video duration", video_duration_int)
 					os.Exit(1)
 				}
 			}
