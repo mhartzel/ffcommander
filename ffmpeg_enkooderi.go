@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.92" // This is the version of this program
+var version_number string = "1.93" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1863,9 +1863,7 @@ func main() {
 		// Test if output audio codec is compatible with the mp4 wrapper format
 		if *use_matroska_container == false && audio_stream_found == true {
 
-			// FIXME opus in mp4 is not yet fully supported by FFmpeg (2020.07.26). When support becomes official uncomment the if -line below and remove the if - line below it.
-			// if audio_codec != "aac" && audio_codec != "ac3" && audio_codec != "mp2" && audio_codec != "mp3" && audio_codec != "dts" && audio_codec != "opus" {
-			if audio_codec != "aac" && audio_codec != "ac3" && audio_codec != "mp2" && audio_codec != "mp3" && audio_codec != "dts" {
+			if audio_codec != "aac" && audio_codec != "ac3" && audio_codec != "mp2" && audio_codec != "mp3" && audio_codec != "dts" && audio_codec != "opus" {
 
 				var error_messages []string
 
@@ -3001,15 +2999,24 @@ func main() {
 
 			}
 
+			// FIXME When FFmpeg opus support in mp4 if mainlined, remove "-strict", "-2" options from the couple of lines below
+			// If we are encoding audio to opus, then enable FFmpeg experimental features
+			// -strict -2 is needed for FFmpeg to use still experimental support for opus in mp4 container.
 			if *audio_compression_opus == true {
 
 				if number_of_audio_channels_int <= 2 {
 					audio_compression_options = nil
-					audio_compression_options = []string{"-c:a", "libopus", "-b:a", bitrate_str, "-vbr", "off", "-mapping_family", "0",  "-strict", "-2"} // -strict -2 is needed for FFmpeg to use still experimental support for opus in mp4 container.
+					audio_compression_options = []string{"-c:a", "libopus", "-b:a", bitrate_str, "-vbr", "off", "-mapping_family", "0",  "-strict", "-2"}
 				} else {
 					audio_compression_options = nil
 					audio_compression_options = []string{"-c:a", "libopus", "-b:a", bitrate_str, "-vbr", "off", "-mapping_family", "255", "-strict", "-2"}
 				}
+			}
+
+			// If we are copying opus audio, then enable FFmpeg experimental features
+			// -strict -2 is needed for FFmpeg to use still experimental support for opus in mp4 container.
+			if audio_codec == "opus" && audio_compression_options[1] == "copy" {
+				audio_compression_options = append(audio_compression_options, "-strict", "-2")
 			}
 
 			if *audio_compression_ac3 == true {
