@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.93" // This is the version of this program
+var version_number string = "1.94" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1047,6 +1047,7 @@ func main() {
 	var audio_compression_ac3 = flag.Bool("ac3", false, "Compress audio as ac3. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate. 6 channels uses the ac3 max bitrate of 640k.")
 	var audio_compression_aac = flag.Bool("aac", false, "Compress audio as aac. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.")
 	var audio_compression_opus = flag.Bool("opus", false, "Compress audio as opus. Opus support in mp4 container is experimental as of FFmpeg vesion 4.2.1. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.")
+	var audio_compression_flac = flag.Bool("flac", false, "Compress audio in lossless Flac - format")
 	var no_audio = flag.Bool("na", false, "Disable audio processing. The resulting file will have no audio, only video.")
 
 	// Video options
@@ -1810,6 +1811,10 @@ func main() {
 			audio_codec = "flac"
 		}
 
+		if *audio_compression_flac == true {
+			audio_codec = "flac"
+		}
+
 		number_of_audio_channels_int, _ := strconv.Atoi(number_of_audio_channels)
 
 		if audio_codec == "ac3" && number_of_audio_channels_int > 6 {
@@ -2200,6 +2205,11 @@ func main() {
 
 			log_messages_str_slice = append(log_messages_str_slice, "\nSplitfile creation took "+file_split_elapsed_time.Round(time.Millisecond).String())
 
+			// If user has not defined audio output codec use aac rather than flac
+			if *audio_compression_flac != true && audio_codec == "flac" {
+				*audio_compression_aac = true
+				audio_codec = "aac"
+			}
 		}
 
 		/////////////////////////////////////////////////////////////
@@ -2958,7 +2968,7 @@ func main() {
 			}
 
 			///////////////////////////////////////////////////////////////////
-			// Add video and audio compressing options to FFmpeg commandline //
+			// Add video and audio compression options to FFmpeg commandline //
 			///////////////////////////////////////////////////////////////////
 
 			// If video vertical resolution is over 700 pixel choose HD video compression settings
