@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.91" // This is the version of this program
+var version_number string = "1.92" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -951,8 +951,6 @@ func remove_duplicate_subtitle_images (original_subtitles_absolute_path string, 
 
 		subtitle_trim_commandline = nil
 		subtitle_trim_commandline = append(subtitle_trim_commandline_start, filepath.Join(original_subtitles_absolute_path, subtitle_name), "-compress", "rle", filepath.Join(temp_path, subtitle_name))
-		// subtitle_trim_output, subtitle_trim_error, _ := run_external_command([]string{"gm", "convert", "-trim", filepath.Join(original_subtitles_absolute_path, subtitle_name), filepath.Join(fixed_subtitles_absolute_path, subtitle_name)})
-
 		_, subtitle_trim_error, trim_error_code := run_external_command(subtitle_trim_commandline)
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1115,6 +1113,7 @@ func main() {
 	var crop_values_width_offset int
 	var crop_values_height_offset int
 	var unsorted_ffprobe_information_str_slice []string
+	var ffprobe_error_message []string
 	var error_code error
 	var error_messages_map = make (map[string][]string)
 	var file_counter int
@@ -1289,7 +1288,6 @@ func main() {
 		duration_int := end_time_int - start_time_int
 		*processing_time_str = convert_seconds_to_timecode(strconv.Itoa(duration_int))
 	}
-
 
 	// Disable -st and -d options if user did use the -sf option and input some edit times
 	if split_video == true {
@@ -1580,7 +1578,7 @@ func main() {
 	if *debug_mode_on == true {
 		ffmpeg_commandline_start = append(ffmpeg_commandline_start, "ffmpeg", "-y", "-hide_banner", "-threads", number_of_threads_to_use_for_video_compression)
 	} else {
-		ffmpeg_commandline_start = append(ffmpeg_commandline_start, "ffmpeg", "-y", "-loglevel", "8", "-threads", number_of_threads_to_use_for_video_compression)
+		ffmpeg_commandline_start = append(ffmpeg_commandline_start, "ffmpeg", "-y", "-loglevel", "level+error", "-threads", number_of_threads_to_use_for_video_compression)
 	}
 
 	if *subtitle_burn_split == true && *search_start_str != "" {
@@ -1595,7 +1593,7 @@ func main() {
 
 		// Get video info with: ffprobe -loglevel 16 -show_entries format:stream -print_format flat -i InputFile
 		command_to_run_str_slice = nil
-		command_to_run_str_slice = append(command_to_run_str_slice, "ffprobe", "-loglevel", "8", "-show_entries", "format:stream", "-print_format", "flat", "-i")
+		command_to_run_str_slice = append(command_to_run_str_slice, "ffprobe", "-loglevel", "level+error", "-show_entries", "format:stream", "-print_format", "flat", "-i")
 
 		if *debug_mode_on == true {
 			fmt.Println()
@@ -1604,11 +1602,24 @@ func main() {
 
 		command_to_run_str_slice = append(command_to_run_str_slice, file_name)
 
-		unsorted_ffprobe_information_str_slice, _, error_code = run_external_command(command_to_run_str_slice)
+		unsorted_ffprobe_information_str_slice, ffprobe_error_message, error_code = run_external_command(command_to_run_str_slice)
 
 		if error_code != nil {
 
-			fmt.Println("\n\nFFprobe reported error:", unsorted_ffprobe_information_str_slice, "\n")
+			fmt.Println("\n\nFFprobe reported error:", "\n")
+
+			if len(unsorted_ffprobe_information_str_slice) != 0 {
+				for _, textline := range unsorted_ffprobe_information_str_slice {
+					fmt.Println(textline)
+				}
+			}
+
+			if len(ffprobe_error_message) != 0 {
+				for _, textline := range ffprobe_error_message {
+					fmt.Println(textline)
+				}
+			}
+
 			os.Exit(1)
 		}
 
@@ -1852,7 +1863,9 @@ func main() {
 		// Test if output audio codec is compatible with the mp4 wrapper format
 		if *use_matroska_container == false && audio_stream_found == true {
 
-			if audio_codec != "aac" && audio_codec != "ac3" && audio_codec != "mp2" && audio_codec != "mp3" && audio_codec != "dts" && audio_codec != "opus" {
+			// FIXME opus in mp4 is not yet fully supported by FFmpeg (2020.07.26). When support becomes official uncomment the if -line below and remove the if - line below it.
+			// if audio_codec != "aac" && audio_codec != "ac3" && audio_codec != "mp2" && audio_codec != "mp3" && audio_codec != "dts" && audio_codec != "opus" {
+			if audio_codec != "aac" && audio_codec != "ac3" && audio_codec != "mp2" && audio_codec != "mp3" && audio_codec != "dts" {
 
 				var error_messages []string
 
@@ -3101,6 +3114,7 @@ func main() {
 				fmt.Println("*audio_stream_number_int:", *audio_stream_number_int)
 				fmt.Println("*scan_mode_only_bool", *scan_mode_only_bool)
 				fmt.Println("*search_start_str", *search_start_str)
+				fmt.Println("*processing_stop_time_str", *processing_stop_time_str)
 				fmt.Println("*processing_time_str", *processing_time_str)
 				fmt.Println("*fast_bool", *fast_bool)
 				fmt.Println("*fast_search_bool", *fast_search_bool)
@@ -3258,7 +3272,7 @@ func main() {
 				fmt.Println()
 
 				if split_video == true {
-					fmt.Println("\nPlease check the following edit positions for possible video / audio glitches and adjust split times if needed: ")
+					fmt.Println("\nPlease check the following cut points for possible video / audio glitches and adjust split times if needed: ")
 
 					for _, timecode := range cut_positions_as_timecodes {
 						fmt.Println(timecode)
