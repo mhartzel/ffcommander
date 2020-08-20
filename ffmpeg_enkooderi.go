@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.95" // This is the version of this program
+var version_number string = "1.97" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1058,6 +1058,7 @@ func main() {
 	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.")
 	var split_times = flag.String("sf", "", "Split out parts of the file. Give colon separated start and stop times for the parts of the file to use, for example: -sf 0,10:00,01:35:12.800,01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.")
 	var burn_timecode_bool = flag.Bool("tc", false, "Burn timecode on top of the video. Timecode can be used to look for exact edit points for the file split feature")
+	var inverse_telecine = flag.Bool("it", false, "Perform inverse telecine on 29.97 fps material to return it back to original 24 fps.")
 
 	// Options that affect both video and audio
 	var force_lossless_bool = flag.Bool("ls", false, "Force encoding to use lossless 'utvideo' compression for video and 'flac' compression for audio. This also turns on -fe")
@@ -2870,8 +2871,16 @@ func main() {
 					// There is no subtitle to process add the "no subtitle" option to FFmpeg commandline.
 					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-sn")
 				}
+				
+				// Add pullup option on the ffmpeg commandline
+				if *inverse_telecine == true {
+					ffmpeg_filter_options = ffmpeg_filter_options + "pullup"
+				}
 
 				// Add deinterlace commands to ffmpeg commandline
+				if ffmpeg_filter_options != "" {
+					ffmpeg_filter_options = ffmpeg_filter_options + ","
+				}
 				ffmpeg_filter_options = ffmpeg_filter_options + deinterlace_options
 
 				// Add crop commands to ffmpeg commandline
@@ -2908,13 +2917,27 @@ func main() {
 
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:v:0", "-vf", ffmpeg_filter_options)
 
+				// Inverse telecine returns frame rate back to original 24 fps
+				if *inverse_telecine == true {
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-r", "24")
+				}
+
+
 			} else {
 				///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 				// There is a subtitle to burn into the video, use the complex video processing chain in FFmpeg (-filer_complex) //
 				// It can have several simultaneous video inputs and outputs.                                                    //
 				///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+				// Add pullup option on the ffmpeg commandline
+				if *inverse_telecine == true {
+					ffmpeg_filter_options = ffmpeg_filter_options + "pullup"
+				}
+
 				// Add deinterlace commands to ffmpeg commandline
+				if ffmpeg_filter_options != "" {
+					ffmpeg_filter_options = ffmpeg_filter_options + ","
+				}
 				ffmpeg_filter_options = ffmpeg_filter_options + deinterlace_options
 
 				// Add crop commands to ffmpeg commandline
@@ -2965,6 +2988,12 @@ func main() {
 					"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=" + subtitle_horizontal_offset_str + ":main_h-overlay_h+" +
 					strconv.Itoa(*subtitle_burn_vertical_offset_int) + ffmpeg_filter_options_2 +
 					"[processed_combined_streams]", "-map", "[processed_combined_streams]")
+
+				// Inverse telecine returns frame rate back to original 24 fps
+				if *inverse_telecine == true {
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-r", "24")
+				}
+
 			}
 
 			///////////////////////////////////////////////////////////////////
@@ -3153,7 +3182,12 @@ func main() {
 
 			} else {
 				fmt.Println()
-				fmt.Printf("Encoding video with video bitrate: %s. ", video_bitrate)
+
+				if *inverse_telecine == true {
+					fmt.Print("Performing Inverse Telecine on video.")
+				}
+
+				fmt.Printf("Encoding video with bitrate: %s. ", video_bitrate)
 
 				if color_subsampling != "yuv420p" {
 					fmt.Println("Subsampling color:", color_subsampling, "---> yuv420p")
