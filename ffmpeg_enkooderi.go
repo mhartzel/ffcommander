@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.94" // This is the version of this program
+var version_number string = "1.95" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -72,7 +72,7 @@ func find_executable_path(filename string) (file_path string) {
 		fmt.Println("Error, cant find program: " + filename + " in path, can't continue.")
 
 
-		if filename == "convert" || filename == "mogrify" {
+		if filename == "magick" || filename == "mogrify" {
 			fmt.Println(filename, "is part of package ImageMagick and is needed by the -sp functionality.")
 		}
 
@@ -734,7 +734,7 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 	var subtitle_trim_commandline_start []string
 	var subtitle_resize_commandline []string
 
-	subtitle_trim_commandline_start = append(subtitle_trim_commandline_start, "convert", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]")
+	subtitle_trim_commandline_start = append(subtitle_trim_commandline_start, "magick", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]")
 
 	var subtitle_trim_commandline []string
 
@@ -808,7 +808,7 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 	var subtitle_new_y int
 	counter := 0
 
-	// Define the the position of the subtitle to be 5 - 20 pixels from the top / bottom of picture depending on the video height.
+	// Define the position of the subtitle to be 5 - 20 pixels from the top / bottom of picture depending on the video height.
 	var subtitle_margin int = video_height_int / 100
 
 	if subtitle_margin < 5 {
@@ -842,17 +842,17 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 			subtitle_new_y = video_height_int - cropped_height - subtitle_margin
 
 		} else {
-			// Center subtitle on top of the picure
+			// Center subtitle on top of the picture
 			subtitle_new_y = subtitle_margin
 		}
 
 		subtitle_adjust_commandline = nil
-		subtitle_adjust_commandline = append(subtitle_adjust_commandline, "convert", "-size", video_width + "x" + video_height, "canvas:transparent", filepath.Join(fixed_subtitles_absolute_path, subtitle_name), "-geometry", "+" + strconv.Itoa(subtitle_new_x) + "+" + strconv.Itoa(subtitle_new_y), "-composite", "-compose", "over", "-compress", "rle", filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
+		subtitle_adjust_commandline = append(subtitle_adjust_commandline, "magick", "-size", video_width + "x" + video_height, "canvas:transparent", filepath.Join(fixed_subtitles_absolute_path, subtitle_name), "-geometry", "+" + strconv.Itoa(subtitle_new_x) + "+" + strconv.Itoa(subtitle_new_y), "-composite", "-compose", "over", "-compress", "rle", filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
 
 		_, subtitle_trim_error, error_code := run_external_command(subtitle_adjust_commandline)
 
 		if error_code != nil {
-			fmt.Println("ImageMagick convert reported error:", subtitle_trim_error)
+			fmt.Println("Repositioning subtitle generated an error:", subtitle_trim_error)
 		}
 	}
 	return_channel <- process_number
@@ -931,10 +931,10 @@ func remove_duplicate_subtitle_images (original_subtitles_absolute_path string, 
 	// Trim images until we find one where there is no subtitle.
 	// Create temp directory for trimmed images
 	var subtitle_trim_commandline_start []string
-	subtitle_trim_commandline_start = append(subtitle_trim_commandline_start, "convert", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]")
+	subtitle_trim_commandline_start = append(subtitle_trim_commandline_start, "magick", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]")
 
 	var empty_subtitle_creation_commandline_start []string
-	empty_subtitle_creation_commandline_start = append(empty_subtitle_creation_commandline_start, "convert", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on", "-compress", "rle")
+	empty_subtitle_creation_commandline_start = append(empty_subtitle_creation_commandline_start, "magick", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on", "-compress", "rle")
 	var empty_subtitle_creation_commandline []string
 
 	var subtitle_trim_commandline []string
@@ -984,7 +984,7 @@ func remove_duplicate_subtitle_images (original_subtitles_absolute_path string, 
 			_, _, error_code := run_external_command(empty_subtitle_creation_commandline)
 
 			if error_code != nil {
-				fmt.Println("\n\nImageMagick convert reported error:", subtitle_trim_error)
+				fmt.Println("\n\nCreating an empty subtitle image generated an error:", subtitle_trim_error)
 			}
 
 			break // Jump out of the loop when the first image without subtitle has been found
@@ -1192,7 +1192,7 @@ func main() {
 	find_executable_path("ffprobe")
 
 	if *subtitle_burn_split == true {
-		find_executable_path("convert")
+		find_executable_path("magick") // Starting from ImageMagick 7 the "magick" command should be used instead of the "convert" - command.
 		find_executable_path("mogrify")
 		os.Setenv("MAGICK_THREAD_LIMIT", "1") // Disable ImageMagick multithreading it only makes processing slower. This sets an environment variable in the os.
 	}
@@ -1592,7 +1592,7 @@ func main() {
 
 	for _, file_name := range input_filenames {
 
-		// Get video info with: ffprobe -loglevel 16 -show_entries format:stream -print_format flat -i InputFile
+		// Get video info with: ffprobe -loglevel level+error -show_entries format:stream -print_format flat -i InputFile
 		command_to_run_str_slice = nil
 		command_to_run_str_slice = append(command_to_run_str_slice, "ffprobe", "-loglevel", "level+error", "-show_entries", "format:stream", "-print_format", "flat", "-i")
 
