@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.97" // This is the version of this program
+var version_number string = "1.98" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -730,12 +730,7 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 	var subtitle_dimension_info []string
 	var subtitle_resize_info []string
 	var subtitles_dimension_map = make(map[string][]string)
-
-	var subtitle_trim_commandline_start []string
 	var subtitle_resize_commandline []string
-
-	subtitle_trim_commandline_start = append(subtitle_trim_commandline_start, "magick", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]")
-
 	var subtitle_trim_commandline []string
 
 	///////////////////////////////////////////////////////////////////
@@ -746,7 +741,7 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 
 		subtitle_trim_commandline = nil
 
-		subtitle_trim_commandline = append(subtitle_trim_commandline_start, filepath.Join(original_subtitles_absolute_path, subtitle_name), "-compress", "rle", filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
+		subtitle_trim_commandline = append(subtitle_trim_commandline, "magick", filepath.Join(original_subtitles_absolute_path, subtitle_name), "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]", "-compress", "rle", filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
 
 		subtitle_trim_output, subtitle_trim_error, trim_error_code := run_external_command(subtitle_trim_commandline)
 
@@ -930,9 +925,6 @@ func remove_duplicate_subtitle_images (original_subtitles_absolute_path string, 
 
 	// Trim images until we find one where there is no subtitle.
 	// Create temp directory for trimmed images
-	var subtitle_trim_commandline_start []string
-	subtitle_trim_commandline_start = append(subtitle_trim_commandline_start, "magick", "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]")
-
 	var empty_subtitle_creation_commandline_start []string
 	empty_subtitle_creation_commandline_start = append(empty_subtitle_creation_commandline_start, "magick", "-size", video_width + "x" + video_height, "canvas:transparent", "-alpha", "on", "-compress", "rle")
 	var empty_subtitle_creation_commandline []string
@@ -950,7 +942,7 @@ func remove_duplicate_subtitle_images (original_subtitles_absolute_path string, 
 	for _, subtitle_name := range files_str_slice {
 
 		subtitle_trim_commandline = nil
-		subtitle_trim_commandline = append(subtitle_trim_commandline_start, filepath.Join(original_subtitles_absolute_path, subtitle_name), "-compress", "rle", filepath.Join(temp_path, subtitle_name))
+		subtitle_trim_commandline = append(subtitle_trim_commandline, "magick", filepath.Join(original_subtitles_absolute_path, subtitle_name), "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]", "-compress", "rle", filepath.Join(temp_path, subtitle_name))
 		_, subtitle_trim_error, trim_error_code := run_external_command(subtitle_trim_commandline)
 
 		///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1165,7 +1157,7 @@ func main() {
 
 			fmt.Println()
 			fmt.Println("Error !!!!!!!")
-			fmt.Println("File: " + file_name + " does not exist")
+			fmt.Println("File: '" + file_name + "' does not exist")
 			fmt.Println()
 
 			os.Exit(1)
@@ -3184,7 +3176,7 @@ func main() {
 				fmt.Println()
 
 				if *inverse_telecine == true {
-					fmt.Print("Performing Inverse Telecine on video.")
+					fmt.Print("Performing Inverse Telecine on video.\n")
 				}
 
 				fmt.Printf("Encoding video with bitrate: %s. ", video_bitrate)
@@ -3248,14 +3240,36 @@ func main() {
 
 			// Make a copy of the FFmpeg commandline for writing in the logfile.
 			// Modify commandline so that it works if the user wants to copy and paste it from the logfile and run it.
+			// The filter command needs to be in single quotes '
 			if subtitle_burn_number == -1 || subtitle_mux_bool == true {
+
 				// Simple processing chain with -vf.
-				pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, "-vf ", "-vf '", 1)
-				pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, " -c:v", "' -c:v", 1)
+				index := strings.Index(pass_1_commandline_for_logfile, "-vf")
+				first_part_of_string := pass_1_commandline_for_logfile[:index + 4]
+				first_part_of_string = first_part_of_string + "'"
+
+				second_part_of_string := pass_1_commandline_for_logfile[index + 4:]
+				index = strings.Index(second_part_of_string, "-")
+				third_part_of_string := second_part_of_string[index - 1:]
+				second_part_of_string = second_part_of_string[:index - 1]
+				second_part_of_string = second_part_of_string + "'"
+
+				pass_1_commandline_for_logfile = first_part_of_string + second_part_of_string + third_part_of_string
+
 			} else {
+
 				// Complex processing chain with -filter_complex
-				pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, "-filter_complex ", "-filter_complex '", 1)
-				pass_1_commandline_for_logfile = strings.Replace(pass_1_commandline_for_logfile, "[processed_combined_streams] -map", "[processed_combined_streams]' -map", 1)
+				index := strings.Index(pass_1_commandline_for_logfile, "-filter_complex")
+				first_part_of_string := pass_1_commandline_for_logfile[:index + 16]
+				first_part_of_string = first_part_of_string + "'"
+
+				second_part_of_string := pass_1_commandline_for_logfile[index + 16:]
+				index = strings.Index(second_part_of_string, "-")
+				third_part_of_string := second_part_of_string[index - 1:]
+				second_part_of_string = second_part_of_string[:index - 1]
+				second_part_of_string = second_part_of_string + "'"
+
+				pass_1_commandline_for_logfile = first_part_of_string + second_part_of_string + third_part_of_string
 			}
 
 			log_messages_str_slice = append(log_messages_str_slice, "")
