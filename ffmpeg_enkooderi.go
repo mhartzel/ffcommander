@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.98" // This is the version of this program
+var version_number string = "1.99" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -222,8 +222,73 @@ func get_video_and_audio_stream_information(file_name string) {
 				video_stream_info_map[video_key] = video_value
 			}
 
+			devidend_str := ""
+			devisor_str := ""
+			devidend_int := 0
+			devisor_int := 0
+			var error_happened error
+			var result float64
+
+			frame_rate_str := video_stream_info_map["r_frame_rate"]
+			frame_rate_average_str := video_stream_info_map["avg_frame_rate"]
+
+			// Frame rate may be displayed by ffprobe in the form of a division like: 300000/1001. Do the calculation to get the human redable frame rate.
+			index := strings.Index(frame_rate_str, "/")
+
+			if index > 0 {
+				temp_slice := strings.Split(frame_rate_str, "/")
+				devidend_str = temp_slice[0]
+				devisor_str = temp_slice[1]
+
+				devidend_int, error_happened = strconv.Atoi(devidend_str)
+
+				if error_happened == nil {
+					devisor_int, error_happened = strconv.Atoi(devisor_str)
+				}
+
+				if error_happened == nil {
+					result = float64(devidend_int) / float64(devisor_int)
+					frame_rate_str = strconv.FormatFloat(result, 'f', 3, 64)
+				}
+			}
+
+			if error_happened != nil {
+				fmt.Println("Info: could not convert frame rate info from ffprobe's output to integer")
+			}
+
+			// Average frame rate may be displayed by ffprobe in the form of a division like: 300000/1001. Do the calculation to get the human redable frame rate.
+			devidend_str = ""
+			devisor_str = ""
+			devidend_int = 0
+			devisor_int = 0
+			result = 0.0
+			error_happened = nil
+
+			index = strings.Index(frame_rate_average_str, "/")
+
+			if index > 0 {
+				temp_slice := strings.Split(frame_rate_average_str, "/")
+				devidend_str = temp_slice[0]
+				devisor_str = temp_slice[1]
+
+				devidend_int, error_happened = strconv.Atoi(devidend_str)
+
+				if error_happened == nil {
+					devisor_int, error_happened = strconv.Atoi(devisor_str)
+				}
+
+				if error_happened == nil {
+					result = float64(devidend_int) / float64(devisor_int)
+					frame_rate_average_str = strconv.FormatFloat(result, 'f', 3, 64)
+				}
+			}
+
+			if error_happened != nil {
+				fmt.Println("Info: could not convert average frame rate info from ffprobe's output to integer")
+			}
+
 			// Add also duration from wrapper information to the video info.
-			single_video_stream_info_slice = append(single_video_stream_info_slice, file_name, video_stream_info_map["width"], video_stream_info_map["height"], wrapper_info_map["duration"], video_stream_info_map["codec_name"], video_stream_info_map["pix_fmt"], video_stream_info_map["color_space"])
+			single_video_stream_info_slice = append(single_video_stream_info_slice, file_name, video_stream_info_map["width"], video_stream_info_map["height"], wrapper_info_map["duration"], video_stream_info_map["codec_name"], video_stream_info_map["pix_fmt"], video_stream_info_map["color_space"], frame_rate_str, frame_rate_average_str)
 			all_video_streams_info_slice = append(all_video_streams_info_slice, single_video_stream_info_slice)
 		}
 
@@ -278,13 +343,20 @@ func get_video_and_audio_stream_information(file_name string) {
 
 	// Complete_file_info_slice contains one slice for each input file.
 	//
-	// The contents is when info for one file is stored: [ [ [/home/mika/Downloads/dvb_stream.ts 720 576 64.123411]]  [[eng 0 2 48000 ac3]  [dut 1 2 48000 pcm_s16le]]  [[fin 0 dvb_subtitle]  [fin 0 dvb_teletext] ] ]
+	// The contents is when info for one file is stored: [ [ [/home/mika/Downloads/dvb_stream.ts 720 576 64.123411, h264, yuv420p, bt709, 25, 24]]  [[eng 0 2 48000 ac3]  [dut 1 2 48000 pcm_s16le]]  [[fin 0 dvb_subtitle]  [fin 0 dvb_teletext] ] ]
 	//
 	// The file path is: /home/mika/Downloads/dvb_stream.ts
 	// Video width is: 720 pixels and height is: 576 pixels and the duration is: 64.123411 seconds.
+	// Video codec is: h264
+	// Color subsampling is: yuv420p
+	// Color space: bt709
+	// Frame rate is 25
+	// Average frame rate is 24
+	//
 	// The input file has two audio streams (languages: eng and dut)
 	// Audio stream 0: language is: english, audio is for for visually impared = 0 (false), there are 2 audio channels in the stream and sample rate is 48000 and audio codec is ac3.
 	// Audio stream 1: language is: dutch, audio is for visually impared = 1 (true), there are 2 audio channels in the stream and sample rate is 48000 and audio codec is pcm_s16le.
+	//
 	// The input file has two subtitle streams
 	// Subtitle stream 0: language is: finnish, subtitle is for hearing impared = 0 (false), the subtitle codec is: dvb (bitmap)
 	// Subtitle stream 1: language is: finnish, subtitle is for hearing impared = 0 (false), the subtitle codec is: teletext
@@ -1655,6 +1727,8 @@ func main() {
 			video_codec_name = video_slice[4]
 			color_subsampling = video_slice[5]
 			color_space = video_slice[6]
+			frame_rate_str := video_slice[7]
+			frame_rate_average_str := video_slice[8]
 
 			fmt.Println()
 			subtitle_text := "File name '" + file_to_process + "'"
@@ -1662,7 +1736,12 @@ func main() {
 			fmt.Println(subtitle_text)
 			fmt.Println(strings.Repeat("-", text_length))
 
-			fmt.Println("Video width:", video_width, ", height:", video_height, ", codec:", video_codec_name, ", color subsampling:", color_subsampling, ", color space:", color_space)
+			if frame_rate_str == "29.970" {
+				fmt.Println("\033[7mWarning: Video frame rate is 29.970. You may need to pullup (Inverse Telecine) this video with option -it\033[0m")
+			}
+
+			fmt.Printf("Video width: %s, height: %s, codec: %s, color subsampling: %s, color space: %s, fps: %s, average fps: %s\n", video_width, video_height, video_codec_name, color_subsampling, color_space, frame_rate_str, frame_rate_average_str)
+
 			fmt.Println()
 
 			for audio_stream_number, audio_info := range audio_slice {
@@ -2037,6 +2116,7 @@ func main() {
 		video_codec_name = video_slice[4]
 		color_subsampling = video_slice[5]
 		color_space = video_slice[6]
+		frame_rate_str := video_slice[7]
 
 		// Create input + output filenames and paths
 		inputfile_absolute_path, _ := filepath.Abs(file_name)
@@ -3177,6 +3257,10 @@ func main() {
 
 				if *inverse_telecine == true {
 					fmt.Print("Performing Inverse Telecine on video.\n")
+				}
+
+				if frame_rate_str == "29.970" && *inverse_telecine == false {
+					fmt.Println("\033[7mWarning: Video frame rate is 29.970. You may need to pullup (Inverse Telecine) this video with option -it\033[0m")
 				}
 
 				fmt.Printf("Encoding video with bitrate: %s. ", video_bitrate)
