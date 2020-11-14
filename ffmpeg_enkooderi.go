@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "2.00" // This is the version of this program
+var version_number string = "2.01" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1248,15 +1248,15 @@ func main() {
 	// The unparsed options left on the commandline are filenames, store them in a slice.
 	for _, file_name := range flag.Args() {
 
-		file_name,_ = filepath.Abs(file_name)
-		fileinfo, err := os.Stat(file_name)
+		inputfile_full_path,_ := filepath.Abs(file_name)
+		fileinfo, err := os.Stat(inputfile_full_path)
 
 		// Test if input files exist
 		if os.IsNotExist(err) == true {
 
 			fmt.Println()
 			fmt.Println("Error !!!!!!!")
-			fmt.Println("File: '" + file_name + "' does not exist")
+			fmt.Println("File: '" + inputfile_full_path + "' does not exist")
 			fmt.Println()
 
 			os.Exit(1)
@@ -1267,14 +1267,14 @@ func main() {
 
 			fmt.Println()
 			fmt.Println("Error !!!!!!!")
-			fmt.Println(file_name + " is not a file it is a directory.")
+			fmt.Println(inputfile_full_path + " is not a file it is a directory.")
 			fmt.Println()
 
 			os.Exit(1)
 		}
 
 		// Add all existing input file names to a slice
-		input_filenames = append(input_filenames, file_name)
+		input_filenames = append(input_filenames, inputfile_full_path)
 	}
 
 	/////////////////////////////////////////////////////////
@@ -1682,7 +1682,7 @@ func main() {
 	// Scan inputfile properties //
 	///////////////////////////////
 
-	for _, file_name := range input_filenames {
+	for _, inputfile_full_path := range input_filenames {
 
 		// Get video info with: ffprobe -loglevel level+error -show_entries format:stream -print_format flat -i InputFile
 		command_to_run_str_slice = nil
@@ -1690,10 +1690,10 @@ func main() {
 
 		if *debug_mode_on == true {
 			fmt.Println()
-			fmt.Println("command_to_run_str_slice:", command_to_run_str_slice, file_name)
+			fmt.Println("command_to_run_str_slice:", command_to_run_str_slice, inputfile_full_path)
 		}
 
-		command_to_run_str_slice = append(command_to_run_str_slice, file_name)
+		command_to_run_str_slice = append(command_to_run_str_slice, inputfile_full_path)
 
 		unsorted_ffprobe_information_str_slice, ffprobe_error_message, error_code = run_external_command(command_to_run_str_slice)
 
@@ -1720,7 +1720,7 @@ func main() {
 		sort_raw_ffprobe_information(unsorted_ffprobe_information_str_slice)
 
 		// Get specific video and audio stream information. This function stores data in global variable: Complete_file_info_slice
-		get_video_and_audio_stream_information(file_name)
+		get_video_and_audio_stream_information(inputfile_full_path)
 
 	}
 
@@ -1808,7 +1808,7 @@ func main() {
 
 		video_slice_temp := file_info_slice[0]
 		video_slice := video_slice_temp[0]
-		file_name := video_slice[0]
+		inputfile_full_path := video_slice[0]
 		video_width := video_slice[1]
 		video_height := video_slice[2]
 
@@ -1821,12 +1821,12 @@ func main() {
 
 			var error_messages []string
 
-			if _, item_found := error_messages_map[file_name]; item_found == true {
-				error_messages = error_messages_map[file_name]
+			if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
+				error_messages = error_messages_map[inputfile_full_path]
 			}
 
 			error_messages = append(error_messages, "File does not have a video stream.")
-			error_messages_map[file_name] = error_messages
+			error_messages_map[inputfile_full_path] = error_messages
 
 			break
 		}
@@ -1853,12 +1853,12 @@ func main() {
 
 				var error_messages []string
 
-				if _, item_found := error_messages_map[file_name]; item_found == true {
-					error_messages = error_messages_map[file_name]
+				if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
+					error_messages = error_messages_map[inputfile_full_path]
 				}
 
 				error_messages = append(error_messages, "Error, file does not have audio language: " + *audio_language_str)
-				error_messages_map[file_name] = error_messages
+				error_messages_map[inputfile_full_path] = error_messages
 			}
 
 			if *debug_mode_on == true {
@@ -1873,12 +1873,12 @@ func main() {
 
 				var error_messages []string
 
-				if _, item_found := error_messages_map[file_name]; item_found == true {
-					error_messages = error_messages_map[file_name]
+				if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
+					error_messages = error_messages_map[inputfile_full_path]
 				}
 
 				error_messages = append(error_messages, "Error, file does not have an audio stream number: " + strconv.Itoa(*audio_stream_number_int))
-				error_messages_map[file_name] = error_messages
+				error_messages_map[inputfile_full_path] = error_messages
 
 			} else {
 
@@ -1918,48 +1918,48 @@ func main() {
 
 			var error_messages []string
 
-			if _, item_found := error_messages_map[file_name]; item_found == true {
-				error_messages = error_messages_map[file_name]
+			if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
+				error_messages = error_messages_map[inputfile_full_path]
 			}
 
 			error_messages = append(error_messages, "Error, file has " + number_of_audio_channels + " audio channels, but AC3 supports max 6 channels")
-			error_messages_map[file_name] = error_messages
+			error_messages_map[inputfile_full_path] = error_messages
 		}
 
 		if audio_codec == "flac" && number_of_audio_channels_int > 8 {
 
 			var error_messages []string
 
-			if _, item_found := error_messages_map[file_name]; item_found == true {
-				error_messages = error_messages_map[file_name]
+			if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
+				error_messages = error_messages_map[inputfile_full_path]
 			}
 
 			error_messages = append(error_messages, "Error, file has " + number_of_audio_channels + " audio channels, but FLAC supports max 8 channels")
-			error_messages_map[file_name] = error_messages
+			error_messages_map[inputfile_full_path] = error_messages
 		}
 
 		if audio_codec == "aac" && number_of_audio_channels_int > 48 {
 
 			var error_messages []string
 
-			if _, item_found := error_messages_map[file_name]; item_found == true {
-				error_messages = error_messages_map[file_name]
+			if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
+				error_messages = error_messages_map[inputfile_full_path]
 			}
 
 			error_messages = append(error_messages, "Error, file has " + number_of_audio_channels + " audio channels, but AAC supports max 48 channels")
-			error_messages_map[file_name] = error_messages
+			error_messages_map[inputfile_full_path] = error_messages
 		}
 
 		if audio_codec == "opus" && number_of_audio_channels_int > 255 {
 
 			var error_messages []string
 
-			if _, item_found := error_messages_map[file_name]; item_found == true {
-				error_messages = error_messages_map[file_name]
+			if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
+				error_messages = error_messages_map[inputfile_full_path]
 			}
 
 			error_messages = append(error_messages, "Error, file has " + number_of_audio_channels + " audio channels, but Opus supports max 255 channels")
-			error_messages_map[file_name] = error_messages
+			error_messages_map[inputfile_full_path] = error_messages
 		}
 
 		// Test if output audio codec is compatible with the mp4 wrapper format
@@ -1969,14 +1969,14 @@ func main() {
 
 				var error_messages []string
 
-				if _, item_found := error_messages_map[file_name]; item_found == true {
-					error_messages = error_messages_map[file_name]
+				if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
+					error_messages = error_messages_map[inputfile_full_path]
 				}
 
 				error_messages = append(error_messages, "Error, audio codec: " + audio_codec + " in file is not compatible with the mp4 wrapper format.")
 				error_messages = append(error_messages, "Either use a compatible audio format (aac, ac3, mp2, mp3, dts) or the -mkv switch to export to a matroska file.")
 				error_messages = append(error_messages, "")
-				error_messages_map[file_name] = error_messages
+				error_messages_map[inputfile_full_path] = error_messages
 			}
 		}
 
@@ -2003,17 +2003,17 @@ func main() {
 			if subtitle_found == false {
 				var error_messages []string
 
-				if _, item_found := error_messages_map[file_name]; item_found == true {
-					error_messages = error_messages_map[file_name]
+				if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
+					error_messages = error_messages_map[inputfile_full_path]
 				}
 
 				error_messages = append(error_messages, "Error, file does not have subtitle language: " + *subtitle_burn_language_str)
-				error_messages_map[file_name] = error_messages
+				error_messages_map[inputfile_full_path] = error_messages
 			}
 
 			if *debug_mode_on == true {
 				fmt.Println()
-				fmt.Printf("Subtitle: %s was found in file %s as number %s\n", *subtitle_burn_language_str, file_name, subtitle_burn_number)
+				fmt.Printf("Subtitle: %s was found in file %s as number %s\n", *subtitle_burn_language_str, inputfile_full_path, subtitle_burn_number)
 				fmt.Println()
 			}
 
@@ -2024,12 +2024,12 @@ func main() {
 
 				var error_messages []string
 
-				if _, item_found := error_messages_map[file_name]; item_found == true {
-					error_messages = error_messages_map[file_name]
+				if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
+					error_messages = error_messages_map[inputfile_full_path]
 				}
 
 				error_messages = append(error_messages, "Error, file does not have an subtitle stream number: " + strconv.Itoa(subtitle_burn_number))
-				error_messages_map[file_name] = error_messages
+				error_messages_map[inputfile_full_path] = error_messages
 			}
 		}
 
@@ -2063,17 +2063,17 @@ func main() {
 
 					var error_messages []string
 
-					if _, item_found := error_messages_map[file_name]; item_found == true {
-						error_messages = error_messages_map[file_name]
+					if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
+						error_messages = error_messages_map[inputfile_full_path]
 					}
 
 					error_messages = append(error_messages, "Error, file does not have subtitle language: " + user_sub_language)
-					error_messages_map[file_name] = error_messages
+					error_messages_map[inputfile_full_path] = error_messages
 				}
 
 				if *debug_mode_on == true {
 					fmt.Println()
-					fmt.Printf("Subtitle: %s was found in file %s\n", user_sub_language, file_name)
+					fmt.Printf("Subtitle: %s was found in file %s\n", user_sub_language, inputfile_full_path)
 					fmt.Println()
 				}
 
@@ -2082,14 +2082,14 @@ func main() {
 
 					var error_messages []string
 
-					if _, item_found := error_messages_map[file_name]; item_found == true {
-						error_messages = error_messages_map[file_name]
+					if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
+						error_messages = error_messages_map[inputfile_full_path]
 					}
 
 					error_messages = append(error_messages, "Error, subtitle type " + subtitle_type + " in file is not compatible with the mp4 wrapper format.")
 					error_messages = append(error_messages, "Use the -mkv switch to export to a matroska file.")
 					error_messages = append(error_messages, "")
-					error_messages_map[file_name] = error_messages
+					error_messages_map[inputfile_full_path] = error_messages
 
 				}
 			}
@@ -2099,12 +2099,12 @@ func main() {
 		if len(error_messages_map) == 0 {
 			var selected_streams_temp []string
 			selected_streams_temp = append(selected_streams_temp, "0", strconv.Itoa(*audio_stream_number_int), strconv.Itoa(subtitle_burn_number))
-			selected_streams[file_name] = selected_streams_temp
+			selected_streams[inputfile_full_path] = selected_streams_temp
 		}
 
 		// Store selected subtitles to mux to a map
 		if subtitle_mux_bool == true && len(user_subtitle_mux_numbers_slice) >0 {
-			subtitles_selected_for_muxing_map[file_name] = user_subtitle_mux_numbers_slice
+			subtitles_selected_for_muxing_map[inputfile_full_path] = user_subtitle_mux_numbers_slice
 			user_subtitle_mux_numbers_slice = nil
 		}
 	}
@@ -2122,13 +2122,13 @@ func main() {
 		sort.Strings(filenames)
 
 		// Print error messages for each file.
-		for _, file_name := range filenames {
+		for _, inputfile_full_path := range filenames {
 
-			error_messages := error_messages_map[file_name]
+			error_messages := error_messages_map[inputfile_full_path]
 
 			fmt.Println()
-			fmt.Println(file_name)
-			fmt.Println(strings.Repeat("-", len(file_name) + 1 ))
+			fmt.Println(inputfile_full_path)
+			fmt.Println(strings.Repeat("-", len(inputfile_full_path) + 1 ))
 
 			for _, text_line := range error_messages {
 				fmt.Println(text_line)
@@ -2152,7 +2152,7 @@ func main() {
 		start_time = time.Now()
 		video_slice_temp := file_info_slice[0]
 		video_slice := video_slice_temp[0]
-		file_name := video_slice[0]
+		inputfile_full_path := video_slice[0]
 		video_width = video_slice[1]
 		video_height = video_slice[2]
 		video_duration = video_slice[3]
@@ -2162,9 +2162,8 @@ func main() {
 		frame_rate_str := video_slice[7]
 
 		// Create input + output filenames and paths
-		inputfile_absolute_path := file_name
-		inputfile_path := filepath.Dir(inputfile_absolute_path)
-		inputfile_name := filepath.Base(file_name)
+		inputfile_path := filepath.Dir(inputfile_full_path)
+		inputfile_name := filepath.Base(inputfile_full_path)
 		input_filename_extension := filepath.Ext(inputfile_name)
 		output_file_absolute_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension)+output_filename_extension)
 		subtitle_extract_base_path := filepath.Join(inputfile_path, output_directory_name, subtitle_extract_dir)
@@ -2191,13 +2190,13 @@ func main() {
 		}
 
 		// Get selected subtitles to mux from map
-		user_subtitle_mux_numbers_slice = subtitles_selected_for_muxing_map[file_name]
+		user_subtitle_mux_numbers_slice = subtitles_selected_for_muxing_map[inputfile_full_path]
 
 		// Add messages to processing log.
 		var log_messages_str_slice []string
 		log_messages_str_slice = append(log_messages_str_slice, "")
-		log_messages_str_slice = append(log_messages_str_slice, "Filename: "+file_name)
-		underline_length := len(file_name) + len("Filename: ") + 1
+		log_messages_str_slice = append(log_messages_str_slice, "Filename: "+inputfile_full_path)
+		underline_length := len(inputfile_full_path) + len("Filename: ") + 1
 		log_messages_str_slice = append(log_messages_str_slice, strings.Repeat("-", underline_length))
 		log_messages_str_slice = append(log_messages_str_slice, "")
 		log_messages_str_slice = append(log_messages_str_slice, "Commandline options:")
@@ -2224,7 +2223,7 @@ func main() {
 		audio_codec = audio_info[4]
 
 
-		selected_streams_slice := selected_streams[inputfile_absolute_path]
+		selected_streams_slice := selected_streams[inputfile_full_path]
 		*audio_stream_number_int, _ = strconv.Atoi(selected_streams_slice[1])
 		subtitle_burn_number, _ = strconv.Atoi(selected_streams_slice[2])
 
@@ -2270,7 +2269,7 @@ func main() {
 
 				ffmpeg_file_split_commandline = nil
 				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, ffmpeg_commandline_start...)
-				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-i", file_name, "-ss", cut_list_seconds_str_slice[counter])
+				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-i", inputfile_full_path, "-ss", cut_list_seconds_str_slice[counter])
 
 				// There is no timecode if the user wants to process to the end of file. Skip the -t FFmpeg option since FFmpeg processes to the end of file without it.
 				if len(cut_list_seconds_str_slice)-1 > counter {
@@ -2484,7 +2483,7 @@ func main() {
 
 					// Create the ffmpeg command to scan for crop values
 					command_to_run_str_slice = nil
-					command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-ss", strconv.Itoa(time_to_jump_to), "-t", scan_duration_str, "-i", file_name, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:8:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
+					command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-ss", strconv.Itoa(time_to_jump_to), "-t", scan_duration_str, "-i", inputfile_full_path, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:8:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
 
 					if *debug_mode_on == true {
 						fmt.Println()
@@ -2555,9 +2554,9 @@ func main() {
 				command_to_run_str_slice = nil
 
 				if crop_start_seconds_int == 0 {
-					command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-t", strconv.Itoa(crop_scan_duration_int), "-i", file_name, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:8:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
+					command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-t", strconv.Itoa(crop_scan_duration_int), "-i", inputfile_full_path, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:8:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
 				} else {
-					command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-ss", strconv.Itoa(crop_start_seconds_int), "-t", strconv.Itoa(crop_scan_duration_int), "-i", file_name, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:8:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
+					command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-ss", strconv.Itoa(crop_start_seconds_int), "-t", strconv.Itoa(crop_scan_duration_int), "-i", inputfile_full_path, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:8:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
 				}
 
 				if *debug_mode_on == false {
@@ -2741,7 +2740,7 @@ func main() {
 				ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-ss", *search_start_str)
 			}
 
-			ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-i", file_name)
+			ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-i", inputfile_full_path)
 
 			// The user wants to use the slow and accurate search, place the -ss option after the first -i on ffmpeg commandline.
 			if *search_start_str != "" && *fast_search_bool == false {
@@ -2934,11 +2933,11 @@ func main() {
 
 			} else if *subtitle_burn_split == true {
 
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name, "-f", "image2", "-i", filepath.Join(fixed_subtitles_absolute_path, "subtitle-%10d." + subtitle_stream_image_format))
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", inputfile_full_path, "-f", "image2", "-i", filepath.Join(fixed_subtitles_absolute_path, "subtitle-%10d." + subtitle_stream_image_format))
 
 			} else {
 
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", file_name)
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", inputfile_full_path)
 			}
 
 			// The user wants to use the slow and accurate search, place the -ss option after the first -i on ffmpeg commandline.
