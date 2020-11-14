@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "2.01" // This is the version of this program
+var version_number string = "2.02" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -2817,7 +2817,7 @@ func main() {
 
 			if *subtitle_burn_resize != "" {
 
-				fmt.Printf("Trimming and resizing subtitle images in multiple threads ")
+				fmt.Printf("Trimming and resizing subtitle images in " + strconv.Itoa(number_of_physical_processors) + " threads ")
 
 			} else {
 
@@ -3378,9 +3378,9 @@ func main() {
 				first_part_of_string = first_part_of_string + "'"
 
 				second_part_of_string := pass_1_commandline_for_logfile[index + 4:]
-				index = strings.Index(second_part_of_string, "-")
-				third_part_of_string := second_part_of_string[index - 1:]
-				second_part_of_string = second_part_of_string[:index - 1]
+				index = strings.Index(second_part_of_string, " -")
+				third_part_of_string := second_part_of_string[index:]
+				second_part_of_string = second_part_of_string[:index]
 				second_part_of_string = second_part_of_string + "'"
 
 				pass_1_commandline_for_logfile = first_part_of_string + second_part_of_string + third_part_of_string
@@ -3393,9 +3393,9 @@ func main() {
 				first_part_of_string = first_part_of_string + "'"
 
 				second_part_of_string := pass_1_commandline_for_logfile[index + 16:]
-				index = strings.Index(second_part_of_string, "-map")
-				third_part_of_string := second_part_of_string[index - 1:]
-				second_part_of_string = second_part_of_string[:index - 1]
+				index = strings.Index(second_part_of_string, " -")
+				third_part_of_string := second_part_of_string[index:]
+				second_part_of_string = second_part_of_string[:index]
 				second_part_of_string = second_part_of_string + "'"
 
 				pass_1_commandline_for_logfile = first_part_of_string + second_part_of_string + third_part_of_string
