@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "1.99" // This is the version of this program
+var version_number string = "2.00" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -931,7 +931,10 @@ func get_number_of_physical_processors () (int, error) {
 	// This is Linux specific code //
 	/////////////////////////////////
 
-	var number_of_physical_processors int
+	last_physical_id_int := -1
+	physical_id_int := -1
+	physical_id_found := false
+	cpu_cores_int := 0
 
 	// Read in /proc/cpuinfo
 	file_handle, err := os.Open("/proc/cpuinfo")
@@ -947,12 +950,35 @@ func get_number_of_physical_processors () (int, error) {
 
 	for scanner.Scan() {
 
-		if strings.HasPrefix(scanner.Text(), "processor") {
-			number_of_physical_processors++
+		if strings.HasPrefix(scanner.Text(), "physical id") {
+			temp_list  := strings.Split(scanner.Text(), ":")
+			physical_id_int, err = strconv.Atoi(strings.TrimSpace(temp_list[1]))
+
+			if physical_id_int != last_physical_id_int {
+				physical_id_found = true
+				last_physical_id_int = physical_id_int
+				continue
+			}
+		}
+
+		if err != nil {
+			break
+		}
+
+		if physical_id_found == true && strings.HasPrefix(scanner.Text(), "cpu cores") {
+			temp_int := -1
+			temp_list  := strings.Split(scanner.Text(), ":")
+			temp_int, err = strconv.Atoi(strings.TrimSpace(temp_list[1]))
+			cpu_cores_int = cpu_cores_int + temp_int
+			physical_id_found = false
+		}
+
+		if err != nil {
+			break
 		}
 	}
 
-	return number_of_physical_processors, err
+	return cpu_cores_int, err
 }
 
 func remove_duplicate_subtitle_images (original_subtitles_absolute_path string, fixed_subtitles_absolute_path string, files_str_slice []string, video_width string, video_height string) (files_remaining []string) {
@@ -1222,6 +1248,7 @@ func main() {
 	// The unparsed options left on the commandline are filenames, store them in a slice.
 	for _, file_name := range flag.Args() {
 
+		file_name,_ = filepath.Abs(file_name)
 		fileinfo, err := os.Stat(file_name)
 
 		// Test if input files exist
@@ -1720,8 +1747,7 @@ func main() {
 			audio_slice := file_info_slice[1]
 			subtitle_slice := file_info_slice[2]
 
-			file_to_process_temp := video_slice[0]
-			file_to_process = filepath.Base(file_to_process_temp)
+			file_to_process = video_slice[0]
 			video_width = video_slice[1]
 			video_height = video_slice[2]
 			video_codec_name = video_slice[4]
@@ -1782,8 +1808,7 @@ func main() {
 
 		video_slice_temp := file_info_slice[0]
 		video_slice := video_slice_temp[0]
-		file_name_temp := video_slice[0]
-		file_name := filepath.Base(file_name_temp)
+		file_name := video_slice[0]
 		video_width := video_slice[1]
 		video_height := video_slice[2]
 
@@ -2014,6 +2039,7 @@ func main() {
 		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		subtitle_found := false
+		subtitle_type := ""
 
 		if subtitle_mux_bool == true && len(user_subtitle_mux_languages_slice) > 0 {
 
@@ -2023,6 +2049,7 @@ func main() {
 
 					subtitle_found = false
 					subtitle_language = subtitle_info[0]
+					subtitle_type = subtitle_info[2]
 
 					if user_sub_language == subtitle_language {
 
@@ -2049,6 +2076,22 @@ func main() {
 					fmt.Printf("Subtitle: %s was found in file %s\n", user_sub_language, file_name)
 					fmt.Println()
 				}
+
+				// Test if output subtitle type is compatible with the mp4 wrapper format
+				if *use_matroska_container == false && subtitle_type == "hdmv_pgs_subtitle" {
+
+					var error_messages []string
+
+					if _, item_found := error_messages_map[file_name]; item_found == true {
+						error_messages = error_messages_map[file_name]
+					}
+
+					error_messages = append(error_messages, "Error, subtitle type " + subtitle_type + " in file is not compatible with the mp4 wrapper format.")
+					error_messages = append(error_messages, "Use the -mkv switch to export to a matroska file.")
+					error_messages = append(error_messages, "")
+					error_messages_map[file_name] = error_messages
+
+				}
 			}
 		}
 
@@ -2061,7 +2104,7 @@ func main() {
 
 		// Store selected subtitles to mux to a map
 		if subtitle_mux_bool == true && len(user_subtitle_mux_numbers_slice) >0 {
-			subtitles_selected_for_muxing_map[file_name_temp] = user_subtitle_mux_numbers_slice
+			subtitles_selected_for_muxing_map[file_name] = user_subtitle_mux_numbers_slice
 			user_subtitle_mux_numbers_slice = nil
 		}
 	}
@@ -2119,7 +2162,7 @@ func main() {
 		frame_rate_str := video_slice[7]
 
 		// Create input + output filenames and paths
-		inputfile_absolute_path, _ := filepath.Abs(file_name)
+		inputfile_absolute_path := file_name
 		inputfile_path := filepath.Dir(inputfile_absolute_path)
 		inputfile_name := filepath.Base(file_name)
 		input_filename_extension := filepath.Ext(inputfile_name)
@@ -2144,6 +2187,7 @@ func main() {
 			fmt.Println("subtitle_extract_base_path", subtitle_extract_base_path)
 			fmt.Println("original_subtitles_absolute_path", original_subtitles_absolute_path)
 			fmt.Println("fixed_subtitles_absolute_path", fixed_subtitles_absolute_path)
+			fmt.Println("number_of_physical_processors", number_of_physical_processors)
 		}
 
 		// Get selected subtitles to mux from map
@@ -2179,7 +2223,8 @@ func main() {
 		number_of_audio_channels = audio_info[2]
 		audio_codec = audio_info[4]
 
-		selected_streams_slice := selected_streams[file_name]
+
+		selected_streams_slice := selected_streams[inputfile_absolute_path]
 		*audio_stream_number_int, _ = strconv.Atoi(selected_streams_slice[1])
 		subtitle_burn_number, _ = strconv.Atoi(selected_streams_slice[2])
 
@@ -3110,7 +3155,8 @@ func main() {
 
 			}
 
-			// FIXME When FFmpeg opus support in mp4 if mainlined, remove "-strict", "-2" options from the couple of lines below
+			// FIXME When FFmpeg opus support in mp4 is mainlined, remove "-strict", "-2" options from the couple of lines below
+			// 2020.11.14: FFmpeg 4.3.1 seems to support opus in mp4 withous strict 2, these can be removed from the following lines
 			// If we are encoding audio to opus, then enable FFmpeg experimental features
 			// -strict -2 is needed for FFmpeg to use still experimental support for opus in mp4 container.
 			if *audio_compression_opus == true {
@@ -3348,7 +3394,7 @@ func main() {
 				first_part_of_string = first_part_of_string + "'"
 
 				second_part_of_string := pass_1_commandline_for_logfile[index + 16:]
-				index = strings.Index(second_part_of_string, "-")
+				index = strings.Index(second_part_of_string, "-map")
 				third_part_of_string := second_part_of_string[index - 1:]
 				second_part_of_string = second_part_of_string[:index - 1]
 				second_part_of_string = second_part_of_string + "'"
