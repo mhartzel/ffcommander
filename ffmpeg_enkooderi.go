@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "2.03" // This is the version of this program
+var version_number string = "2.04" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -2166,7 +2166,7 @@ func main() {
 		inputfile_path := filepath.Dir(inputfile_full_path)
 		inputfile_name := filepath.Base(inputfile_full_path)
 		input_filename_extension := filepath.Ext(inputfile_name)
-		output_file_absolute_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension)+output_filename_extension)
+		output_file_absolute_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension) + output_filename_extension)
 		subtitle_extract_base_path := filepath.Join(inputfile_path, output_directory_name, subtitle_extract_dir)
 
 		if *temp_file_directory != "" {
@@ -2238,7 +2238,7 @@ func main() {
 			list_of_splitfiles = nil
 
 			// Open split_infofile for appending info about file splits
-			split_info_filename = "00-" + inputfile_name + "splitfile_info.txt"
+			split_info_filename = "00-" + strings.TrimSuffix(inputfile_name, input_filename_extension) + "-splitfile_info.txt"
 			split_info_file_absolute_path = filepath.Join(inputfile_path, output_directory_name, split_info_filename)
 
 			if _, err := os.Stat(split_info_file_absolute_path); err == nil {
@@ -2264,7 +2264,7 @@ func main() {
 
 			for counter := 0; counter < len(cut_list_seconds_str_slice); counter = counter + 2 {
 				counter_2++
-				splitfile_name := inputfile_name + "splitfile-" + strconv.Itoa(counter_2) + output_matroska_filename_extension
+				splitfile_name := strings.TrimSuffix(inputfile_name, input_filename_extension) + "-splitfile-" + strconv.Itoa(counter_2) + output_matroska_filename_extension
 				split_file_path := filepath.Join(inputfile_path, output_directory_name, splitfile_name)
 				list_of_splitfiles = append(list_of_splitfiles, split_file_path)
 
@@ -3577,6 +3577,18 @@ func main() {
 
 					if _, err := os.Stat(fixed_subtitles_absolute_path); err == nil {
 						os.RemoveAll(fixed_subtitles_absolute_path)
+					}
+
+					// Delete subtitle dir if it is empty
+					file_handle, err := os.Open(subtitle_extract_base_path)
+					defer file_handle.Close()
+
+					if err == nil {
+						_, dir_empty := file_handle.Readdirnames(1)
+
+						if dir_empty == io.EOF {
+							os.Remove(subtitle_extract_base_path)
+						}
 					}
 				}
 			}
