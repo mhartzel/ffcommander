@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "2.02" // This is the version of this program
+var version_number string = "2.03" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1128,6 +1128,9 @@ func remove_duplicate_subtitle_images (original_subtitles_absolute_path string, 
 
 func main() {
 
+	// Print executable name and version
+	fmt.Println(filepath.Base(os.Args[0]), "version", version_number)
+
 	//////////////////////////////////////////
 	// Define and parse commandline options //
 	//////////////////////////////////////////
@@ -1587,8 +1590,6 @@ func main() {
 	// Print program version and license info.
 	if *show_program_version_short == true || *show_program_version_long == true {
 		fmt.Println()
-		fmt.Println("Version:", version_number)
-		fmt.Println()
 		fmt.Println("(C) Mikael Hartzell 2018.")
 		fmt.Println()
 		fmt.Println("FFmpeg version 3 or higher is required to use this program.")
@@ -2013,7 +2014,7 @@ func main() {
 
 			if *debug_mode_on == true {
 				fmt.Println()
-				fmt.Printf("Subtitle: %s was found in file %s as number %s\n", *subtitle_burn_language_str, inputfile_full_path, subtitle_burn_number)
+				fmt.Printf("Subtitle: %s was found in file %s as number %s\n", *subtitle_burn_language_str, inputfile_full_path, strconv.Itoa(subtitle_burn_number))
 				fmt.Println()
 			}
 
@@ -2237,7 +2238,7 @@ func main() {
 			list_of_splitfiles = nil
 
 			// Open split_infofile for appending info about file splits
-			split_info_filename = "00-splitfile_info.txt"
+			split_info_filename = "00-" + inputfile_name + "splitfile_info.txt"
 			split_info_file_absolute_path = filepath.Join(inputfile_path, output_directory_name, split_info_filename)
 
 			if _, err := os.Stat(split_info_file_absolute_path); err == nil {
@@ -2263,7 +2264,7 @@ func main() {
 
 			for counter := 0; counter < len(cut_list_seconds_str_slice); counter = counter + 2 {
 				counter_2++
-				splitfile_name := "splitfile-" + strconv.Itoa(counter_2) + output_matroska_filename_extension
+				splitfile_name := inputfile_name + "splitfile-" + strconv.Itoa(counter_2) + output_matroska_filename_extension
 				split_file_path := filepath.Join(inputfile_path, output_directory_name, splitfile_name)
 				list_of_splitfiles = append(list_of_splitfiles, split_file_path)
 
@@ -2289,11 +2290,11 @@ func main() {
 					os.Exit(0)
 				}
 
-				file_split_output_temp, file_split_error_output_temp, error_code := run_external_command(ffmpeg_file_split_commandline)
-
 				if *debug_mode_on == true {
 					fmt.Println(ffmpeg_file_split_commandline, "\n")
 				}
+
+				file_split_output_temp, file_split_error_output_temp, error_code := run_external_command(ffmpeg_file_split_commandline)
 
 				if error_code != nil {
 
@@ -2740,7 +2741,13 @@ func main() {
 				ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-ss", *search_start_str)
 			}
 
-			ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-i", inputfile_full_path)
+			if split_video == true {
+
+				ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-f", "concat", "-safe", "0", "-i", split_info_file_absolute_path)
+
+			} else {
+				ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-i", inputfile_full_path)
+			}
 
 			// The user wants to use the slow and accurate search, place the -ss option after the first -i on ffmpeg commandline.
 			if *search_start_str != "" && *fast_search_bool == false {
@@ -2752,6 +2759,13 @@ func main() {
 			}
 
 			ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-vn", "-an", "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_burn_number)+"]copy[subtitle_processing_stream]", "-map", "[subtitle_processing_stream]", filepath.Join(original_subtitles_absolute_path, "subtitle-%10d." + subtitle_stream_image_format))
+
+			if *debug_mode_on == true {
+				fmt.Println()
+				fmt.Println("FFmpeg Subtitle Extract Commandline:")
+				fmt.Println(strings.Join(ffmpeg_subtitle_extract_commandline, " "))
+				fmt.Println()
+			}
 
 			log_messages_str_slice = append(log_messages_str_slice, "")
 			log_messages_str_slice = append(log_messages_str_slice, "FFmpeg Subtitle Extract Options:")
@@ -2928,8 +2942,11 @@ func main() {
 			}
 
 			if split_video == true {
-
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-f", "concat", "-safe", "0", "-i", split_info_file_absolute_path)
+
+				 if *subtitle_burn_split == true {
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-f", "image2", "-i", filepath.Join(fixed_subtitles_absolute_path, "subtitle-%10d." + subtitle_stream_image_format))
+				}
 
 			} else if *subtitle_burn_split == true {
 
@@ -3526,18 +3543,26 @@ func main() {
 				os.Remove(ffmpeg_2_pass_logfile_path + "-0.log.mbtree")
 			}
 
-			for _, splitfile_name := range list_of_splitfiles {
-				if _, err := os.Stat(splitfile_name); err == nil {
-					os.Remove(splitfile_name)
-				} else {
-					fmt.Println("Could not delete splitfile:", splitfile_name)
-				}
-			}
+			if *debug_mode_on == true {
 
-			if _, err := os.Stat(split_info_file_absolute_path); !os.IsNotExist(err) {
-				if err = os.Remove(split_info_file_absolute_path); err != nil {
-					fmt.Println("Could not delete split_info_file:", split_info_file_absolute_path)
+				fmt.Println("\nSplitfiles are not deleted in debug - mode.\n")
+
+			} else {
+
+				for _, splitfile_name := range list_of_splitfiles {
+					if _, err := os.Stat(splitfile_name); err == nil {
+						os.Remove(splitfile_name)
+					} else {
+						fmt.Println("Could not delete splitfile:", splitfile_name)
+					}
 				}
+
+				if _, err := os.Stat(split_info_file_absolute_path); !os.IsNotExist(err) {
+					if err = os.Remove(split_info_file_absolute_path); err != nil {
+						fmt.Println("Could not delete split_info_file:", split_info_file_absolute_path)
+					}
+				}
+
 			}
 
 			if *subtitle_burn_split == true {
