@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "2.04" // This is the version of this program
+var version_number string = "2.05" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1149,6 +1149,7 @@ func main() {
 	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.")
 	var force_hd_bool = flag.Bool("hd", false, "Force video encoding to use HD bitrate and profile (Profile = High, Level = 4.1, Bitrate = 8000k) By default this program decides video encoding profile and bitrate automatically depending on the vertical resolution of the picture.")
 	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.")
+	var parallel_sd = flag.Bool("psd", false, "Parallel SD. Create SD version in parallel to HD processing. This creates an additional version of the video downconverted to SD resolution. The SD file is stored in directory: sd")
 	var split_times = flag.String("sf", "", "Split out parts of the file. Give colon separated start and stop times for the parts of the file to use, for example: -sf 0,10:00,01:35:12.800,01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.")
 	var burn_timecode_bool = flag.Bool("tc", false, "Burn timecode on top of the video. Timecode can be used to look for exact edit points for the file split feature")
 	var inverse_telecine = flag.Bool("it", false, "Perform inverse telecine on 29.97 fps material to return it back to original 24 fps.")
@@ -1239,6 +1240,7 @@ func main() {
 	subtitle_processing_elapsed_time := time.Since(subtitle_extract_start_time)
 
 	output_directory_name := "00-processed_files"
+	sd_directory_name := "sd"
 	subtitle_extract_dir := "subtitles"
 	original_subtitles_dir := "original_subtitles"
 	fixed_subtitles_dir := "fixed_subtitles"
@@ -2168,6 +2170,8 @@ func main() {
 		input_filename_extension := filepath.Ext(inputfile_name)
 		output_file_absolute_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension) + output_filename_extension)
 		subtitle_extract_base_path := filepath.Join(inputfile_path, output_directory_name, subtitle_extract_dir)
+		sd_directory_path := filepath.Join(inputfile_path, output_directory_name, sd_directory_name)
+		sd_file_absolute_path := filepath.Join(sd_directory_path, strings.TrimSuffix(inputfile_name, input_filename_extension) + output_filename_extension)
 
 		if *temp_file_directory != "" {
 			subtitle_extract_base_path = filepath.Join(*temp_file_directory, output_directory_name, subtitle_extract_dir)
@@ -2207,6 +2211,13 @@ func main() {
 		// If output directory does not exist path then create it.
 		if _, err := os.Stat(filepath.Join(inputfile_path, output_directory_name)); os.IsNotExist(err) {
 			os.Mkdir(filepath.Join(inputfile_path, output_directory_name), 0777)
+		}
+
+		if *parallel_sd == true {
+			// If SD output directory does not exist path then create it.
+			if _, err := os.Stat(sd_directory_path); os.IsNotExist(err) {
+				os.Mkdir(sd_directory_path, 0777)
+			}
 		}
 
 		// Print information about processing
@@ -2969,12 +2980,6 @@ func main() {
 			ffmpeg_filter_options := ""
 			ffmpeg_filter_options_2 := ""
 
-			/////////////////////////////////////////////////////////////////////////////////////////////////////////
-			// If there is no subtitle to process or we are just muxing dvd, dvb or bluray subtitle to target file //
-			// then use the simple video processing chain (-vf) in FFmpeg                                          //
-			// It has a processing pipeline with only one video input and output                                   //
-			/////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 			// Create grayscale FFmpeg - options
 			if *grayscale_bool == false {
 
@@ -2985,82 +2990,17 @@ func main() {
 				grayscale_options = "lut=u=128:v=128"
 			}
 
+			// Timecode burn options
 			if *burn_timecode_bool == true {
 				timecode_burn_options = "drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:text=%{pts \\\\: hms}:fontcolor=#ffc400:fontsize=" +
 					strconv.Itoa(timecode_font_size) + ":box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)"
 			}
 
-			if subtitle_burn_number == -1 || subtitle_mux_bool == true {
+			//////////////////////////////////////////////////////////
+			// Create HD and SD version of the video simultaneously //
+			//////////////////////////////////////////////////////////
 
-				if subtitle_mux_bool == true {
-					// There is a dvd, dvb or bluray bitmap subtitle to mux into the target file add the relevant options to FFmpeg commandline.
-					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-scodec", "copy")
-
-					for _, subtitle_mux_number := range user_subtitle_mux_numbers_slice {
-						ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:s:"+ subtitle_mux_number)
-					}
-
-				} else {
-					// There is no subtitle to process add the "no subtitle" option to FFmpeg commandline.
-					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-sn")
-				}
-				
-				// Add pullup option on the ffmpeg commandline
-				if *inverse_telecine == true {
-					ffmpeg_filter_options = ffmpeg_filter_options + "pullup"
-				}
-
-				// Add deinterlace commands to ffmpeg commandline
-				if ffmpeg_filter_options != "" {
-					ffmpeg_filter_options = ffmpeg_filter_options + ","
-				}
-				ffmpeg_filter_options = ffmpeg_filter_options + deinterlace_options
-
-				// Add crop commands to ffmpeg commandline
-				if *autocrop_bool == true {
-					if ffmpeg_filter_options != "" {
-						ffmpeg_filter_options = ffmpeg_filter_options + ","
-					}
-					ffmpeg_filter_options = ffmpeg_filter_options + "crop=" + final_crop_string
-				}
-
-				// Add denoise options to ffmpeg commandline
-				if *denoise_bool == true {
-					if ffmpeg_filter_options != "" {
-						ffmpeg_filter_options = ffmpeg_filter_options + ","
-					}
-					ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(denoise_options, "")
-				}
-
-				// Add timecode burn in options
-				if *burn_timecode_bool == true {
-					if ffmpeg_filter_options != "" {
-						ffmpeg_filter_options = ffmpeg_filter_options + ","
-					}
-					ffmpeg_filter_options = ffmpeg_filter_options + timecode_burn_options
-				}
-
-				// Add grayscale options to ffmpeg commandline
-				if *grayscale_bool == true {
-					if ffmpeg_filter_options != "" {
-						ffmpeg_filter_options = ffmpeg_filter_options + ","
-					}
-					ffmpeg_filter_options = ffmpeg_filter_options + grayscale_options
-				}
-
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:v:0", "-vf", ffmpeg_filter_options)
-
-				// Inverse telecine returns frame rate back to original 24 fps
-				if *inverse_telecine == true {
-					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-r", "24")
-				}
-
-
-			} else {
-				///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-				// There is a subtitle to burn into the video, use the complex video processing chain in FFmpeg (-filer_complex) //
-				// It can have several simultaneous video inputs and outputs.                                                    //
-				///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+			if *parallel_sd == true {
 
 				// Add pullup option on the ffmpeg commandline
 				if *inverse_telecine == true {
@@ -3127,6 +3067,155 @@ func main() {
 					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-r", "24")
 				}
 
+			}
+
+			/////////////////////////////////////////////////////////////////////////////////////////////////////////
+			// Create only one output video                                                                        //
+			//                                                                                                     //
+			// If there is no subtitle to process or we are just muxing dvd, dvb or bluray subtitle to target file //
+			// then use the simple video processing chain (-vf) in FFmpeg                                          //
+			// It has a processing pipeline with only one video input and output                                   //
+			/////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+			if *parallel_sd == false {
+
+				if subtitle_burn_number == -1 || subtitle_mux_bool == true {
+
+					if subtitle_mux_bool == true {
+						// There is a dvd, dvb or bluray bitmap subtitle to mux into the target file add the relevant options to FFmpeg commandline.
+						ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-scodec", "copy")
+
+						for _, subtitle_mux_number := range user_subtitle_mux_numbers_slice {
+							ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:s:"+ subtitle_mux_number)
+						}
+
+					} else {
+						// There is no subtitle to process add the "no subtitle" option to FFmpeg commandline.
+						ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-sn")
+					}
+					
+					// Add pullup option on the ffmpeg commandline
+					if *inverse_telecine == true {
+						ffmpeg_filter_options = ffmpeg_filter_options + "pullup"
+					}
+
+					// Add deinterlace commands to ffmpeg commandline
+					if ffmpeg_filter_options != "" {
+						ffmpeg_filter_options = ffmpeg_filter_options + ","
+					}
+					ffmpeg_filter_options = ffmpeg_filter_options + deinterlace_options
+
+					// Add crop commands to ffmpeg commandline
+					if *autocrop_bool == true {
+						if ffmpeg_filter_options != "" {
+							ffmpeg_filter_options = ffmpeg_filter_options + ","
+						}
+						ffmpeg_filter_options = ffmpeg_filter_options + "crop=" + final_crop_string
+					}
+
+					// Add denoise options to ffmpeg commandline
+					if *denoise_bool == true {
+						if ffmpeg_filter_options != "" {
+							ffmpeg_filter_options = ffmpeg_filter_options + ","
+						}
+						ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(denoise_options, "")
+					}
+
+					// Add timecode burn in options
+					if *burn_timecode_bool == true {
+						if ffmpeg_filter_options != "" {
+							ffmpeg_filter_options = ffmpeg_filter_options + ","
+						}
+						ffmpeg_filter_options = ffmpeg_filter_options + timecode_burn_options
+					}
+
+					// Add grayscale options to ffmpeg commandline
+					if *grayscale_bool == true {
+						if ffmpeg_filter_options != "" {
+							ffmpeg_filter_options = ffmpeg_filter_options + ","
+						}
+						ffmpeg_filter_options = ffmpeg_filter_options + grayscale_options
+					}
+
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:v:0", "-vf", ffmpeg_filter_options)
+
+					// Inverse telecine returns frame rate back to original 24 fps
+					if *inverse_telecine == true {
+						ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-r", "24")
+					}
+
+
+				} else {
+					////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+					// There is a subtitle to burn into the video, use the complex video processing chain in FFmpeg (-filter_complex) //
+					// It can have several simultaneous video inputs and outputs.                                                     //
+					////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+					// Add pullup option on the ffmpeg commandline
+					if *inverse_telecine == true {
+						ffmpeg_filter_options = ffmpeg_filter_options + "pullup"
+					}
+
+					// Add deinterlace commands to ffmpeg commandline
+					if ffmpeg_filter_options != "" {
+						ffmpeg_filter_options = ffmpeg_filter_options + ","
+					}
+					ffmpeg_filter_options = ffmpeg_filter_options + deinterlace_options
+
+					// Add crop commands to ffmpeg commandline
+					if *autocrop_bool == true {
+						if ffmpeg_filter_options != "" {
+							ffmpeg_filter_options = ffmpeg_filter_options + ","
+						}
+						ffmpeg_filter_options = ffmpeg_filter_options + "crop=" + final_crop_string
+					}
+
+					// Add denoise options to ffmpeg commandline
+					if *denoise_bool == true {
+						if ffmpeg_filter_options != "" {
+							ffmpeg_filter_options = ffmpeg_filter_options + ","
+						}
+						ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(denoise_options, "")
+					}
+
+					// Add timecode burn in options
+					if *burn_timecode_bool == true {
+						ffmpeg_filter_options_2 = ffmpeg_filter_options_2 + "," + timecode_burn_options
+					}
+
+					// Add grayscale options to ffmpeg commandline
+					if *grayscale_bool == true {
+						ffmpeg_filter_options_2 = ffmpeg_filter_options_2 + "," + grayscale_options
+					}
+
+					// Add video filter options to ffmpeg commanline
+					subtitle_processing_options = "copy"
+
+					// When cropping video widthwise shrink subtitles to fit on top of the cropped video.
+					// This results in smaller subtitle font.
+					if *autocrop_bool == true && *subtitle_burn_downscale == true {
+						subtitle_processing_options = "scale=" + strconv.Itoa(crop_values_picture_width) + ":" + strconv.Itoa(crop_values_picture_height)
+					}
+
+					subtitle_source_file := "[0:s:"
+
+					if *subtitle_burn_split == true {
+
+						subtitle_source_file = "[1:v:"
+						subtitle_burn_number = 0
+					}
+
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", subtitle_source_file + strconv.Itoa(subtitle_burn_number) +
+						"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
+						"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=" + subtitle_horizontal_offset_str + ":main_h-overlay_h+" +
+						strconv.Itoa(*subtitle_burn_vertical_offset_int) + ffmpeg_filter_options_2 +
+						"[processed_combined_streams]", "-map", "[processed_combined_streams]")
+
+					// Inverse telecine returns frame rate back to original 24 fps
+					if *inverse_telecine == true {
+						ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-r", "24")
+					}
+				}
 			}
 
 			///////////////////////////////////////////////////////////////////
@@ -3226,9 +3315,11 @@ func main() {
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(*audio_stream_number_int))
 
 			ffmpeg_2_pass_logfile_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension))
+			ffmpeg_sd_2_pass_logfile_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension) + "sd")
 
 			if *temp_file_directory != "" {
 				ffmpeg_2_pass_logfile_path = filepath.Join(*temp_file_directory, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension))
+				ffmpeg_sd_2_pass_logfile_path = filepath.Join(*temp_file_directory, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension) + "sd")
 			}
 
 			if *fast_encode_bool == false {
@@ -3543,6 +3634,14 @@ func main() {
 				os.Remove(ffmpeg_2_pass_logfile_path + "-0.log.mbtree")
 			}
 
+			if _, err := os.Stat(ffmpeg_sd_2_pass_logfile_path + "-0.log"); err == nil {
+				os.Remove(ffmpeg_sd_2_pass_logfile_path + "-0.log")
+			}
+
+			if _, err := os.Stat(ffmpeg_sd_2_pass_logfile_path + "-0.log.mbtree"); err == nil {
+				os.Remove(ffmpeg_sd_2_pass_logfile_path + "-0.log.mbtree")
+			}
+
 			if *debug_mode_on == true {
 
 				fmt.Println("\nSplitfiles are not deleted in debug - mode.\n")
@@ -3589,6 +3688,20 @@ func main() {
 						if dir_empty == io.EOF {
 							os.Remove(subtitle_extract_base_path)
 						}
+					}
+				}
+			}
+
+			// Delete SD output directory if it is empty
+			if *parallel_sd == true {
+				file_handle, err := os.Open(sd_directory_path)
+				defer file_handle.Close()
+
+				if err == nil {
+					_, dir_empty := file_handle.Readdirnames(1)
+
+					if dir_empty == io.EOF {
+						os.Remove(sd_directory_path)
 					}
 				}
 			}
