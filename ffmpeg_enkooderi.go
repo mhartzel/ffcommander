@@ -19,7 +19,7 @@ import (
 )
 
 // Global variable definitions
-var version_number string = "2.05" // This is the version of this program
+var version_number string = "2.07" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1201,7 +1201,7 @@ func main() {
 	var command_to_run_str_slice []string
 	var file_to_process, video_width, video_height, video_duration, video_codec_name, color_subsampling, color_space string
 	var video_height_int int
-	var video_bitrate string
+	var main_video_bitrate string
 	var audio_language, for_visually_impared, number_of_audio_channels, audio_codec string
 	var subtitle_language, for_hearing_impared, subtitle_codec_name string
 	var crop_values_picture_width int
@@ -1339,6 +1339,12 @@ func main() {
 	if *fast_bool == true {
 		*fast_search_bool = true
 		*fast_encode_bool = true
+	}
+
+	// Parallel SD processing requires defining inputfile seek for each output file or placing the seek before the inputfile.
+	// We choose to place the seek before the inputfile. This results using the fast but sometimes inaccurate FFmpeg seek.
+	if *parallel_sd == true {
+		*fast_search_bool = true
 	}
 
 	// Convert processing end time to duration and store it in variable used with -d option (duration).
@@ -1659,16 +1665,25 @@ func main() {
 		fmt.Println()
 	}
 
-	number_of_threads_to_use_for_video_compression := "auto"
-
 	// Don't use more than 8 threads to process a single video because it is claimed that video quality goes down when using more than 10 cores with x264 encoder.
 	// https://streaminglearningcenter.com/blogs/ffmpeg-command-threads-how-it-affects-quality-and-performance.html
 	// Yllä mainitun sivun screenshot löytyy koodin hakemistosta '00-vanhat' nimellä: 'FFmpeg Threads Command How it Affects Quality and Performance.jpg'
 	// It is said that this is caused by the fact that the processing threads can't use the results from other threads to optimize compression.
 	// Also processing goes sligthly faster when ffmpeg is using max 8 cores.
 	// The user may process files in 4 simultaneously by dividing videos to 4 dirs and processing each simultaneously.
-	if number_of_physical_processors > 8 {
+
+	number_of_threads_to_use_for_video_compression := "auto"
+
+	if number_of_physical_processors >= 8 {
 		number_of_threads_to_use_for_video_compression = "8"
+	}
+
+	// For parallel HD and SD compression use max 16 cores
+	if *parallel_sd == true {
+
+		if number_of_physical_processors >= 16 {
+			number_of_threads_to_use_for_video_compression = "16"
+		}
 	}
 
 	if *debug_mode_on == true {
@@ -2171,7 +2186,7 @@ func main() {
 		output_file_absolute_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension) + output_filename_extension)
 		subtitle_extract_base_path := filepath.Join(inputfile_path, output_directory_name, subtitle_extract_dir)
 		sd_directory_path := filepath.Join(inputfile_path, output_directory_name, sd_directory_name)
-		// sd_file_absolute_path := filepath.Join(sd_directory_path, strings.TrimSuffix(inputfile_name, input_filename_extension) + output_filename_extension)
+		sd_output_file_absolute_path := filepath.Join(sd_directory_path, strings.TrimSuffix(inputfile_name, input_filename_extension) + output_filename_extension)
 
 		if *temp_file_directory != "" {
 			subtitle_extract_base_path = filepath.Join(*temp_file_directory, output_directory_name, subtitle_extract_dir)
@@ -2960,12 +2975,12 @@ func main() {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-f", "concat", "-safe", "0", "-i", split_info_file_absolute_path)
 
 				 if *subtitle_burn_split == true {
-					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-f", "image2", "-i", filepath.Join(fixed_subtitles_absolute_path, "subtitle-%10d." + subtitle_stream_image_format))
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-thread_queue_size", "4096", "-f", "image2", "-i", filepath.Join(fixed_subtitles_absolute_path, "subtitle-%10d." + subtitle_stream_image_format))
 				}
 
 			} else if *subtitle_burn_split == true {
 
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", inputfile_full_path, "-f", "image2", "-i", filepath.Join(fixed_subtitles_absolute_path, "subtitle-%10d." + subtitle_stream_image_format))
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", inputfile_full_path, "-thread_queue_size", "4096", "-f", "image2", "-i", filepath.Join(fixed_subtitles_absolute_path, "subtitle-%10d." + subtitle_stream_image_format))
 
 			} else {
 
@@ -2977,8 +2992,10 @@ func main() {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-ss", *search_start_str)
 			}
 
-			if *processing_time_str != "" {
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-t", *processing_time_str)
+			if *parallel_sd == false {
+				if *processing_time_str != "" {
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-t", *processing_time_str)
+				}
 			}
 
 			ffmpeg_filter_options := ""
@@ -3041,12 +3058,81 @@ func main() {
 				ffmpeg_filter_options_2 = ffmpeg_filter_options_2 + "," + grayscale_options
 			}
 
+			///////////////////////////////////////////////////////////////////////////////////
+			// Calculate resolution of the SD - version created parallel to the HD - version //
+			///////////////////////////////////////////////////////////////////////////////////
+
+			sd_width := 0
+			v_width := 0
+			v_height := 0
+
+			if *parallel_sd == true {
+
+				// Use cropped video resolution if it is defined else use original wideo reso
+				if crop_values_picture_width > 0 {
+
+					v_width = crop_values_picture_width
+
+				} else {
+
+					v_width,_ = strconv.Atoi(video_width)
+				}
+
+				if crop_values_picture_height > 0 {
+
+					v_height = crop_values_picture_height
+
+				} else {
+
+					v_height,_ = strconv.Atoi(video_height)
+				}
+
+
+				// First try matching the standard HD - resolutions to SD, We only calculate SD x - resolution FFmpeg will automatically scale y based on x.
+				if v_width == 1920 {
+					sd_width = 1024
+
+				} else if v_height == 1080 {
+					sd_width = 720
+
+				} else {
+
+					// The HD resolutions were not the standard ones, calculate aspect radio and decide SD resolution based on it
+					// 4:3 = 125 and 16:9 = 177 and wide screen > 177.
+					aspect_ratio := (v_width * 100) / v_height
+
+					if aspect_ratio <= 151 {
+
+						sd_width = 720
+
+					} else {
+						sd_width = 1024
+					}
+				}
+
+				if sd_width == 0 {
+					fmt.Println()
+					fmt.Println("Error: could not calculate width of the SD - version")
+					fmt.Println()
+					os.Exit(1)
+				}
+			}
+
 			/////////////////////////////////////////
 			// No subtitle in any format is wanted //
 			/////////////////////////////////////////
 			if subtitle_mux_bool == false && subtitle_burn_number == -1 {
+
 				// There is no subtitle to process add the "no subtitle" option to FFmpeg commandline.
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-sn", "-filter_complex", "[0:v:0]" + ffmpeg_filter_options + "[processed_combined_streams]", "-map", "[processed_combined_streams]")
+				if *parallel_sd == true {
+
+					// FFmpeg scaling needs only resolution of one axis and it calculates the other automatically. For example for a 1920x1080 source video: scale=1024:-2 will scale the video to 1024x576. The -2 means calculate axis automatically so that it is divisible by 2
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:v:0]" + ffmpeg_filter_options + ",split=2[main_processed_video_out][sd_input],[sd_input]scale=" + strconv.Itoa(sd_width) + ":-2[sd_scaled_out]", "-map", "[main_processed_video_out]", "-sn")
+
+				} else {
+
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:v:0]" + ffmpeg_filter_options + "[main_processed_video_out]", "-map", "[main_processed_video_out]", "-sn")
+				}
 			}
 
 			////////////////////////////////
@@ -3054,13 +3140,20 @@ func main() {
 			////////////////////////////////
 			if subtitle_mux_bool == true {
 				// There is a dvd, dvb or bluray bitmap subtitle to mux into the target file add the relevant options to FFmpeg commandline.
+				if *parallel_sd == true {
+					// FFmpeg scaling needs only resolution of one axis and it calculates the other automatically. For example for a 1920x1080 source video: scale=1024:-2 will scale the video to 1024x576. The -2 means calculate axis automatically so that it is divisible by 2
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:v:0]" + ffmpeg_filter_options + ",split=2[main_processed_video_out][sd_input],[sd_input]scale=" + strconv.Itoa(sd_width) + ":-2[sd_scaled_out]", "-map", "[main_processed_video_out]")
+				} else {
+
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:v:0]" + ffmpeg_filter_options + "[main_processed_video_out]", "-map", "[main_processed_video_out]")
+				}
+
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-scodec", "copy")
 
 				for _, subtitle_mux_number := range user_subtitle_mux_numbers_slice {
 					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:s:"+ subtitle_mux_number)
 				}
 
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:v:0]" + ffmpeg_filter_options + "[processed_combined_streams]", "-map", "[processed_combined_streams]")
 			}
 
 			///////////////////
@@ -3085,11 +3178,23 @@ func main() {
 					subtitle_burn_number = 0
 				}
 
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", subtitle_source_file + strconv.Itoa(subtitle_burn_number) +
-					"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
-					"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=" + subtitle_horizontal_offset_str + ":main_h-overlay_h+" +
-					strconv.Itoa(*subtitle_burn_vertical_offset_int) + ffmpeg_filter_options_2 +
-					"[processed_combined_streams]", "-map", "[processed_combined_streams]")
+				if *parallel_sd == true {
+
+					// FFmpeg scaling needs only resolution of one axis and it calculates the other automatically. For example for a 1920x1080 source video: scale=1024:-2 will scale the video to 1024x576. The -2 means calculate axis automatically so that it is divisible by 2
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", subtitle_source_file + strconv.Itoa(subtitle_burn_number) +
+						"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
+						"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=" + subtitle_horizontal_offset_str + ":main_h-overlay_h+" +
+						strconv.Itoa(*subtitle_burn_vertical_offset_int) + ffmpeg_filter_options_2 +
+						",split=2[main_processed_video_out][sd_input],[sd_input]scale=" + strconv.Itoa(sd_width) + ":-2[sd_scaled_out]", "-map", "[main_processed_video_out]")
+
+				} else {
+
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", subtitle_source_file + strconv.Itoa(subtitle_burn_number) +
+						"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
+						"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=" + subtitle_horizontal_offset_str + ":main_h-overlay_h+" +
+						strconv.Itoa(*subtitle_burn_vertical_offset_int) + ffmpeg_filter_options_2 +
+						"[main_processed_video_out]", "-map", "[main_processed_video_out]")
+					}
 				}
 
 			// Inverse telecine returns frame rate back to original 24 fps
@@ -3101,8 +3206,11 @@ func main() {
 			// Add video and audio compression options to FFmpeg commandline //
 			///////////////////////////////////////////////////////////////////
 
+			sd_ffmpeg_pass_1_commandline := []string{}
+			sd_ffmpeg_pass_2_commandline := []string{"-map", "[sd_scaled_out]", "-sws_flags", "lanczos"}
+
 			// If video vertical resolution is over 700 pixel choose HD video compression settings
-			video_compression_options := video_compression_options_sd
+			main_video_compression_options := video_compression_options_sd
 
 			video_height_int, _ = strconv.Atoi(video_height)
 
@@ -3111,11 +3219,12 @@ func main() {
 				video_height_int = crop_values_picture_height
 			}
 
-			video_bitrate = "1600k"
+			main_video_bitrate = "1600k"
+			sd_video_bitrate := "1600k"
 
 			if *force_hd_bool == true || video_height_int > 700 {
-				video_compression_options = video_compression_options_hd
-				video_bitrate = "8000k"
+				main_video_compression_options = video_compression_options_hd
+				main_video_bitrate = "8000k"
 			}
 
 			if *force_lossless_bool == true {
@@ -3124,8 +3233,8 @@ func main() {
 				audio_compression_options = audio_compression_options_lossless
 
 				// Lossless video compression options
-				video_compression_options = video_compression_options_lossless
-				video_bitrate = "Lossless"
+				main_video_compression_options = video_compression_options_lossless
+				main_video_bitrate = "Lossless"
 			}
 
 			number_of_audio_channels_int, _ := strconv.Atoi(number_of_audio_channels)
@@ -3179,39 +3288,95 @@ func main() {
 				audio_compression_options = append(audio_compression_options, "-an")
 			}
 
+			// Add subtitle options for parallel SD processing
+			if *parallel_sd == true {
+
+				if subtitle_mux_bool == false && subtitle_burn_number == -1 {
+					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-sn")
+				}
+
+				if subtitle_mux_bool == true {
+					// There is a dvd, dvb or bluray bitmap subtitle to mux into the target file add the relevant options to FFmpeg commandline.
+					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-scodec", "copy")
+
+					for _, subtitle_mux_number := range user_subtitle_mux_numbers_slice {
+						sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-map", "0:s:"+ subtitle_mux_number)
+					}
+				}
+			}
+
 			// Add video compression options to ffmpeg commandline
-			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, video_compression_options...)
+			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, main_video_compression_options...)
+
+			if *parallel_sd == true {
+				sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, video_compression_options_sd...)
+			}
 
 			// Add color subsampling options if needed
 			if color_subsampling != "yuv420p" {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, color_subsampling_options...)
 			}
 
+			if *parallel_sd == true {
+				sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, color_subsampling_options...)
+			}
+
 			// Add audio compression options to ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, audio_compression_options...)
+
+			if *parallel_sd == true {
+				sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, audio_compression_options...)
+			}
 
 			// Add audiomapping options on the commanline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(*audio_stream_number_int))
 
+			if *parallel_sd == true {
+				sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(*audio_stream_number_int))
+			}
+
+			if *processing_time_str != "" {
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-t", *processing_time_str)
+			}
+
+			if *parallel_sd == true {
+				if *processing_time_str != "" {
+					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-t", *processing_time_str)
+				}
+			}
+
 			ffmpeg_2_pass_logfile_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension))
-			ffmpeg_sd_2_pass_logfile_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension) + "sd")
+			ffmpeg_sd_2_pass_logfile_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension) + "-sd")
 
 			if *temp_file_directory != "" {
 				ffmpeg_2_pass_logfile_path = filepath.Join(*temp_file_directory, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension))
-				ffmpeg_sd_2_pass_logfile_path = filepath.Join(*temp_file_directory, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension) + "sd")
+				ffmpeg_sd_2_pass_logfile_path = filepath.Join(*temp_file_directory, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension) + "-sd")
 			}
 
 			if *fast_encode_bool == false {
 				// Add 2 - pass logfile path to ffmpeg commandline
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-passlogfile")
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_2_pass_logfile_path)
+
+				if *parallel_sd == true {
+					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-passlogfile")
+					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, ffmpeg_sd_2_pass_logfile_path)
+				}
 			}
 
 			// Add video output format to ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, output_video_format...)
 
+			if *parallel_sd == true {
+				sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, output_video_format...)
+			}
+
 			// Copy ffmpeg pass 2 commandline to ffmpeg pass 1 commandline
 			ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, ffmpeg_pass_2_commandline...)
+
+			if *parallel_sd == true {
+				sd_ffmpeg_pass_1_commandline = append(sd_ffmpeg_pass_1_commandline, sd_ffmpeg_pass_2_commandline...)
+			}
 
 			// Add pass 1/2 info on ffmpeg commandline
 			if *fast_encode_bool == false {
@@ -3221,15 +3386,31 @@ func main() {
 
 				// Add /dev/null output option to ffmpeg pass 1 commandline
 				ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, "/dev/null")
+
+				if *parallel_sd == true {
+					sd_ffmpeg_pass_1_commandline = append(sd_ffmpeg_pass_1_commandline, "-pass", "1")
+					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-pass", "2")
+
+					// Add /dev/null output option to ffmpeg pass 1 commandline
+					sd_ffmpeg_pass_1_commandline = append(sd_ffmpeg_pass_1_commandline, "/dev/null")
+				}
 			}
 
 			// Add outfile path to ffmpeg pass 2 commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, output_file_absolute_path)
+			sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, sd_output_file_absolute_path)
 
-			// If we have "fast" mode on then we will only do 1-pass encoding and the pass 1 commanline is the same as pass 2.
+			// Add parallel SD compression options to FFmpeg commandline.
+			if *parallel_sd == true {
+				ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, sd_ffmpeg_pass_1_commandline...)
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, sd_ffmpeg_pass_2_commandline...)
+			}
+
+			// If we have "fast" mode on then we will only do 1-pass encoding and the pass 1 commandline is the same as pass 2.
 			// In this case we won't do pass 2 at all.
 			if *fast_encode_bool == true {
 				ffmpeg_pass_1_commandline = ffmpeg_pass_2_commandline
+				sd_ffmpeg_pass_1_commandline = sd_ffmpeg_pass_2_commandline
 			}
 
 			/////////////////////////////////////////
@@ -3239,7 +3420,7 @@ func main() {
 				fmt.Println()
 				fmt.Println("video_compression_options_sd:", video_compression_options_sd)
 				fmt.Println("video_compression_options_hd:", video_compression_options_hd)
-				fmt.Println("video_compression_options:", video_compression_options)
+				fmt.Println("main_video_compression_options:", main_video_compression_options)
 				fmt.Println("audio_compression_options:", audio_compression_options)
 				fmt.Println("denoise_options:", denoise_options)
 				fmt.Println("deinterlace_options:", deinterlace_options)
@@ -3295,7 +3476,14 @@ func main() {
 					fmt.Println("\033[7mWarning: Video frame rate is 29.970. You may need to pullup (Inverse Telecine) this video with option -it\033[0m")
 				}
 
-				fmt.Printf("Encoding video with bitrate: %s. ", video_bitrate)
+				if *parallel_sd == false {
+
+					fmt.Printf("Encoding video with bitrate: %s. ", main_video_bitrate)
+				} else {
+
+					fmt.Println("Processing two video resolutions in parallel.")
+					fmt.Printf("Encoding main video with bitrate: %s and SD - video with bitrate: %s. ", main_video_bitrate, sd_video_bitrate)
+				}
 
 				if color_subsampling != "yuv420p" {
 					fmt.Println("Subsampling color:", color_subsampling, "---> yuv420p")
@@ -3474,7 +3662,7 @@ func main() {
 				} else {
 					// Complex processing chain with -filter_complex
 					pass_2_commandline_for_logfile = strings.Replace(pass_2_commandline_for_logfile, "-filter_complex ", "-filter_complex '", 1)
-					pass_2_commandline_for_logfile = strings.Replace(pass_2_commandline_for_logfile, "[processed_combined_streams] -map", "[processed_combined_streams]' -map", 1)
+					pass_2_commandline_for_logfile = strings.Replace(pass_2_commandline_for_logfile, "[main_processed_video_out] -map", "[main_processed_video_out]' -map", 1)
 				}
 
 				log_messages_str_slice = append(log_messages_str_slice, "")
