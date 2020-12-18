@@ -18,8 +18,18 @@ import (
 	"time"
 )
 
+/////////////////////////////////////////////////////
+// Defaults. Edit these to change program behavior //
+/////////////////////////////////////////////////////
+var video_compression_bitrate_divider = 256
+var crf_value = "18"
+
+///////////////////////
+// Defaults end here //
+///////////////////////
+
 // Global variable definitions
-var version_number string = "2.07" // This is the version of this program
+var version_number string = "2.08" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1145,9 +1155,9 @@ func main() {
 
 	// Video options
 	var autocrop_bool = flag.Bool("ac", false, "Autocrop. Find crop values automatically by doing 10 second spot checks in 10 places for the duration of the file.")
+	var crf_bool = flag.Bool("crf", false, "Use constant quality instead of 2-pass encoding. The default value for crf is 18, which produces the same quality as default 2-pass but about 12% bigger file size. CRF is much faster that 2-pass encoding.")
 	var denoise_bool = flag.Bool("dn", false, "Denoise. Use HQDN3D - filter to remove noise from the picture. This option is equal to Hanbrakes 'medium' noise reduction settings.")
 	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.")
-	var force_hd_bool = flag.Bool("hd", false, "Force video encoding to use HD bitrate and profile (Profile = High, Level = 4.1, Bitrate = 8000k) By default this program decides video encoding profile and bitrate automatically depending on the vertical resolution of the picture.")
 	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.")
 	var parallel_sd = flag.Bool("psd", false, "Parallel SD. Create SD version in parallel to HD processing. This creates an additional version of the video downconverted to SD resolution. The SD file is stored in directory: sd")
 	var split_times = flag.String("sf", "", "Split out parts of the file. Give colon separated start and stop times for the parts of the file to use, for example: -sf 0,10:00,01:35:12.800,01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.")
@@ -1201,7 +1211,7 @@ func main() {
 	var command_to_run_str_slice []string
 	var file_to_process, video_width, video_height, video_duration, video_codec_name, color_subsampling, color_space string
 	var video_height_int int
-	var main_video_bitrate string
+	var main_video_2_pass_bitrate_str string
 	var audio_language, for_visually_impared, number_of_audio_channels, audio_codec string
 	var subtitle_language, for_hearing_impared, subtitle_codec_name string
 	var crop_values_picture_width int
@@ -1620,8 +1630,10 @@ func main() {
 	//////////////////////////////////////////////////
 	// Define default processing options for FFmpeg //
 	//////////////////////////////////////////////////
-	video_compression_options_sd := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "main", "-level", "4.0", "-b:v", "1600k"}
-	video_compression_options_hd := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "4.1", "-b:v", "8000k"}
+	video_compression_options_sd := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "main", "-level", "4.0"}
+	video_compression_options_hd := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "4.1"}
+	video_compression_options_ultra_hd_4k := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "6.1"}
+        video_compression_options_ultra_hd_8k := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "6.2"}
 	video_compression_options_lossless := []string{"-c:v", "utvideo"}
 	audio_compression_options := []string{"-acodec", "copy"}
 	audio_compression_options_lossless := []string{"-acodec", "flac"}
@@ -2953,7 +2965,7 @@ func main() {
 			video_height_int, _ = strconv.Atoi(video_height)
 			timecode_font_size = 24
 
-			if *force_hd_bool == true || video_height_int > 700 {
+			if video_height_int > 699 {
 				timecode_font_size = 48
 			}
 
@@ -3069,21 +3081,16 @@ func main() {
 			if *parallel_sd == true {
 
 				// Use cropped video resolution if it is defined else use original wideo reso
-				if crop_values_picture_width > 0 {
+				if *autocrop_bool == true {
 
 					v_width = crop_values_picture_width
-
 				} else {
-
 					v_width,_ = strconv.Atoi(video_width)
 				}
 
 				if crop_values_picture_height > 0 {
-
 					v_height = crop_values_picture_height
-
 				} else {
-
 					v_height,_ = strconv.Atoi(video_height)
 				}
 
@@ -3091,10 +3098,8 @@ func main() {
 				// First try matching the standard HD - resolutions to SD, We only calculate SD x - resolution FFmpeg will automatically scale y based on x.
 				if v_width == 1920 {
 					sd_width = 1024
-
 				} else if v_height == 1080 {
 					sd_width = 720
-
 				} else {
 
 					// The HD resolutions were not the standard ones, calculate aspect radio and decide SD resolution based on it
@@ -3209,22 +3214,48 @@ func main() {
 			sd_ffmpeg_pass_1_commandline := []string{}
 			sd_ffmpeg_pass_2_commandline := []string{"-map", "[sd_scaled_out]", "-sws_flags", "lanczos"}
 
-			// If video vertical resolution is over 700 pixel choose HD video compression settings
-			main_video_compression_options := video_compression_options_sd
+			////////////////////////////////////////////////////////////////////////
+			// Calculate 2-pass bitrate based on the pixecount on the video frame //
+			////////////////////////////////////////////////////////////////////////
 
-			video_height_int, _ = strconv.Atoi(video_height)
-
-			// If video has been cropped, decide video compression bitrate  by the cropped hight of the video.
 			if *autocrop_bool == true {
-				video_height_int = crop_values_picture_height
+
+				v_width = crop_values_picture_width
+				v_height = crop_values_picture_height
+			} else {
+				v_width,_ = strconv.Atoi(video_width)
+				v_height,_ = strconv.Atoi(video_height)
 			}
 
-			main_video_bitrate = "1600k"
-			sd_video_bitrate := "1600k"
+			// The formula is (horizontal resolution * vertical resolution) / video_compression_bitrate_divider. For example: 1920 x 1080 = 2 073 600 pixels / 256 = bitrate 8100k
+			main_video_2_pass_bitrate_int := (v_width * v_height) / video_compression_bitrate_divider
+			main_video_2_pass_bitrate_str = strconv.Itoa(main_video_2_pass_bitrate_int) + "k"
 
-			if *force_hd_bool == true || video_height_int > 700 {
+			// Parallel SD video 2-pass bitrate is fixed to 1620k
+			sd_video_bitrate := "1620k"
+
+			/////////////////////////////////////////////////////////////////
+			// Choose video compression profile by the vertical resolution //
+			/////////////////////////////////////////////////////////////////
+			main_video_compression_options := video_compression_options_sd
+
+			if v_height > 4191 {
+				main_video_compression_options = video_compression_options_ultra_hd_8k
+
+			} else if v_height > 2096 {
+				main_video_compression_options = video_compression_options_ultra_hd_4k
+
+			} else if v_height > 699 {
 				main_video_compression_options = video_compression_options_hd
-				main_video_bitrate = "8000k"
+			}
+
+			if *crf_bool == true {
+				// Use constant quality instead of 2-pass encoding
+				main_video_compression_options = append(main_video_compression_options, "-crf", crf_value)
+				main_video_2_pass_bitrate_str = "Constant Quality: " + crf_value
+			} else {
+				// Add calculated 2-pass bitrate to video compression options
+				main_video_compression_options = append(main_video_compression_options, "-b:v", main_video_2_pass_bitrate_str)
 			}
 
 			if *force_lossless_bool == true {
@@ -3234,7 +3265,7 @@ func main() {
 
 				// Lossless video compression options
 				main_video_compression_options = video_compression_options_lossless
-				main_video_bitrate = "Lossless"
+				main_video_2_pass_bitrate_str = "Lossless"
 			}
 
 			number_of_audio_channels_int, _ := strconv.Atoi(number_of_audio_channels)
@@ -3309,28 +3340,32 @@ func main() {
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, main_video_compression_options...)
 
 			if *parallel_sd == true {
+
 				sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, video_compression_options_sd...)
+
+				if *crf_bool == true {
+					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-crf", crf_value)
+				} else {
+					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-b:v", sd_video_bitrate)
+				}
 			}
 
 			// Add color subsampling options if needed
 			if color_subsampling != "yuv420p" {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, color_subsampling_options...)
 			}
-
 			if *parallel_sd == true {
 				sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, color_subsampling_options...)
 			}
 
 			// Add audio compression options to ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, audio_compression_options...)
-
 			if *parallel_sd == true {
 				sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, audio_compression_options...)
 			}
 
 			// Add audiomapping options on the commanline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(*audio_stream_number_int))
-
 			if *parallel_sd == true {
 				sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(*audio_stream_number_int))
 			}
@@ -3338,7 +3373,6 @@ func main() {
 			if *processing_time_str != "" {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-t", *processing_time_str)
 			}
-
 			if *parallel_sd == true {
 				if *processing_time_str != "" {
 					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-t", *processing_time_str)
@@ -3353,7 +3387,7 @@ func main() {
 				ffmpeg_sd_2_pass_logfile_path = filepath.Join(*temp_file_directory, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension) + "-sd")
 			}
 
-			if *fast_encode_bool == false {
+			if *fast_encode_bool == false && *crf_bool == false {
 				// Add 2 - pass logfile path to ffmpeg commandline
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-passlogfile")
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_2_pass_logfile_path)
@@ -3366,20 +3400,18 @@ func main() {
 
 			// Add video output format to ffmpeg commandline
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, output_video_format...)
-
 			if *parallel_sd == true {
 				sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, output_video_format...)
 			}
 
 			// Copy ffmpeg pass 2 commandline to ffmpeg pass 1 commandline
 			ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, ffmpeg_pass_2_commandline...)
-
 			if *parallel_sd == true {
 				sd_ffmpeg_pass_1_commandline = append(sd_ffmpeg_pass_1_commandline, sd_ffmpeg_pass_2_commandline...)
 			}
 
 			// Add pass 1/2 info on ffmpeg commandline
-			if *fast_encode_bool == false {
+			if *fast_encode_bool == false && *crf_bool == false {
 
 				ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, "-pass", "1")
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-pass", "2")
@@ -3408,7 +3440,7 @@ func main() {
 
 			// If we have "fast" mode on then we will only do 1-pass encoding and the pass 1 commandline is the same as pass 2.
 			// In this case we won't do pass 2 at all.
-			if *fast_encode_bool == true {
+			if *fast_encode_bool == true || *crf_bool == true {
 				ffmpeg_pass_1_commandline = ffmpeg_pass_2_commandline
 				sd_ffmpeg_pass_1_commandline = sd_ffmpeg_pass_2_commandline
 			}
@@ -3441,7 +3473,6 @@ func main() {
 				fmt.Println("*subtitle_burn_int:", *subtitle_burn_int)
 				fmt.Println("*no_deinterlace_bool:", *no_deinterlace_bool)
 				fmt.Println("*denoise_bool:", *denoise_bool)
-				fmt.Println("*force_hd_bool:", *force_hd_bool)
 				fmt.Println("*audio_stream_number_int:", *audio_stream_number_int)
 				fmt.Println("*scan_mode_only_bool", *scan_mode_only_bool)
 				fmt.Println("*search_start_str", *search_start_str)
@@ -3452,6 +3483,8 @@ func main() {
 				fmt.Println("*fast_encode_bool", *fast_encode_bool)
 				fmt.Println("*burn_timecode_bool", *burn_timecode_bool)
 				fmt.Println("timecode_burn_options", timecode_burn_options)
+				fmt.Println("*crf_bool", *crf_bool)
+				fmt.Println("crf_value", crf_value)
 				fmt.Println("*debug_mode_on", *debug_mode_on)
 				fmt.Println()
 				fmt.Println("input_filenames:", input_filenames)
@@ -3476,13 +3509,21 @@ func main() {
 					fmt.Println("\033[7mWarning: Video frame rate is 29.970. You may need to pullup (Inverse Telecine) this video with option -it\033[0m")
 				}
 
-				if *parallel_sd == false {
+				if *parallel_sd == true {
 
-					fmt.Printf("Encoding video with bitrate: %s. ", main_video_bitrate)
+					if *crf_bool == true {
+						fmt.Println("Encoding main and SD video with", main_video_2_pass_bitrate_str)
+					} else {
+						fmt.Println("Encoding main video with bitrate:", main_video_2_pass_bitrate_str)
+						fmt.Println("Encoding SD-video with bitrate:", sd_video_bitrate)
+					}
 				} else {
 
-					fmt.Println("Processing two video resolutions in parallel.")
-					fmt.Printf("Encoding main video with bitrate: %s and SD - video with bitrate: %s. ", main_video_bitrate, sd_video_bitrate)
+					if *crf_bool == true {
+						fmt.Println("Encoding video with ", main_video_2_pass_bitrate_str)
+					} else {
+						fmt.Println("Encoding video with bitrate:", main_video_2_pass_bitrate_str)
+					}
 				}
 
 				if color_subsampling != "yuv420p" {
@@ -3600,7 +3641,7 @@ func main() {
 			/////////////////////////////////////
 			// Run Pass 2 encoding with FFmpeg //
 			/////////////////////////////////////
-			if *fast_encode_bool == false {
+			if *fast_encode_bool == false && *crf_bool == false {
 
 				if *debug_mode_on == true {
 
