@@ -18,9 +18,12 @@ import (
 	"time"
 )
 
-/////////////////////////////////////////////////////
-// Defaults. Edit these to change program behavior //
-/////////////////////////////////////////////////////
+
+// Global variable definitions
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// Defaults. Edit these to change program behavior                                      //
+//////////////////////////////////////////////////////////////////////////////////////////
 // Video compression bitrate is calculated like this:
 // (Horixontal resolution * vertical resolution) / video_compression_bitrate_divider.
 // For example: 1920 x 1080 = 2 073 600 pixels / 256 = bitrate 8100k
@@ -36,12 +39,46 @@ var video_compression_bitrate_divider = 256
 // 17 and 18 look the same to me and both seem equal to 2-pass with the defaults used in this program
 var crf_value = "18"
 
-///////////////////////
-// Defaults end here //
-///////////////////////
+// Default video processing. Possible values are "2-pass" and "crf"
+var default_video_processing = "2-pass" 
+// var default_video_processing = "crf" 
 
-// Global variable definitions
-var version_number string = "2.10" // This is the version of this program
+// Default audio processing. Possible values are "copy" and "aac"
+var default_audio_processing = "copy"
+// var default_audio_processing = "aac"
+var audio_bitrate_multiplier = 128
+
+// Define default processing options for FFmpeg //
+var video_compression_options_sd = []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "main", "-level", "4.0"}
+var video_compression_options_hd = []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "4.1"}
+var video_compression_options_ultra_hd_4k = []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "6.1"}
+var video_compression_options_ultra_hd_8k = []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "6.2"}
+var video_compression_options_lossless = []string{"-c:v", "utvideo"}
+var audio_compression_options = []string{"-acodec", "copy"}
+var audio_compression_options_lossless = []string{"-acodec", "flac"}
+var denoise_options = []string{"hqdn3d=3.0:3.0:2.0:3.0"}
+var color_subsampling_options = []string{"-pix_fmt", "yuv420p"}
+
+// Default number of thread to use. There are claims on the internet that using more than 8 threads
+// in h264 processing will hurt quality, because the threads can not use results from other
+// threads to optimize quality. This is why we default to using a maximum of 8 threads,
+// except when creating a main (HD) and SD video simultaneously
+// When using imagemagick to resize subtitles all cores are always used.
+// Possible values are:
+// "" empty parenthesis means calculate thread count automatically based on how many cores the computer has, and use a max of 8.
+// a number like "12" means always use twelve threads,
+// the word "auto" means let FFmpeg decide how many threads to use.
+var default_max_threads = ""
+//var default_max_threads = "12"
+//var default_max_threads = "auto"
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// Defaults end here                                                                    //
+//////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+var version_number string = "2.11" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1588,8 +1625,13 @@ func main() {
 	user_main_bitrate_bool := false
 	user_sd_bitrate_bool := false
 
+
+	if default_video_processing == "crf" {
+		*crf_bool = true
+	}
+
 	// Check the validity of the user given main video bitrate
-	if len(*user_main_bitrate) > 0 {
+	if len(*user_main_bitrate) > 0  && *crf_bool == false{
 
 		if strings.ToLower( string( *user_main_bitrate )[len( *user_main_bitrate) - 1 : ]) != "k" {
 			fmt.Println()
@@ -1618,7 +1660,7 @@ func main() {
 	}
 
 	// Check the validity of the user given sd - video bitrate
-	if len(*user_sd_bitrate) > 0 {
+	if len(*user_sd_bitrate) > 0  && *crf_bool == false {
 
 		if strings.ToLower( string( *user_sd_bitrate )[len( *user_sd_bitrate) - 1 : ]) != "k" {
 			fmt.Println()
@@ -1710,18 +1752,6 @@ func main() {
 		os.Exit(0)
 	}
 
-	//////////////////////////////////////////////////
-	// Define default processing options for FFmpeg //
-	//////////////////////////////////////////////////
-	video_compression_options_sd := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "main", "-level", "4.0"}
-	video_compression_options_hd := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "4.1"}
-	video_compression_options_ultra_hd_4k := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "6.1"}
-        video_compression_options_ultra_hd_8k := []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "6.2"}
-	video_compression_options_lossless := []string{"-c:v", "utvideo"}
-	audio_compression_options := []string{"-acodec", "copy"}
-	audio_compression_options_lossless := []string{"-acodec", "flac"}
-	denoise_options := []string{"hqdn3d=3.0:3.0:2.0:3.0"}
-	color_subsampling_options := []string{"-pix_fmt", "yuv420p"}
 	var ffmpeg_commandline_start []string
 	subtitle_stream_image_format := "tiff" // FFmpeg png extract is 30x slower than tiff, thats why we default to tiff.
 
@@ -1767,17 +1797,44 @@ func main() {
 	// Also processing goes sligthly faster when ffmpeg is using max 8 cores.
 	// The user may process files in 4 simultaneously by dividing videos to 4 dirs and processing each simultaneously.
 
+	// Decide automatically how many threads to use.
+	// There are claims on the internet that using more than 8 threads
+	// in h264 processing will hurt quality, because the threads can not use results from other
+	// threads to optimize quality. This is why we default to using a maximum of 8 threads,
+	// except when creating a main (HD) and SD video simultaneously
 	number_of_threads_to_use_for_video_compression := "auto"
 
-	if number_of_physical_processors >= 8 {
-		number_of_threads_to_use_for_video_compression = "8"
+	// User wants to override automatic thread count calculation
+	if default_max_threads != "" && default_max_threads != "auto" {
+
+		temp_number,err :=  strconv.Atoi(default_max_threads)
+
+		if err != nil {
+			fmt.Println()
+			fmt.Println("Error, can't understand the value in variable 'default_max_threads'. Defaulting to automatically determining the amount of threads to use.")
+			fmt.Println()
+
+			default_max_threads = ""
+		} else {
+			if temp_number > 0 {
+				number_of_threads_to_use_for_video_compression = default_max_threads
+			}
+		}
 	}
 
-	// For parallel HD and SD compression use max 16 cores
-	if *parallel_sd == true {
+	// Calculate automatically based on core count how many threads to use for video processing
+	if default_max_threads == "" {
 
-		if number_of_physical_processors >= 16 {
-			number_of_threads_to_use_for_video_compression = "16"
+		if number_of_physical_processors >= 8 {
+			number_of_threads_to_use_for_video_compression = "8"
+		}
+
+		// For parallel HD and SD compression use max 16 cores
+		if *parallel_sd == true {
+
+			if number_of_physical_processors >= 16 {
+				number_of_threads_to_use_for_video_compression = "16"
+			}
 		}
 	}
 
@@ -1999,6 +2056,10 @@ func main() {
 				number_of_audio_channels = audio_info[2]
 				audio_codec = strings.ToLower(audio_info[4])
 			}
+		}
+
+		if default_audio_processing == "aac" {
+			*audio_compression_aac = true
 		}
 
 		if audio_codec == "ac-3" {
@@ -2990,7 +3051,11 @@ func main() {
 				v_width = strconv.Itoa(crop_values_picture_width)
 			}
 
-			files_remaining := remove_duplicate_subtitle_images (original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_str_slice, v_width, v_height)
+			var files_remaining []string
+
+			if *only_print_commands == false {
+				files_remaining = remove_duplicate_subtitle_images (original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_str_slice, v_width, v_height)
+			}
 
 			duplicate_removal_elapsed_time := time.Since(duplicate_removal_start_time)
 
@@ -3421,7 +3486,7 @@ func main() {
 			}
 
 			number_of_audio_channels_int, _ := strconv.Atoi(number_of_audio_channels)
-			bitrate_int := number_of_audio_channels_int * 128
+			bitrate_int := number_of_audio_channels_int * audio_bitrate_multiplier
 			bitrate_str := strconv.Itoa(bitrate_int) + "k"
 
 			if *audio_compression_aac == true {
