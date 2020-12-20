@@ -41,7 +41,7 @@ var crf_value = "18"
 ///////////////////////
 
 // Global variable definitions
-var version_number string = "2.09" // This is the version of this program
+var version_number string = "2.10" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1170,8 +1170,10 @@ func main() {
 	var crf_bool = flag.Bool("crf", false, "Use Constant Quality instead of 2-pass encoding. The default value for crf is 18, which produces the same quality as default 2-pass but a bigger file. CRF is much faster that 2-pass encoding.")
 	var denoise_bool = flag.Bool("dn", false, "Denoise. Use HQDN3D - filter to remove noise from the picture. This option is equal to Hanbrakes 'medium' noise reduction settings.")
 	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.")
+	var user_main_bitrate = flag.String("mbr", "", "Override main videoprocessing automatic bitrate calculation and define bitrate manually.")
 	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.")
 	var parallel_sd = flag.Bool("psd", false, "Parallel SD. Create SD version in parallel to HD processing. This creates an additional version of the video downconverted to SD resolution. The SD file is stored in directory: sd")
+	var user_sd_bitrate = flag.String("sbr", "", "Override parallel sd videoprocessing automatic bitrate calculation and define bitrate manually.")
 	var split_times = flag.String("sf", "", "Split out parts of the file. Give colon separated start and stop times for the parts of the file to use, for example: -sf 0,10:00,01:35:12.800,01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.")
 	var burn_timecode_bool = flag.Bool("tc", false, "Burn timecode on top of the video. Timecode can be used to look for exact edit points for the file split feature")
 	var inverse_telecine = flag.Bool("it", false, "Perform inverse telecine on 29.97 fps material to return it back to original 24 fps.")
@@ -1581,6 +1583,74 @@ func main() {
 	// Use the first subtitle if user wants subtitle split but did not specify subtitle number
 	if *subtitle_burn_split == true && subtitle_burn_number == -1 {
 		subtitle_burn_number = 0
+	}
+
+	user_main_bitrate_bool := false
+	user_sd_bitrate_bool := false
+
+	// Check the validity of the user given main video bitrate
+	if len(*user_main_bitrate) > 0 {
+
+		if strings.ToLower( string( *user_main_bitrate )[len( *user_main_bitrate) - 1 : ]) != "k" {
+			fmt.Println()
+			fmt.Println("The -mbr option takes a bitrate in the form of: 8000k don't forget the 'k' at the end of the value")
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		number_str := string(*user_main_bitrate)[0:len(*user_main_bitrate) - 1]
+		number_int,err := strconv.Atoi(number_str)
+
+		if err != nil {
+			fmt.Println()
+			fmt.Println("Error cannot convert value", *user_main_bitrate, "to a number.")
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		if number_int < 1 || number_int > 1000000 {
+			fmt.Println()
+			fmt.Println("Error the bitrate must be between 1 and 1 000 000, for example: 8000k")
+			fmt.Println()
+			os.Exit(0)
+		}
+		user_main_bitrate_bool = true
+	}
+
+	// Check the validity of the user given sd - video bitrate
+	if len(*user_sd_bitrate) > 0 {
+
+		if strings.ToLower( string( *user_sd_bitrate )[len( *user_sd_bitrate) - 1 : ]) != "k" {
+			fmt.Println()
+			fmt.Println("The -sbr option takes a bitrate in the form of: 1600k don't forget the 'k' at the end of the value")
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		number_str := string(*user_sd_bitrate)[0:len(*user_sd_bitrate) - 1]
+		number_int,err := strconv.Atoi(number_str)
+
+		if err != nil {
+			fmt.Println()
+			fmt.Println("Error cannot convert value", *user_sd_bitrate, "to a number.")
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		if number_int < 1 || number_int > 1000000 {
+			fmt.Println()
+			fmt.Println("Error the bitrate must be between 1 and 1 000 000, for example: 1600k")
+			fmt.Println()
+			os.Exit(0)
+		}
+		user_sd_bitrate_bool = true
+	}
+
+	if *parallel_sd == false && user_sd_bitrate_bool == true {
+		fmt.Println()
+		fmt.Println("Error: the -sbr option can be used only with the -psd option.")
+		fmt.Println()
+		os.Exit(0)
 	}
 
 	if *debug_mode_on == true {
@@ -3303,8 +3373,18 @@ func main() {
 			main_video_2_pass_bitrate_int := (v_width * v_height) / video_compression_bitrate_divider
 			main_video_2_pass_bitrate_str = strconv.Itoa(main_video_2_pass_bitrate_int) + "k"
 
+			// User overrides automatic bitrate calculation and defines one on the commandline
+			if user_main_bitrate_bool == true {
+				main_video_2_pass_bitrate_str = *user_main_bitrate
+			}
+
 			// Parallel SD video 2-pass bitrate is fixed to 1620k
 			sd_video_bitrate := "1620k"
+
+			// User overrides automatic bitrate calculation and defines one on the commandline
+			if user_sd_bitrate_bool == true {
+				sd_video_bitrate = *user_sd_bitrate
+			}
 
 			/////////////////////////////////////////////////////////////////
 			// Choose video compression profile by the vertical resolution //
