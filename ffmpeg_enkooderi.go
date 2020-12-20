@@ -21,7 +21,19 @@ import (
 /////////////////////////////////////////////////////
 // Defaults. Edit these to change program behavior //
 /////////////////////////////////////////////////////
+// Video compression bitrate is calculated like this:
+// (Horixontal resolution * vertical resolution) / video_compression_bitrate_divider.
+// For example: 1920 x 1080 = 2 073 600 pixels / 256 = bitrate 8100k
 var video_compression_bitrate_divider = 256
+
+// Constant Quality CRF uses as much bitrate as is needed
+// to have the video quality be constant through the video.
+// CRF compression is much faster than 2-pass but it creates a larger file.
+// Also some dark scenes might look better on 2-pass than CRF.
+// 17 or 18 is recommended for FFmpeg to create a copy with almost the same quality as the original
+// although there is always some detail loss on recompression on any bitrate.
+// Smaller value creates a bigger file
+// 17 and 18 look the same to me and both seem equal to 2-pass with the defaults used in this program
 var crf_value = "18"
 
 ///////////////////////
@@ -29,7 +41,7 @@ var crf_value = "18"
 ///////////////////////
 
 // Global variable definitions
-var version_number string = "2.08" // This is the version of this program
+var version_number string = "2.09" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1155,7 +1167,7 @@ func main() {
 
 	// Video options
 	var autocrop_bool = flag.Bool("ac", false, "Autocrop. Find crop values automatically by doing 10 second spot checks in 10 places for the duration of the file.")
-	var crf_bool = flag.Bool("crf", false, "Use constant quality instead of 2-pass encoding. The default value for crf is 18, which produces the same quality as default 2-pass but about 12% bigger file size. CRF is much faster that 2-pass encoding.")
+	var crf_bool = flag.Bool("crf", false, "Use Constant Quality instead of 2-pass encoding. The default value for crf is 18, which produces the same quality as default 2-pass but a bigger file. CRF is much faster that 2-pass encoding.")
 	var denoise_bool = flag.Bool("dn", false, "Denoise. Use HQDN3D - filter to remove noise from the picture. This option is equal to Hanbrakes 'medium' noise reduction settings.")
 	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.")
 	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.")
@@ -1190,6 +1202,7 @@ func main() {
 	// Misc options
 	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables and the FFmpeg commandlines used.")
 	var use_matroska_container = flag.Bool("mkv", false, "Use matroska (mkv) as the output file wrapper format.")
+	var only_print_commands = flag.Bool("print", false, "Only print FFmpeg commands that would be used for processing, don't process any files.")
 	var show_program_version_short = flag.Bool("v", false, "Show the version of this program.")
 	var show_program_version_long = flag.Bool("version", false, "Show the version of this program.")
 	var temp_file_directory = flag.String("td", "", "Path to directory for temporary files, example_ -td PathToDir. This option directs temporary files created with 2-pass encoding and subtitle processing with the -sp switch to a separate directory. If the temp dir is a ram or a fast ssd disk then it speeds up processing with the -sp switch. Processing files with the -sp switch extracts every frame of the movie as a picture, so you need to have lots of space in the temp directory. For a FullHD movie you need to have 20 GB or more free storage. If you run multiple instances of this program simultaneously each instance processing one FullHD movie then you need 20 GB or more free storage for each movie that is processed at the same time. -sp switch extracts movie subtitle frames with FFmpeg and FFmpeg fails silently if it runs out of storage space. If this happens then some of the last subtitles won't be available when the video is compressed and this results the last available subtitle to be 'stuck' on top of video to the end of the movie.")
@@ -2317,7 +2330,11 @@ func main() {
 
 				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-vcodec", "utvideo", "-acodec", "flac", "-scodec", "copy", "-map", "0", split_file_path)
 
-				fmt.Println("Creating splitfile: " + splitfile_name)
+
+				if *only_print_commands == false {
+					fmt.Println("Creating splitfile: " + splitfile_name)
+				}
+
 				log_messages_str_slice = append(log_messages_str_slice, strings.Join(ffmpeg_file_split_commandline, " "))
 
 				// Write split file names to a text file
@@ -2328,11 +2345,17 @@ func main() {
 					os.Exit(0)
 				}
 
-				if *debug_mode_on == true {
-					fmt.Println(ffmpeg_file_split_commandline, "\n")
+				if *debug_mode_on == true || *only_print_commands == true {
+					fmt.Println(strings.Join(ffmpeg_file_split_commandline, " "), "\n")
 				}
 
-				file_split_output_temp, file_split_error_output_temp, error_code := run_external_command(ffmpeg_file_split_commandline)
+				var file_split_output_temp []string
+				var file_split_error_output_temp []string
+				var error_code error
+
+				if *only_print_commands == false {
+					file_split_output_temp, file_split_error_output_temp, error_code = run_external_command(ffmpeg_file_split_commandline)
+				}
 
 				if error_code != nil {
 
@@ -2356,8 +2379,31 @@ func main() {
 			}
 
 			file_split_elapsed_time = time.Since(file_split_start_time)
-			fmt.Printf("\nSplitfile creation took %s\n", file_split_elapsed_time.Round(time.Millisecond))
-			fmt.Println()
+
+			if *only_print_commands == false {
+				fmt.Printf("\nSplitfile creation took %s\n", file_split_elapsed_time.Round(time.Millisecond))
+				fmt.Println()
+			}
+
+			if *only_print_commands == true {
+
+				fmt.Println("Contents of textfile:", split_info_file_absolute_path)
+
+				split_info_file_pointer, err := os.Open(split_info_file_absolute_path)
+
+				if err == nil {
+					text_scanner := bufio.NewScanner(split_info_file_pointer)
+
+					for text_scanner.Scan() {
+						fmt.Println(text_scanner.Text())
+					}
+					fmt.Println()
+				} else {
+					fmt.Println("Could not open texttile:", split_info_file_absolute_path)
+					fmt.Println()
+				}
+				defer split_info_file_pointer.Close()
+			}
 
 			log_messages_str_slice = append(log_messages_str_slice, "\nSplitfile creation took "+file_split_elapsed_time.Round(time.Millisecond).String())
 
@@ -2738,21 +2784,23 @@ func main() {
 			var subtitle_extract_output []string
 			var subtitle_extract_error_output []string
 
-			// Remove subtitle directories if they were left over from the previous run
-			if _, err := os.Stat(original_subtitles_absolute_path); err == nil {
-				fmt.Printf("Deleting original subtitle files left over from previous run. ")
+			if *only_print_commands == false {
+				// Remove subtitle directories if they were left over from the previous run
+				if _, err := os.Stat(original_subtitles_absolute_path); err == nil {
+					fmt.Printf("Deleting original subtitle files left over from previous run. ")
 
-				os.RemoveAll(original_subtitles_absolute_path)
+					os.RemoveAll(original_subtitles_absolute_path)
 
-				fmt.Println("Done.")
-			}
+					fmt.Println("Done.")
+				}
 
-			if _, err := os.Stat(fixed_subtitles_absolute_path); err == nil {
-				fmt.Printf("Deleting fixed subtitle files left over from previous run. ")
+				if _, err := os.Stat(fixed_subtitles_absolute_path); err == nil {
+					fmt.Printf("Deleting fixed subtitle files left over from previous run. ")
 
-				os.RemoveAll(fixed_subtitles_absolute_path)
+					os.RemoveAll(fixed_subtitles_absolute_path)
 
-				fmt.Println("Done.")
+					fmt.Println("Done.")
+				}
 			}
 
 			subtitle_extract_start_time = time.Now()
@@ -2798,7 +2846,7 @@ func main() {
 
 			ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-vn", "-an", "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_burn_number)+"]copy[subtitle_processing_stream]", "-map", "[subtitle_processing_stream]", filepath.Join(original_subtitles_absolute_path, "subtitle-%10d." + subtitle_stream_image_format))
 
-			if *debug_mode_on == true {
+			if *debug_mode_on == true || *only_print_commands == true {
 				fmt.Println()
 				fmt.Println("FFmpeg Subtitle Extract Commandline:")
 				fmt.Println(strings.Join(ffmpeg_subtitle_extract_commandline, " "))
@@ -2810,11 +2858,18 @@ func main() {
 			log_messages_str_slice = append(log_messages_str_slice, "--------------------------------")
 			log_messages_str_slice = append(log_messages_str_slice, strings.Join(ffmpeg_subtitle_extract_commandline, " "))
 
-			fmt.Printf("Extracting subtitle stream as %s - images ", subtitle_stream_image_format)
+			if *only_print_commands == false {
+				fmt.Printf("Extracting subtitle stream as %s - images ", subtitle_stream_image_format)
+			}
 
 			error_code = nil
 
-			subtitle_extract_output, subtitle_extract_error_output, error_code = run_external_command(ffmpeg_subtitle_extract_commandline)
+			////////////////
+			// Run FFmpeg //
+			////////////////
+			if *only_print_commands == false {
+				subtitle_extract_output, subtitle_extract_error_output, error_code = run_external_command(ffmpeg_subtitle_extract_commandline)
+			}
 
 			if error_code != nil {
 
@@ -2840,7 +2895,10 @@ func main() {
 			}
 
 			subtitle_extract_elapsed_time = time.Since(subtitle_extract_start_time)
-			fmt.Println("took", subtitle_extract_elapsed_time.Round(time.Millisecond))
+
+			if *only_print_commands == false {
+				fmt.Println("took", subtitle_extract_elapsed_time.Round(time.Millisecond))
+			}
 
 			//////////////////////////////////////////////////////////////////////////////////////////
 			// Process extracted subtitles in as many threads as there are physical processor cores //
@@ -2850,7 +2908,9 @@ func main() {
 			files_str_slice := read_filenames_in_a_dir(original_subtitles_absolute_path)
 
 			duplicate_removal_start_time := time.Now()
-			fmt.Printf("Removing duplicate subtitle slides ")
+			if *only_print_commands == false {
+				fmt.Printf("Removing duplicate subtitle slides ")
+			}
 
 			v_height := video_height
 			v_width := video_width
@@ -2863,21 +2923,27 @@ func main() {
 			files_remaining := remove_duplicate_subtitle_images (original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_str_slice, v_width, v_height)
 
 			duplicate_removal_elapsed_time := time.Since(duplicate_removal_start_time)
-			fmt.Println("took", duplicate_removal_elapsed_time.Round(time.Millisecond))
+
+			if *only_print_commands == false {
+				fmt.Println("took", duplicate_removal_elapsed_time.Round(time.Millisecond))
+			}
 
 			subtitle_trimming_start_time := time.Now()
 
-			if *subtitle_burn_resize != "" {
+			if *only_print_commands == false {
 
-				fmt.Printf("Trimming and resizing subtitle images in " + strconv.Itoa(number_of_physical_processors) + " threads ")
+				if *subtitle_burn_resize != "" {
 
-			} else {
+					fmt.Printf("Trimming and resizing subtitle images in " + strconv.Itoa(number_of_physical_processors) + " threads ")
 
-				fmt.Printf("Trimming subtitle images in multiple threads ")
-			}
+				} else {
 
-			if *debug_mode_on == true {
-				fmt.Println()
+					fmt.Printf("Trimming subtitle images in multiple threads ")
+				}
+
+				if *debug_mode_on == true {
+					fmt.Println()
+				}
 			}
 
 			number_of_subtitle_files := len(files_remaining)
@@ -2929,14 +2995,20 @@ func main() {
 			}
 
 			subtitle_trimming_elapsed_time := time.Since(subtitle_trimming_start_time)
-			fmt.Println("took", subtitle_trimming_elapsed_time.Round(time.Millisecond))
+
+			if *only_print_commands == false {
+				fmt.Println("took", subtitle_trimming_elapsed_time.Round(time.Millisecond))
+			}
 
 			subtitle_processing_elapsed_time = time.Since(subtitle_processing_start_time)
-			fmt.Printf("Complete subtitle processing took %s", subtitle_processing_elapsed_time.Round(time.Millisecond))
-			fmt.Println()
+
+			if *only_print_commands == false {
+				fmt.Printf("Complete subtitle processing took %s", subtitle_processing_elapsed_time.Round(time.Millisecond))
+				fmt.Println()
+			}
 
 
-			if *debug_mode_on == false {
+			if *debug_mode_on == false && *only_print_commands == false {
 
 				if _, err := os.Stat(original_subtitles_absolute_path); err == nil {
 					fmt.Printf("Deleting original subtitles to recover disk space. ")
@@ -3493,10 +3565,11 @@ func main() {
 			/////////////////////////////////////
 			// Run Pass 1 encoding with FFmpeg //
 			/////////////////////////////////////
-			if *debug_mode_on == true {
+			if *debug_mode_on == true || * only_print_commands == true {
 
 				fmt.Println()
-				fmt.Println("ffmpeg_pass_1_commandline:", ffmpeg_pass_1_commandline)
+				fmt.Println("ffmpeg_pass_1_commandline:")
+				fmt.Println(strings.Join(ffmpeg_pass_1_commandline," "))
 
 			} else {
 				fmt.Println()
@@ -3520,7 +3593,7 @@ func main() {
 				} else {
 
 					if *crf_bool == true {
-						fmt.Println("Encoding video with ", main_video_2_pass_bitrate_str)
+						fmt.Println("Encoding video with", main_video_2_pass_bitrate_str)
 					} else {
 						fmt.Println("Encoding video with bitrate:", main_video_2_pass_bitrate_str)
 					}
@@ -3555,7 +3628,16 @@ func main() {
 
 			pass_1_start_time = time.Now()
 
-			ffmpeg_pass_1_output_temp, ffmpeg_pass_1_error_output_temp, error_code := run_external_command(ffmpeg_pass_1_commandline)
+			////////////////
+			// Run FFmpeg //
+			////////////////
+			var ffmpeg_pass_1_output_temp []string
+			var ffmpeg_pass_1_error_output_temp []string
+			var error_code error
+
+			if *only_print_commands == false {
+				ffmpeg_pass_1_output_temp, ffmpeg_pass_1_error_output_temp, error_code = run_external_command(ffmpeg_pass_1_commandline)
+			}
 
 			if error_code != nil {
 
@@ -3643,10 +3725,11 @@ func main() {
 			/////////////////////////////////////
 			if *fast_encode_bool == false && *crf_bool == false {
 
-				if *debug_mode_on == true {
+				if *debug_mode_on == true || *only_print_commands == true  {
 
 					fmt.Println()
-					fmt.Println("ffmpeg_pass_2_commandline:", ffmpeg_pass_2_commandline)
+					fmt.Println("ffmpeg_pass_2_commandline:")
+					fmt.Println(strings.Join(ffmpeg_pass_2_commandline, " "))
 
 				} else {
 
@@ -3654,8 +3737,15 @@ func main() {
 					fmt.Printf("Pass 2 encoding: " + inputfile_name + " ")
 				}
 
+				if *only_print_commands == true {
+					os.Exit(0)
+				}
+
 				pass_2_start_time = time.Now()
 
+				////////////////
+				// Run FFmpeg //
+				////////////////
 				ffmpeg_pass_2_output_temp, ffmpeg_pass_2_error_output_temp, error_code := run_external_command(ffmpeg_pass_2_commandline)
 
 				if error_code != nil {
@@ -3728,6 +3818,11 @@ func main() {
 
 					fmt.Println()
 				}
+			}
+
+
+			if *only_print_commands == true {
+				os.Exit(0)
 			}
 
 			////////////////////////////
