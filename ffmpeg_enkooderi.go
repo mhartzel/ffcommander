@@ -24,31 +24,8 @@ import (
 //////////////////////////////////////////////////////////////////////////////////////////
 // Defaults. Edit these to change program behavior                                      //
 //////////////////////////////////////////////////////////////////////////////////////////
-// Video compression bitrate is calculated like this:
-// (Horixontal resolution * vertical resolution) / video_compression_bitrate_divider.
-// For example: 1920 x 1080 = 2 073 600 pixels / 256 = bitrate 8100k
-var video_compression_bitrate_divider = 256
-
-// Constant Quality CRF uses as much bitrate as is needed
-// to have the video quality be constant through the video.
-// CRF compression is much faster than 2-pass but it creates a larger file.
-// Also some dark scenes might look better on 2-pass than CRF.
-// 17 or 18 is recommended for FFmpeg to create a copy with almost the same quality as the original
-// although there is always some detail loss on recompression on any bitrate.
-// Smaller value creates a bigger file
-// 17 and 18 look the same to me and both seem equal to 2-pass with the defaults used in this program
-var crf_value = "18"
-
-// Default video processing. Possible values are "2-pass" and "crf"
-var default_video_processing = "2-pass" 
-// var default_video_processing = "crf" 
-
-// Default audio processing. Possible values are "copy" and "aac"
-var default_audio_processing = "copy"
-// var default_audio_processing = "aac"
-var audio_bitrate_multiplier = 128
-
-// Define default processing options for FFmpeg //
+// Define default processing profiles for x264 different resolutions
+// Profiles are automatically selected based on video resolution
 var video_compression_options_sd = []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "main", "-level", "4.0"}
 var video_compression_options_hd = []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "4.1"}
 var video_compression_options_ultra_hd_4k = []string{"-c:v", "libx264", "-preset", "medium", "-profile:v", "high", "-level", "6.1"}
@@ -58,6 +35,36 @@ var audio_compression_options = []string{"-acodec", "copy"}
 var audio_compression_options_lossless = []string{"-acodec", "flac"}
 var denoise_options = []string{"hqdn3d=3.0:3.0:2.0:3.0"}
 var color_subsampling_options = []string{"-pix_fmt", "yuv420p"}
+
+// Video compression bitrate is calculated like this:
+// (Horixontal resolution * vertical resolution) / video_compression_bitrate_divider.
+// For example: 1920 x 1080 = 2 073 600 pixels / 256 = bitrate 8100k
+var video_compression_bitrate_divider = 256
+
+// Constant Quality CRF uses as much bitrate as is needed
+// to have the video quality be constant throughout the video.
+// CRF compression is much faster than 2-pass but it creates a larger file.
+// Also some dark scenes might look better on 2-pass than CRF.
+// 17 or 18 is recommended for FFmpeg to create a copy with almost the same quality as the original
+// although there is always some detail loss on recompression on any bitrate.
+// Smaller value creates a bigger file
+// 17 and 18 look the same to me and both seem equal to 2-pass with the default compression bitrates used in this program
+var crf_value = "18"
+
+// Default video processing. Possible values are "2-pass" and "crf"
+var default_video_processing = "2-pass" 
+// var default_video_processing = "crf" 
+
+// Default audio processing. Possible values are "copy", "opus" and "aac"
+// Copy copies the original audio unchanhed from source file to target,
+// opus recompresses audio to opus - format
+// and aac recompresses audio to aac - format
+var default_audio_processing = "copy"
+// var default_audio_processing = "opus"
+// var default_audio_processing = "aac"
+
+// Default audio bitrate per channel is 128k. If there are 6 channels then this results to 128 * 6 = 768k
+var audio_bitrate_multiplier = 128
 
 // Default number of thread to use. There are claims on the internet that using more than 8 threads
 // in h264 processing will hurt quality, because the threads can not use results from other
@@ -78,7 +85,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.11" // This is the version of this program
+var version_number string = "2.12" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -2060,7 +2067,10 @@ func main() {
 
 		if default_audio_processing == "aac" {
 			*audio_compression_aac = true
+		} else if default_audio_processing == "opus" {
+			*audio_compression_opus = true
 		}
+
 
 		if audio_codec == "ac-3" {
 			audio_codec = "ac3"
