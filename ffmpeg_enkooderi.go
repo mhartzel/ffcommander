@@ -86,7 +86,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.14" // This is the version of this program
+var version_number string = "2.15" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1475,9 +1475,12 @@ func main() {
 		*fast_encode_bool = true
 	}
 
-	if *subtitle_burn_split == true && *search_start_str != "" && *fast_bool == false {
+	if *subtitle_burn_split == true && *search_start_str != "" && *fast_bool == false && *crf_bool == false {
 		fmt.Println("\nOptions -st -sp and 2-pass encoding won't work correctly together.")
-		fmt.Println("You options are: disable 2-pass encoding with the -f option or don't use the -st option.\n")
+		fmt.Println("You options are:")
+		fmt.Println("disable 2-pass encoding with the -f option")
+		fmt.Println("don't use the -st and -et options")
+		fmt.Println("use the -crf option (Constant Quality).\n")
 		os.Exit(1)
 	}
 
@@ -2062,8 +2065,12 @@ func main() {
 
 		} else {
 
+			// User did not give audio language code (fin, eng, ita). Find the wanted audio stream by number (starts from 0).
+			// Either user defined a audio stream number on the commandline or we use the audio stream number 0.
+
 			if len(audio_slice) - 1 < *audio_stream_number_int {
 
+				// The audio stream number is higher than any stream number in the input file.
 				var error_messages []string
 
 				if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
@@ -2075,9 +2082,12 @@ func main() {
 
 			} else {
 
+				// There is a audio stream for the suadio stream number we have.
+				// Either user defined the number on the commandline or we use the default value of 0 (first audio in source file).
 				audio_info := audio_slice[*audio_stream_number_int]
 				number_of_audio_channels = audio_info[2]
 				audio_codec = strings.ToLower(audio_info[4])
+				audio_stream_found = true
 			}
 		}
 
@@ -2163,6 +2173,8 @@ func main() {
 		}
 
 		// Test if output audio codec is compatible with the mp4 wrapper format
+		// MP4 supported audio formats: https://en.wikipedia.org/wiki/Comparison_of_video_container_formats
+		// Amr, mp1, mp2, mp3. aac, ac3, e-ac3, dts, opus, alac, mlp, Dolby TrueHD, DTS-HD, als, sls, lpcm, DV Audio.
 		if *use_matroska_container == false && audio_stream_found == true {
 
 			if audio_codec != "aac" && audio_codec != "ac3" && audio_codec != "mp2" && audio_codec != "mp3" && audio_codec != "dts" && audio_codec != "opus" {
@@ -2174,7 +2186,7 @@ func main() {
 				}
 
 				error_messages = append(error_messages, "Error, audio codec: " + audio_codec + " in file is not compatible with the mp4 wrapper format.")
-				error_messages = append(error_messages, "Either use a compatible audio format (aac, ac3, mp2, mp3, dts) or the -mkv switch to export to a matroska file.")
+				error_messages = append(error_messages, "Either use a compatible audio format (aac, ac3, mp2, mp3, dts, opus) or the -mkv switch to export to a matroska file.")
 				error_messages = append(error_messages, "")
 				error_messages_map[inputfile_full_path] = error_messages
 			}
@@ -2495,7 +2507,7 @@ func main() {
 				log_messages_str_slice = append(log_messages_str_slice, strings.Join(ffmpeg_file_split_commandline, " "))
 
 				// Write split file names to a text file
-				if _, err = split_info_file_pointer.WriteString("file " + splitfile_name + "\n"); err != nil {
+				if _, err = split_info_file_pointer.WriteString("file '" + splitfile_name + "'\n"); err != nil {
 					fmt.Println("")
 					fmt.Println("Error, could not write to split info file:", split_info_filename)
 					log.Fatal(err)
@@ -2980,8 +2992,10 @@ func main() {
 
 
 			// If the user wants to use the fast and inaccurate search, place the -ss option before the first -i on ffmpeg commandline.
-			if *search_start_str != "" && *fast_search_bool == true {
-				ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-ss", *search_start_str)
+			if *search_start_str != "" {
+				if *fast_search_bool == true || *crf_bool == true {
+					ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-ss", *search_start_str)
+				}
 			}
 
 			if split_video == true {
@@ -2993,8 +3007,10 @@ func main() {
 			}
 
 			// The user wants to use the slow and accurate search, place the -ss option after the first -i on ffmpeg commandline.
-			if *search_start_str != "" && *fast_search_bool == false {
-				ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-ss", *search_start_str)
+			if *search_start_str != "" {
+				if *fast_search_bool == false && *crf_bool == false {
+					ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-ss", *search_start_str)
+				}
 			}
 
 			if *processing_time_str != "" {
@@ -3206,8 +3222,10 @@ func main() {
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_commandline_start...)
 
 			// If the user wants to use the fast and inaccurate search, place the -ss option before the first -i on ffmpeg commandline.
-			if *search_start_str != "" && *fast_search_bool == true {
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-ss", *search_start_str)
+			if *search_start_str != "" {
+				if *fast_search_bool == true || *crf_bool == true {
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-ss", *search_start_str)
+				}
 			}
 
 			// Add possible dvd subtitle color palette hacking option to the FFmpeg commandline.
@@ -3233,8 +3251,10 @@ func main() {
 			}
 
 			// The user wants to use the slow and accurate search, place the -ss option after the first -i on ffmpeg commandline.
-			if *search_start_str != "" && *fast_search_bool == false {
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-ss", *search_start_str)
+			if *search_start_str != "" {
+				if *fast_search_bool == false && *crf_bool == false {
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-ss", *search_start_str)
+				}
 			}
 
 			if *parallel_sd == false && *scale_to_sd == false {
