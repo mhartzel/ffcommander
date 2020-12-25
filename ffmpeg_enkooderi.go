@@ -86,7 +86,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.15" // This is the version of this program
+var version_number string = "2.17" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -3815,11 +3815,29 @@ func main() {
 			/////////////////////////////////////
 			// Run Pass 1 encoding with FFmpeg //
 			/////////////////////////////////////
+			// Add pass 1 messages to processing log.
+			pass_1_commandline_for_logfile := strings.Join(ffmpeg_pass_1_commandline, " ")
+
+			// Make a copy of the FFmpeg commandline for writing in the logfile.
+			// Modify commandline so that it works if the user wants to copy and paste it from the logfile and run it.
+			// The filter command needs to be in single quotes '
+			index := strings.Index(pass_1_commandline_for_logfile, "-filter_complex")
+			first_part_of_string := pass_1_commandline_for_logfile[:index + 16]
+			first_part_of_string = first_part_of_string + "'"
+
+			second_part_of_string := pass_1_commandline_for_logfile[index + 16:]
+			index = strings.Index(second_part_of_string, " -")
+			third_part_of_string := second_part_of_string[index:]
+			second_part_of_string = second_part_of_string[:index]
+			second_part_of_string = second_part_of_string + "'"
+
+			pass_1_commandline_for_logfile = first_part_of_string + second_part_of_string + third_part_of_string
+
 			if *debug_mode_on == true || * only_print_commands == true {
 
 				fmt.Println()
 				fmt.Println("ffmpeg_pass_1_commandline:")
-				fmt.Println(strings.Join(ffmpeg_pass_1_commandline," "))
+				fmt.Println(pass_1_commandline_for_logfile)
 
 			} else {
 				fmt.Println()
@@ -3922,42 +3940,20 @@ func main() {
 			fmt.Printf("took %s", pass_1_elapsed_time.Round(time.Millisecond))
 			fmt.Println()
 
-			// Add messages to processing log.
-			pass_1_commandline_for_logfile := strings.Join(ffmpeg_pass_1_commandline, " ")
+			// Add pass 2 messages to processing log.
+			pass_2_commandline_for_logfile := strings.Join(ffmpeg_pass_2_commandline, " ")
 
-			// Make a copy of the FFmpeg commandline for writing in the logfile.
-			// Modify commandline so that it works if the user wants to copy and paste it from the logfile and run it.
-			// The filter command needs to be in single quotes '
-			if subtitle_burn_number == -1 || subtitle_mux_bool == true {
+			index = strings.Index(pass_2_commandline_for_logfile, "-filter_complex")
+			first_part_of_string = pass_2_commandline_for_logfile[:index + 16]
+			first_part_of_string = first_part_of_string + "'"
 
-				// Simple processing chain with -vf.
-				index := strings.Index(pass_1_commandline_for_logfile, "-vf")
-				first_part_of_string := pass_1_commandline_for_logfile[:index + 4]
-				first_part_of_string = first_part_of_string + "'"
+			second_part_of_string = pass_2_commandline_for_logfile[index + 16:]
+			index = strings.Index(second_part_of_string, " -")
+			third_part_of_string = second_part_of_string[index:]
+			second_part_of_string = second_part_of_string[:index]
+			second_part_of_string = second_part_of_string + "'"
 
-				second_part_of_string := pass_1_commandline_for_logfile[index + 4:]
-				index = strings.Index(second_part_of_string, " -")
-				third_part_of_string := second_part_of_string[index:]
-				second_part_of_string = second_part_of_string[:index]
-				second_part_of_string = second_part_of_string + "'"
-
-				pass_1_commandline_for_logfile = first_part_of_string + second_part_of_string + third_part_of_string
-
-			} else {
-
-				// Complex processing chain with -filter_complex
-				index := strings.Index(pass_1_commandline_for_logfile, "-filter_complex")
-				first_part_of_string := pass_1_commandline_for_logfile[:index + 16]
-				first_part_of_string = first_part_of_string + "'"
-
-				second_part_of_string := pass_1_commandline_for_logfile[index + 16:]
-				index = strings.Index(second_part_of_string, " -")
-				third_part_of_string := second_part_of_string[index:]
-				second_part_of_string = second_part_of_string[:index]
-				second_part_of_string = second_part_of_string + "'"
-
-				pass_1_commandline_for_logfile = first_part_of_string + second_part_of_string + third_part_of_string
-			}
+			pass_2_commandline_for_logfile = first_part_of_string + second_part_of_string + third_part_of_string
 
 			log_messages_str_slice = append(log_messages_str_slice, "")
 			log_messages_str_slice = append(log_messages_str_slice, "FFmpeg Pass 1 Options:")
@@ -3989,7 +3985,7 @@ func main() {
 
 					fmt.Println()
 					fmt.Println("ffmpeg_pass_2_commandline:")
-					fmt.Println(strings.Join(ffmpeg_pass_2_commandline, " "))
+					fmt.Println(pass_2_commandline_for_logfile)
 
 				} else {
 
@@ -4040,21 +4036,6 @@ func main() {
 				}
 
 				fmt.Println()
-
-				// Add messages to processing log.
-				pass_2_commandline_for_logfile := strings.Join(ffmpeg_pass_2_commandline, " ")
-
-				// Make a copy of the FFmpeg commandline for writing in the logfile.
-				// Modify commandline so that it works if the user wants to copy and paste it from the logfile and run it.
-				if subtitle_burn_number == -1 || subtitle_mux_bool == true {
-					// Simple processing chain with -vf.
-					pass_2_commandline_for_logfile = strings.Replace(pass_2_commandline_for_logfile, "-vf ", "-vf '", 1)
-					pass_2_commandline_for_logfile = strings.Replace(pass_2_commandline_for_logfile, " -c:v", "' -c:v", 1)
-				} else {
-					// Complex processing chain with -filter_complex
-					pass_2_commandline_for_logfile = strings.Replace(pass_2_commandline_for_logfile, "-filter_complex ", "-filter_complex '", 1)
-					pass_2_commandline_for_logfile = strings.Replace(pass_2_commandline_for_logfile, "[main_processed_video_out] -map", "[main_processed_video_out]' -map", 1)
-				}
 
 				log_messages_str_slice = append(log_messages_str_slice, "")
 				log_messages_str_slice = append(log_messages_str_slice, "FFmpeg Pass 2 Options:")
