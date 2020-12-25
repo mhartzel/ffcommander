@@ -86,7 +86,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.21" // This is the version of this program
+var version_number string = "2.22" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -864,7 +864,7 @@ func read_filenames_in_a_dir(source_dir string) (files_str_slice []string) {
 	return files_str_slice
 }
 
-func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_absolute_path string, files_str_slice []string, video_width string, video_height string, process_number int, return_channel chan int, subtitle_burn_resize string) {
+func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_absolute_path string, files_str_slice []string, video_width string, video_height string, process_number int, return_channel chan int, subtitle_burn_resize string, subtitle_burn_grayscale bool) {
 
 	var subtitle_dimension_info []string
 	var subtitle_resize_info []string
@@ -880,7 +880,13 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 
 		subtitle_trim_commandline = nil
 
-		subtitle_trim_commandline = append(subtitle_trim_commandline, "magick", filepath.Join(original_subtitles_absolute_path, subtitle_name), "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]", "-compress", "rle", filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
+		if subtitle_burn_grayscale == true {
+			// Convert subtitle to grayscale and trim
+			subtitle_trim_commandline = append(subtitle_trim_commandline, "magick", filepath.Join(original_subtitles_absolute_path, subtitle_name), "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]", "-compress", "rle", "-set", "colorspace", "Gray", filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
+		} else {
+			// Trim subtitle
+			subtitle_trim_commandline = append(subtitle_trim_commandline, "magick", filepath.Join(original_subtitles_absolute_path, subtitle_name), "-trim", "-print", "%[W],%[H],%[fx:w],%[fx:h],%[fx:page.x],%[fx:page.y]", "-compress", "rle", filepath.Join(fixed_subtitles_absolute_path, subtitle_name))
+		}
 
 		subtitle_trim_output, subtitle_trim_error, trim_error_code := run_external_command(subtitle_trim_commandline)
 
@@ -1230,6 +1236,7 @@ func main() {
 	// Subtitle options
 	var subtitle_burn_language_str = flag.String("s", "", "Subtitle language: -s fin or -s eng -s ita  Only use option -sn or -s not both. This option affects only subtitle burned on top of video.")
 	var subtitle_burn_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font. This option affects only subtitle burned on top of video.")
+	var subtitle_burn_grayscale = flag.Bool("sgr", false, "Subtitle Grayscale. Remove color from subtitle by converting it to grayscale. This option only works with subtitle burned on top of video. This option may also help if you experience jerky video every time subtitle picture changes.")
 	var subtitle_burn_int = flag.Int("sn", -1, "Subtitle stream `number, -sn 1` Use subtitle number 1 from the source file. Only use option -sn or -s not both. This option affects only subtitle burned on top of video.")
 	var subtitle_burn_vertical_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up). This option affects only subtitle burned on top of video.")
 	var user_subtitle_mux_languages_str = flag.String("sm", "", "Mux subtitle into the target file. For example: -sm eng. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the -mkv option.")
@@ -1620,6 +1627,13 @@ func main() {
 
 	if *subtitle_burn_language_str != "" || subtitle_burn_number  != -1 {
 		subtitle_burn_bool = true
+	}
+
+	if subtitle_burn_bool == false && *subtitle_burn_grayscale == true {
+		fmt.Println()
+		fmt.Println("Error, you need to define what subtitle to burn grayscale on top of video.")
+		fmt.Println()
+		os.Exit(0)
 	}
 
 	if subtitle_mux_bool == true && subtitle_burn_bool == true {
@@ -3223,7 +3237,7 @@ func main() {
 					subtitle_end_number = number_of_subtitle_files
 				}
 
-				go subtitle_trim(original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_remaining[subtitle_start_number : subtitle_end_number], v_width, v_height, process_number, return_channel, *subtitle_burn_resize)
+				go subtitle_trim(original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_remaining[subtitle_start_number : subtitle_end_number], v_width, v_height, process_number, return_channel, *subtitle_burn_resize, *subtitle_burn_grayscale)
 
 				if *debug_mode_on == true {
 					fmt.Println("Process number:", process_number, "started. It processes subtitles:", subtitle_start_number + 1, "-", subtitle_end_number)
