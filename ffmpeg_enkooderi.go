@@ -86,7 +86,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.19" // This is the version of this program
+var version_number string = "2.20" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -2200,16 +2200,26 @@ func main() {
 
 
 			subtitle_found := false
+			subtitle_palette_supported := true
+			subtitle_format := ""
 
 			for counter, subtitle_info := range subtitle_slice {
 				subtitle_language = subtitle_info[0]
 
+				// Subtitle found
 				if *subtitle_burn_language_str == subtitle_language {
 					subtitle_burn_number = counter
 					subtitle_found = true
+
+					if *subtitle_burn_palette != "" {
+						subtitle_format = subtitle_info[2]
+						if subtitle_format != "dvd_subtitle" || subtitle_format != "dvb_subtitle" {
+							subtitle_palette_supported = false
+						}
+					}
+
 					break // Continue searching the next file when the first matching subtitle has been found.
 				}
-
 			}
 
 			if subtitle_found == false {
@@ -2220,6 +2230,17 @@ func main() {
 				}
 
 				error_messages = append(error_messages, "Error, file does not have subtitle language: " + *subtitle_burn_language_str)
+				error_messages_map[inputfile_full_path] = error_messages
+			}
+
+			if *subtitle_burn_palette != "" && subtitle_palette_supported == false {
+				var error_messages []string
+
+				if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
+					error_messages = error_messages_map[inputfile_full_path]
+				}
+
+				error_messages = append(error_messages, "Error, the palette-command does not support subtitle format: " + subtitle_format + ". Only formats: 'dvd_subtitle' and 'dvb_subtitle' are supported.")
 				error_messages_map[inputfile_full_path] = error_messages
 			}
 
@@ -2242,6 +2263,23 @@ func main() {
 
 				error_messages = append(error_messages, "Error, file does not have an subtitle stream number: " + strconv.Itoa(subtitle_burn_number))
 				error_messages_map[inputfile_full_path] = error_messages
+
+			} else if *subtitle_burn_palette != "" {
+
+				temp_slice := subtitle_slice[subtitle_burn_number]
+				subtitle_format := temp_slice[2]
+
+				if subtitle_format != "dvd_subtitle" || subtitle_format != "dvb_subtitle" {
+
+					var error_messages []string
+
+					if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
+						error_messages = error_messages_map[inputfile_full_path]
+					}
+
+					error_messages = append(error_messages, "Error, the palette-command does not support subtitle format: " + subtitle_format + ". Only formats: 'dvd_subtitle' and 'dvb_subtitle' are supported.")
+					error_messages_map[inputfile_full_path] = error_messages
+				}
 			}
 		}
 
