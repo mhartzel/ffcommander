@@ -86,7 +86,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.17" // This is the version of this program
+var version_number string = "2.18" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -2921,27 +2921,35 @@ func main() {
 				fmt.Println("Most frequent crop value is", final_crop_string)
 			}
 
-			video_height_int, _ := strconv.Atoi(video_height)
-			cropped_height := video_height_int - crop_values_picture_height - crop_values_height_offset
+			// If there is nothing to crop then turn of cropping
+			if crop_values_width_offset == 0 && crop_values_height_offset == 0  {
 
-			video_width_int, _ := strconv.Atoi(video_width)
-			cropped_width := video_width_int - crop_values_picture_width - crop_values_width_offset
+				// Turn cropping off
+				*autocrop_bool = false
 
-			// Prepare offset for possible subtitle burn in
-			// Subtitle placement is always relative to the left side of the picture,
-			// if left is cropped then the subtitle needs to be moved left the same amount of pixels
-			// Don't use subtitle offset if option -sp is active because it will center subtitles automatically.
-			if *subtitle_burn_split == false {
-				subtitle_horizontal_offset_int = crop_values_width_offset * -1
-				subtitle_horizontal_offset_str = strconv.Itoa(subtitle_horizontal_offset_int)
+			} else {
+				// Cropping is on
+				video_height_int, _ := strconv.Atoi(video_height)
+				cropped_height := video_height_int - crop_values_picture_height - crop_values_height_offset
+
+				video_width_int, _ := strconv.Atoi(video_width)
+				cropped_width := video_width_int - crop_values_picture_width - crop_values_width_offset
+
+				// Prepare offset for possible subtitle burn in
+				// Subtitle placement is always relative to the left side of the picture,
+				// if left is cropped then the subtitle needs to be moved left the same amount of pixels
+				// Don't use subtitle offset if option -sp is active because it will center subtitles automatically.
+				if *subtitle_burn_split == false {
+					subtitle_horizontal_offset_int = crop_values_width_offset * -1
+					subtitle_horizontal_offset_str = strconv.Itoa(subtitle_horizontal_offset_int)
+				}
+
+				fmt.Println("Top:", crop_values_height_offset, ", Bottom:", strconv.Itoa(cropped_height), ", Left:", crop_values_width_offset, ", Right:", strconv.Itoa(cropped_width))
+
+				log_messages_str_slice = append(log_messages_str_slice, "")
+				log_messages_str_slice = append(log_messages_str_slice, "Crop values are, Top: "+strconv.Itoa(crop_values_height_offset)+", Bottom: "+strconv.Itoa(cropped_height)+", Left: "+strconv.Itoa(crop_values_width_offset)+", Right: "+strconv.Itoa(cropped_width))
+				log_messages_str_slice = append(log_messages_str_slice, "After cropping video width is: "+strconv.Itoa(crop_values_picture_width)+", and height is: "+strconv.Itoa(crop_values_picture_height))
 			}
-
-			fmt.Println("Top:", crop_values_height_offset, ", Bottom:", strconv.Itoa(cropped_height), ", Left:", crop_values_width_offset, ", Right:", strconv.Itoa(cropped_width))
-
-			log_messages_str_slice = append(log_messages_str_slice, "")
-			log_messages_str_slice = append(log_messages_str_slice, "Crop values are, Top: "+strconv.Itoa(crop_values_height_offset)+", Bottom: "+strconv.Itoa(cropped_height)+", Left: "+strconv.Itoa(crop_values_width_offset)+", Right: "+strconv.Itoa(cropped_width))
-			log_messages_str_slice = append(log_messages_str_slice, "After cropping video width is: "+strconv.Itoa(crop_values_picture_width)+", and height is: "+strconv.Itoa(crop_values_picture_height))
-
 		}
 
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
