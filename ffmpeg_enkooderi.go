@@ -86,7 +86,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.18" // This is the version of this program
+var version_number string = "2.19" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1232,7 +1232,7 @@ func main() {
 	var subtitle_burn_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font. This option affects only subtitle burned on top of video.")
 	var subtitle_burn_int = flag.Int("sn", -1, "Subtitle stream `number, -sn 1` Use subtitle number 1 from the source file. Only use option -sn or -s not both. This option affects only subtitle burned on top of video.")
 	var subtitle_burn_vertical_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up). This option affects only subtitle burned on top of video.")
-	var user_subtitle_mux_languages_str = flag.String("sm", "", "Mux subtitle into the target file. This only works with dvd, dvb and bluray bitmap based subtitles. If this option is not set then subtitles will be burned into the video. This option can not be used by itself, it must be used with -s or -sn. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file.")
+	var user_subtitle_mux_languages_str = flag.String("sm", "", "Mux subtitle into the target file. For example: -sm eng. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the -mkv option.")
 	var user_subtitle_mux_numbers_str = flag.String("smn", "", "Mux subtitle into the target file. This only works with dvd, dvb and bluray bitmap based subtitles. If this option is not set then subtitles will be burned into the video. This option can not be used by itself, it must be used with -s or -sn. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file.")
 	var subtitle_burn_palette = flag.String("palette", "", "Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: -palette f,0,f  This option affects only subtitle burned on top of video.")
 	var subtitle_burn_split = flag.Bool("sp", false, "Subtitle Split. Move subtitles that are above the center of the screen up to the top of the screen and subtitles below center down on the bottom of the screen. Distance from the screen edge will be picture height divided by 100 and rounded down to nearest integer. Minimum distance is 5 pixels and max 20 pixels. Subtitles will be automatically centered horizontally. You can resize subtitles with the -sr option when usind Subtitle Split. This option requires installing ImageMacick. This option affects only subtitle burned on top of video.")
