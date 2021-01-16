@@ -86,7 +86,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.22" // This is the version of this program
+var version_number string = "2.23" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1209,7 +1209,7 @@ func main() {
 	//////////////////////////////////////////
 	// Audio options
 	var audio_language_str = flag.String("a", "", "Audio language: -a fin or -a eng or -a ita  Find audio stream corresponding the language code. Only use option -an or -a not both.")
-	var audio_stream_number_int = flag.Int("an", 0, "Audio stream number, -a 1. Only use option -an or -a not both.")
+	var audio_stream_number_str = flag.String("an", "0", "Audio stream number, -a 1. Only use option -an or -a not both.")
 	var audio_compression_ac3 = flag.Bool("ac3", false, "Compress audio as ac3. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate. 6 channels uses the ac3 max bitrate of 640k.")
 	var audio_compression_aac = flag.Bool("aac", false, "Compress audio as aac. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.")
 	var audio_compression_opus = flag.Bool("opus", false, "Compress audio as opus. Opus support in mp4 container is experimental as of FFmpeg vesion 4.2.1. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.")
@@ -1234,13 +1234,13 @@ func main() {
 	var force_lossless_bool = flag.Bool("ls", false, "Force encoding to use lossless 'utvideo' compression for video and 'flac' compression for audio. This also turns on -fe. This option only affects the main video if used with the -psd option.")
 
 	// Subtitle options
-	var subtitle_burn_language_str = flag.String("s", "", "Subtitle language: -s fin or -s eng -s ita  Only use option -sn or -s not both. This option affects only subtitle burned on top of video.")
+	var subtitle_burn_language_str = flag.String("s", "", "Burn subtitle with this language code on top of video. Example: -s fin or -s eng or -s ita  Only use option -sn or -s not both.")
 	var subtitle_burn_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font. This option affects only subtitle burned on top of video.")
 	var subtitle_burn_grayscale = flag.Bool("sgr", false, "Subtitle Grayscale. Remove color from subtitle by converting it to grayscale. This option only works with subtitle burned on top of video. This option may also help if you experience jerky video every time subtitle picture changes.")
-	var subtitle_burn_int = flag.Int("sn", -1, "Subtitle stream `number, -sn 1` Use subtitle number 1 from the source file. Only use option -sn or -s not both. This option affects only subtitle burned on top of video.")
-	var subtitle_burn_vertical_offset_int = flag.Int("so", 0, "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up). This option affects only subtitle burned on top of video.")
-	var user_subtitle_mux_languages_str = flag.String("sm", "", "Mux subtitle into the target file. For example: -sm eng. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the -mkv option.")
-	var user_subtitle_mux_numbers_str = flag.String("smn", "", "Mux subtitle into the target file. This only works with dvd, dvb and bluray bitmap based subtitles. If this option is not set then subtitles will be burned into the video. This option can not be used by itself, it must be used with -s or -sn. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file.")
+	var subtitle_burn_str = flag.String("sn", "-1", "Burn subtitle with this stream number on top of video. Example: -sn 1. Use subtitle number 1 from the source file. Only use option -sn or -s not both.")
+	var subtitle_burn_vertical_offset_str = flag.String("so", "0", "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up). This option affects only subtitle burned on top of video.")
+	var user_subtitle_mux_languages_str = flag.String("sm", "", "Mux subtitles with these language codes into the target file. Example: -sm eng, or -sm eng,fra,fin. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the -mkv option.")
+	var user_subtitle_mux_numbers_str = flag.String("smn", "", "Mux subtitles with these stream numbers into the target file. Example: -smn 1 or -smn 3,1,7. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the -mkv option.")
 	var subtitle_burn_palette = flag.String("palette", "", "Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: -palette f,0,f  This option affects only subtitle burned on top of video.")
 	var subtitle_burn_split = flag.Bool("sp", false, "Subtitle Split. Move subtitles that are above the center of the screen up to the top of the screen and subtitles below center down on the bottom of the screen. Distance from the screen edge will be picture height divided by 100 and rounded down to nearest integer. Minimum distance is 5 pixels and max 20 pixels. Subtitles will be automatically centered horizontally. You can resize subtitles with the -sr option when usind Subtitle Split. This option requires installing ImageMacick. This option affects only subtitle burned on top of video.")
 	var subtitle_burn_resize = flag.String("sr", "", "Subtitle Resize. Values less than 1 makes subtitles smaller, values bigger than 1 makes subtitle larger. This option can only be user with the -sp option. Example: make subtitle 25% smaller: -sr 0.75   make subtitle 50% smaller: -sr 0.50   make subtitle 75% larger: -sr 1.75. This option affects only subtitle burned on top of video.")
@@ -1570,15 +1570,16 @@ func main() {
 	var user_subtitle_mux_languages_slice []string
 	subtitle_mux_bool := false
 	subtitle_burn_bool := false
-	highest_subtitle_number := ""
+	highest_subtitle_number_int := -1
 
 	if *user_subtitle_mux_numbers_str != "" && *user_subtitle_mux_languages_str != "" {
 		fmt.Println()
-		fmt.Println("Error, only -sm or -smn can be used at a time.")
+		fmt.Println("Error, -sm and -smn cannot be used at the same time.")
 		fmt.Println()
 		os.Exit(0)
 	}
 
+	// Parse subtitle numbers list
 	if *user_subtitle_mux_numbers_str != "" {
 
 		user_subtitle_mux_numbers_slice = strings.Split(*user_subtitle_mux_numbers_str, ",")
@@ -1593,8 +1594,6 @@ func main() {
 		// Check that user gave only numbers for the option and store highest subtitle number
 		for _, number := range user_subtitle_mux_numbers_slice {
 
-			highest_subtitle_number_int ,_ := strconv.Atoi(highest_subtitle_number)
-
 			if number_int, atoi_error := strconv.Atoi(number) ; atoi_error != nil {
 				fmt.Println()
 				fmt.Println("Error parsing subtitle number:", number, "in:", *user_subtitle_mux_numbers_str)
@@ -1602,13 +1601,14 @@ func main() {
 				os.Exit(0)
 
 			} else if number_int > highest_subtitle_number_int {
-				highest_subtitle_number = number
+				highest_subtitle_number_int = number_int
 			}
 		}
 
 		subtitle_mux_bool = true
 	}
 
+	// Parse subtitle language code list
 	if *user_subtitle_mux_languages_str != "" {
 
 		user_subtitle_mux_languages_slice = strings.Split(*user_subtitle_mux_languages_str, ",")
@@ -1623,7 +1623,17 @@ func main() {
 		subtitle_mux_bool = true
 	}
 
-	subtitle_burn_number := *subtitle_burn_int
+	// Check that user given subtitle numer is a number
+	var subtitle_burn_number int
+	var atoi_error error
+	subtitle_burn_vertical_offset_int := 0
+
+	if subtitle_burn_number, atoi_error = strconv.Atoi(*subtitle_burn_str) ; atoi_error != nil {
+		fmt.Println()
+		fmt.Println("Error parsing subtitle number:", *subtitle_burn_str)
+		fmt.Println()
+		os.Exit(0)
+	}
 
 	if *subtitle_burn_language_str != "" || subtitle_burn_number  != -1 {
 		subtitle_burn_bool = true
@@ -1646,6 +1656,13 @@ func main() {
 	// Use the first subtitle if user wants subtitle split but did not specify subtitle number
 	if *subtitle_burn_split == true && subtitle_burn_number == -1 {
 		subtitle_burn_number = 0
+	}
+
+	if subtitle_burn_vertical_offset_int, atoi_error = strconv.Atoi(*subtitle_burn_vertical_offset_str) ; atoi_error != nil {
+		fmt.Println()
+		fmt.Println("Error parsing subtitle offset:", *subtitle_burn_vertical_offset_str)
+		fmt.Println()
+		os.Exit(0)
 	}
 
 	user_main_bitrate_bool := false
@@ -1745,7 +1762,7 @@ func main() {
 			fmt.Println(rivi)
 		}
 
-		fmt.Println("Highest_subtitle_number", highest_subtitle_number)
+		fmt.Println("Highest_subtitle_number", strconv.Itoa(highest_subtitle_number_int))
 
 		fmt.Println()
 
@@ -2013,6 +2030,7 @@ func main() {
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	var subtitles_selected_for_muxing_map = make(map[string][]string)
+	var audio_stream_number_int int
 
 	for _, file_info_slice := range Complete_file_info_slice {
 
@@ -2045,13 +2063,19 @@ func main() {
 		// If user gave us the audio language (fin, eng, ita), find the corresponding audio stream number //
 		// If no matching audio is found stop the program.                                                //
 		////////////////////////////////////////////////////////////////////////////////////////////////////
+		if audio_stream_number_int, atoi_error = strconv.Atoi(*audio_stream_number_str) ; atoi_error != nil {
+
+			// If user did not give us a subtitle number use 0 as the default
+			audio_stream_number_int = 0
+		}
+
 		if *audio_language_str != "" {
 
 			for audio_stream_number, audio_info := range audio_slice {
 				audio_language = audio_info[0]
 
 				if *audio_language_str == audio_language {
-					*audio_stream_number_int = audio_stream_number
+					audio_stream_number_int = audio_stream_number
 					number_of_audio_channels = audio_info[2]
 					audio_codec = audio_info[4]
 					audio_stream_found = true
@@ -2073,7 +2097,7 @@ func main() {
 
 			if *debug_mode_on == true {
 				fmt.Println()
-				fmt.Printf("Audio: %s was found in audio stream number: %d\n", *audio_language_str, *audio_stream_number_int)
+				fmt.Printf("Audio: %s was found in audio stream number: %d\n", *audio_language_str, audio_stream_number_int)
 				fmt.Println()
 			}
 
@@ -2082,7 +2106,7 @@ func main() {
 			// User did not give audio language code (fin, eng, ita). Find the wanted audio stream by number (starts from 0).
 			// Either user defined a audio stream number on the commandline or we use the audio stream number 0.
 
-			if len(audio_slice) - 1 < *audio_stream_number_int {
+			if audio_stream_number_int  > len(audio_slice) - 1 {
 
 				// The audio stream number is higher than any stream number in the input file.
 				var error_messages []string
@@ -2091,14 +2115,14 @@ func main() {
 					error_messages = error_messages_map[inputfile_full_path]
 				}
 
-				error_messages = append(error_messages, "Error, file does not have an audio stream number: " + strconv.Itoa(*audio_stream_number_int))
+				error_messages = append(error_messages, "Error, file does not have an audio stream number: " + strconv.Itoa(audio_stream_number_int))
 				error_messages_map[inputfile_full_path] = error_messages
 
 			} else {
 
-				// There is a audio stream for the suadio stream number we have.
+				// There is a audio stream for the audio stream number we have.
 				// Either user defined the number on the commandline or we use the default value of 0 (first audio in source file).
-				audio_info := audio_slice[*audio_stream_number_int]
+				audio_info := audio_slice[audio_stream_number_int]
 				number_of_audio_channels = audio_info[2]
 				audio_codec = strings.ToLower(audio_info[4])
 				audio_stream_found = true
@@ -2200,7 +2224,8 @@ func main() {
 				}
 
 				error_messages = append(error_messages, "Error, audio codec: " + audio_codec + " in file is not compatible with the mp4 wrapper format.")
-				error_messages = append(error_messages, "Either use a compatible audio format (aac, ac3, mp2, mp3, dts, opus) or the -mkv switch to export to a matroska file.")
+				error_messages = append(error_messages, "Compatible formats are: aac, ac3, mp2, mp3, dts, opus.")
+				error_messages = append(error_messages, "Your options are: use the -mkv switch to export to a matroska file, the -aac or -opus switches to convert audio to aac or opus formats.")
 				error_messages = append(error_messages, "")
 				error_messages_map[inputfile_full_path] = error_messages
 			}
@@ -2282,7 +2307,7 @@ func main() {
 		} else if subtitle_burn_bool == true && subtitle_burn_number != -1 {
 
 			// If user gave subtitle stream number, check that we have at least that much subtitle streams in the source file.
-			if len(subtitle_slice) - 1 < subtitle_burn_number {
+			if subtitle_burn_number > len(subtitle_slice) - 1 {
 
 				// The subtitle number was not found
 				var error_messages []string
@@ -2330,72 +2355,89 @@ func main() {
 			}
 		}
 
-		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		// If user gave us the subtitle language (fin, eng, ita) to mux into the file, find the corresponding subtitle stream number //
-		// If no matching subtitle is found stop the program.                                                                        //
-		///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// If user gave us subtitle language codes (fin, eng, ita) to mux into the file, find the corresponding subtitle stream numbers //
+		// If no matching subtitle is found stop the program.                                                                           //
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 		subtitle_found := false
 		subtitle_type := ""
 
-		if subtitle_mux_bool == true && len(user_subtitle_mux_languages_slice) > 0 {
+		if subtitle_mux_bool == true {
 
-			for _, user_sub_language := range user_subtitle_mux_languages_slice {
+			if len(user_subtitle_mux_languages_slice) > 0 {
 
-				for counter, subtitle_info := range subtitle_slice {
+				for _, user_sub_language := range user_subtitle_mux_languages_slice {
 
-					subtitle_found = false
-					subtitle_language = subtitle_info[0]
-					subtitle_type = subtitle_info[2]
+					for counter, subtitle_info := range subtitle_slice {
 
-					if user_sub_language == subtitle_language {
+						subtitle_found = false
+						subtitle_language = subtitle_info[0]
+						subtitle_type = subtitle_info[2]
 
-						user_subtitle_mux_numbers_slice = append(user_subtitle_mux_numbers_slice, strconv.Itoa(counter))
-						subtitle_found = true
-						break // Continue searching the next file when the first matching subtitle has been found.
-					}
-				}
+						if user_sub_language == subtitle_language {
 
-				if subtitle_found == false {
-
-					var error_messages []string
-
-					if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
-						error_messages = error_messages_map[inputfile_full_path]
+							user_subtitle_mux_numbers_slice = append(user_subtitle_mux_numbers_slice, strconv.Itoa(counter))
+							subtitle_found = true
+							break // Continue searching the next file when the first matching subtitle has been found.
+						}
 					}
 
-					error_messages = append(error_messages, "Error, file does not have subtitle language: " + user_sub_language)
-					error_messages_map[inputfile_full_path] = error_messages
-				}
+					if subtitle_found == false {
 
-				if *debug_mode_on == true {
-					fmt.Println()
-					fmt.Printf("Subtitle: %s was found in file %s\n", user_sub_language, inputfile_full_path)
-					fmt.Println()
-				}
+						var error_messages []string
 
-				// Test if output subtitle type is compatible with the mp4 wrapper format
-				if *use_matroska_container == false && subtitle_type == "hdmv_pgs_subtitle" {
+						if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
+							error_messages = error_messages_map[inputfile_full_path]
+						}
 
-					var error_messages []string
-
-					if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
-						error_messages = error_messages_map[inputfile_full_path]
+						error_messages = append(error_messages, "Error, file does not have subtitle language: " + user_sub_language)
+						error_messages_map[inputfile_full_path] = error_messages
 					}
 
-					error_messages = append(error_messages, "Error, subtitle type " + subtitle_type + " in file is not compatible with the mp4 wrapper format.")
-					error_messages = append(error_messages, "Use the -mkv switch to export to a matroska file.")
-					error_messages = append(error_messages, "")
-					error_messages_map[inputfile_full_path] = error_messages
+					if *debug_mode_on == true {
+						fmt.Println()
+						fmt.Printf("Subtitle: %s was found in file %s\n", user_sub_language, inputfile_full_path)
+						fmt.Println()
+					}
 
+					// Test if output subtitle type is compatible with the mp4 wrapper format
+					if *use_matroska_container == false && subtitle_type == "hdmv_pgs_subtitle" {
+
+						var error_messages []string
+
+						if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
+							error_messages = error_messages_map[inputfile_full_path]
+						}
+
+						error_messages = append(error_messages, "Error, subtitle type " + subtitle_type + " in file is not compatible with the mp4 wrapper format.")
+						error_messages = append(error_messages, "Use the -mkv switch to export to a matroska file.")
+						error_messages = append(error_messages, "")
+						error_messages_map[inputfile_full_path] = error_messages
+
+					}
 				}
+			}
+
+			// Check that we have at least as much subtitle streams in the source file as the highest subtitle number user gave us.
+			if highest_subtitle_number_int > len(subtitle_slice) - 1 {
+
+				// The subtitle number was not found
+				var error_messages []string
+
+				if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
+					error_messages = error_messages_map[inputfile_full_path]
+				}
+
+				error_messages = append(error_messages, "Error, file does not have an subtitle stream number: " + strconv.Itoa(highest_subtitle_number_int))
+				error_messages_map[inputfile_full_path] = error_messages
 			}
 		}
 
 		// Store info about selected video  always stream 0), audio and subtitle streams.
 		if len(error_messages_map) == 0 {
 			var selected_streams_temp []string
-			selected_streams_temp = append(selected_streams_temp, "0", strconv.Itoa(*audio_stream_number_int), strconv.Itoa(subtitle_burn_number))
+			selected_streams_temp = append(selected_streams_temp, "0", strconv.Itoa(audio_stream_number_int), strconv.Itoa(subtitle_burn_number))
 			selected_streams[inputfile_full_path] = selected_streams_temp
 		}
 
@@ -2439,6 +2481,13 @@ func main() {
 	/////////////////////////////////////////
 	// Main loop that processess all files //
 	/////////////////////////////////////////
+
+	if len(Complete_file_info_slice) == 0 {
+		fmt.Println()
+		fmt.Println("No files to process")
+		fmt.Println()
+		os.Exit(0)
+	}
 
 	files_to_process_str = strconv.Itoa(len(Complete_file_info_slice))
 
@@ -2524,13 +2573,13 @@ func main() {
 		fmt.Println("Processing file " + file_counter_str + "/" + files_to_process_str + "  '" + inputfile_name + "'")
 
 		audio_slice := file_info_slice[1]
-		audio_info := audio_slice[*audio_stream_number_int]
+		audio_info := audio_slice[audio_stream_number_int]
 		number_of_audio_channels = audio_info[2]
 		audio_codec = audio_info[4]
 
 
 		selected_streams_slice := selected_streams[inputfile_full_path]
-		*audio_stream_number_int, _ = strconv.Atoi(selected_streams_slice[1])
+		audio_stream_number_int, _ = strconv.Atoi(selected_streams_slice[1])
 		subtitle_burn_number, _ = strconv.Atoi(selected_streams_slice[2])
 
 		////////////////////////////////////////////////////
@@ -3546,14 +3595,14 @@ func main() {
 					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", subtitle_source_file + strconv.Itoa(subtitle_burn_number) +
 						"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
 						"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=" + subtitle_horizontal_offset_str + ":main_h-overlay_h+" +
-						strconv.Itoa(*subtitle_burn_vertical_offset_int) + ffmpeg_filter_options_2 +
+						strconv.Itoa(subtitle_burn_vertical_offset_int) + ffmpeg_filter_options_2 +
 						",split=2[main_processed_video_out][sd_input],[sd_input]scale=" + strconv.Itoa(sd_width) + ":-2[sd_scaled_out]", "-map", "[main_processed_video_out]")
 
 				} else if *scale_to_sd == true {
 					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", subtitle_source_file + strconv.Itoa(subtitle_burn_number) +
 						"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
 						"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=" + subtitle_horizontal_offset_str + ":main_h-overlay_h+" +
-						strconv.Itoa(*subtitle_burn_vertical_offset_int) + ffmpeg_filter_options_2 +
+						strconv.Itoa(subtitle_burn_vertical_offset_int) + ffmpeg_filter_options_2 +
 						"[sd_input],[sd_input]scale=" + strconv.Itoa(sd_width) + ":-2[sd_scaled_out]")
 				} else {
 
@@ -3561,7 +3610,7 @@ func main() {
 					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", subtitle_source_file + strconv.Itoa(subtitle_burn_number) +
 						"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
 						"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=" + subtitle_horizontal_offset_str + ":main_h-overlay_h+" +
-						strconv.Itoa(*subtitle_burn_vertical_offset_int) + ffmpeg_filter_options_2 +
+						strconv.Itoa(subtitle_burn_vertical_offset_int) + ffmpeg_filter_options_2 +
 						"[main_processed_video_out]", "-map", "[main_processed_video_out]")
 					}
 				}
@@ -3744,7 +3793,7 @@ func main() {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, audio_compression_options...)
 
 				// Add audiomapping options on the commanline
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(*audio_stream_number_int))
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(audio_stream_number_int))
 			}
 
 			// Add color subsampling options to SD commandline if needed
@@ -3766,7 +3815,7 @@ func main() {
 
 			// Add audiomapping options on the SD commanline
 			if *parallel_sd == true || *scale_to_sd == true {
-				sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(*audio_stream_number_int))
+				sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(audio_stream_number_int))
 			}
 
 			if *scale_to_sd == false {
@@ -3874,7 +3923,7 @@ func main() {
 				fmt.Println("ffmpeg_commandline_start:", ffmpeg_commandline_start)
 				fmt.Println("subtitle_burn_number:", subtitle_burn_number)
 				fmt.Println("subtitle_burn_language_str:", subtitle_burn_language_str)
-				fmt.Println("subtitle_burn_vertical_offset_int:", *subtitle_burn_vertical_offset_int)
+				fmt.Println("subtitle_burn_vertical_offset_int:", subtitle_burn_vertical_offset_int)
 				fmt.Println("*subtitle_burn_downscale:", *subtitle_burn_downscale)
 				fmt.Println("*subtitle_burn_palette:", *subtitle_burn_palette)
 				fmt.Println("*subtitle_burn_split:", *subtitle_burn_split)
@@ -3885,10 +3934,10 @@ func main() {
 				fmt.Println("grayscale_options:", grayscale_options)
 				fmt.Println("color_subsampling_options", color_subsampling_options)
 				fmt.Println("*autocrop_bool:", *autocrop_bool)
-				fmt.Println("*subtitle_burn_int:", *subtitle_burn_int)
+				fmt.Println("subtitle_burn_number:", subtitle_burn_number)
 				fmt.Println("*no_deinterlace_bool:", *no_deinterlace_bool)
 				fmt.Println("*denoise_bool:", *denoise_bool)
-				fmt.Println("*audio_stream_number_int:", *audio_stream_number_int)
+				fmt.Println("audio_stream_number_int:", audio_stream_number_int)
 				fmt.Println("*scan_mode_only_bool", *scan_mode_only_bool)
 				fmt.Println("*search_start_str", *search_start_str)
 				fmt.Println("*processing_stop_time_str", *processing_stop_time_str)
