@@ -86,7 +86,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.23" // This is the version of this program
+var version_number string = "2.24" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1425,6 +1425,12 @@ func main() {
 		*fast_search_bool = true
 	}
 
+	if *search_start_str == "" && *processing_stop_time_str != "" {
+			fmt.Println()
+			fmt.Println("Error, start time missing")
+			fmt.Println()
+			os.Exit(0)
+	}
 	// Convert processing end time to duration and store it in variable used with -d option (duration).
 	// FFmpeg does not understarnd end times, only start time + duration.
 	if *processing_stop_time_str != "" {
@@ -1468,6 +1474,14 @@ func main() {
 		}
 
 		duration_int := end_time_int - start_time_int
+
+		if duration_int <= 0 {
+			fmt.Println()
+			fmt.Println("Error duration cannot be", duration_int)
+			fmt.Println()
+			os.Exit(0)
+		}
+
 		*processing_time_str = convert_seconds_to_timecode(strconv.Itoa(duration_int))
 	}
 
@@ -1776,15 +1790,38 @@ func main() {
 		fmt.Println()
 	}
 
-	// Check if user given path to temp folder exists
+	// Check if user given path to temp folder exists and if it is writable
 	if *temp_file_directory != "" {
 
-		if _, err := os.Stat(*temp_file_directory); os.IsNotExist(err) {
+		// Get directory info from filesystem
+		dir_stat, err := os.Stat(*temp_file_directory)
+
+		if os.IsNotExist(err) {
 			fmt.Println()
-			fmt.Println("Path to temp file dir: ", *temp_file_directory, " does not exist.")
+			fmt.Println("Path to temp file dir:", *temp_file_directory, "does not exist.")
 			fmt.Println()
 			os.Exit(0)
 		}
+
+		if dir_stat.IsDir() == false {
+			fmt.Println()
+			fmt.Println("Path to -td option:", *temp_file_directory, "is not a directory.")
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		// Test if temp dir is writable
+		testfile_path := filepath.Join(*temp_file_directory, "Testfile.txt")
+		err = os.WriteFile(testfile_path, []byte("This is a test file and can be deleted\n"), 0644)
+
+		if err != nil {
+			fmt.Println()
+			fmt.Println("Tempfile path", *temp_file_directory, "is not writable.")
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		os.Remove(testfile_path)
 	}
 
 	// Print program version and license info.
