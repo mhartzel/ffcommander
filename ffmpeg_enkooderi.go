@@ -86,7 +86,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.24" // This is the version of this program
+var version_number string = "2.25" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -2629,8 +2629,8 @@ func main() {
 			list_of_splitfiles = nil
 
 			// Open split_infofile for appending info about file splits
-			split_info_filename = "00-" + strings.TrimSuffix(inputfile_name, input_filename_extension) + "-splitfile_info.txt"
-			split_info_file_absolute_path = filepath.Join(inputfile_path, output_directory_name, split_info_filename)
+			split_info_filename = "00-" + strings.TrimSuffix(strings.Replace(inputfile_name, "'", "", -1), input_filename_extension) + "-splitfile_info.txt"
+			split_info_file_absolute_path = filepath.Join(inputfile_path, output_directory_name, strings.Replace(split_info_filename, "'", "", -1))
 
 			if _, err := os.Stat(split_info_file_absolute_path); err == nil {
 				os.Remove(split_info_file_absolute_path)
@@ -2655,7 +2655,7 @@ func main() {
 
 			for counter := 0; counter < len(cut_list_seconds_str_slice); counter = counter + 2 {
 				counter_2++
-				splitfile_name := strings.TrimSuffix(inputfile_name, input_filename_extension) + "-splitfile-" + strconv.Itoa(counter_2) + output_matroska_filename_extension
+				splitfile_name := strings.TrimSuffix(strings.Replace(inputfile_name, "'", "", -1), input_filename_extension) + "-splitfile-" + strconv.Itoa(counter_2) + output_matroska_filename_extension
 				split_file_path := filepath.Join(inputfile_path, output_directory_name, splitfile_name)
 				list_of_splitfiles = append(list_of_splitfiles, split_file_path)
 
