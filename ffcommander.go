@@ -88,7 +88,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.31" // This is the version of this program
+var version_number string = "2.32" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1582,13 +1582,24 @@ func parse_options() []string {
 	var input_filenames []string
 	var commandline_option_variables *commandline_struct
 	var predefined_option string
-	var option_found, string_option_found, int_option_found bool
+	var option_found, string_option_found, int_option_found, item_is_an_option bool
 	string_option_found = false
 	int_option_found = false
 
 	for _, commandline_option := range os.Args[1:] {
 
 		option_found = false
+		item_is_an_option = false
+
+		// Remove leading "-" characters from the option
+		if commandline_option[0] == '-' {
+			commandline_option = commandline_option[1:]
+			item_is_an_option = true
+		}
+
+		if commandline_option[0] == '-' {
+			commandline_option = commandline_option[1:]
+		}
 
 		// This part assigns int or string value following an option to the commandline variable 
 		// After the assingment the next option is fetched from the commandline
@@ -1621,51 +1632,62 @@ func parse_options() []string {
 
 		// This part recognizes an option on the commandline and sets boolean values so that 
 		// the int or string following the option is handled at the next round of the for loop
-		for predefined_option, commandline_option_variables = range commandline_option_map {
+		if item_is_an_option == true {
 
-			if commandline_option == predefined_option {
+			for predefined_option, commandline_option_variables = range commandline_option_map {
 
-				if commandline_option_variables.variable_type == "int" {
+				if commandline_option == predefined_option {
 
-					if *debug_mode_on == true {
-						fmt.Print("found int variable:", commandline_option, " ")
+					if commandline_option_variables.variable_type == "int" {
+
+						if *debug_mode_on == true {
+							fmt.Print("found int variable:", commandline_option, " ")
+						}
+
+						int_option_found = true
+						option_found = true
+						break
 					}
 
-					int_option_found = true
-					option_found = true
-					break
-				}
+					if commandline_option_variables.variable_type == "bool" {
 
-				if commandline_option_variables.variable_type == "bool" {
+						if *debug_mode_on == true {
+							fmt.Println("found bool variable", commandline_option, " ")
+						}
 
-					if *debug_mode_on == true {
-						fmt.Println("found bool variable", commandline_option, " ")
+						// Store value: true to this options struct and switch the variable connected
+						// to this commandline option to point to the value in struct
+						commandline_option_variables.bool_value = true
+						*commandline_option_variables.pointer_to_bool_variable =  &commandline_option_variables.bool_value
+						option_found = true
+						break
 					}
 
-					// Store value: true to this options struct and switch the variable connected
-					// to this commandline option to point to the value in struct
-					commandline_option_variables.bool_value = true
-					*commandline_option_variables.pointer_to_bool_variable =  &commandline_option_variables.bool_value
-					option_found = true
-					break
-				}
+					if commandline_option_variables.variable_type == "string" {
 
-				if commandline_option_variables.variable_type == "string" {
+						if *debug_mode_on == true {
+							fmt.Print("found string variable:", commandline_option, " ")
+						}
 
-					if *debug_mode_on == true {
-						fmt.Print("found string variable:", commandline_option, " ")
+						string_option_found = true
+						option_found = true
+						break
 					}
-
-					string_option_found = true
-					option_found = true
-					break
 				}
 			}
-		}
 
-		// The rest of the items on the commandline are filenames, test if files exist
-		if option_found == false {
+			if option_found == false {
 
+				fmt.Println()
+				fmt.Println("Error, unknown option: -" + commandline_option)
+				fmt.Println()
+
+				os.Exit(0)
+			}
+
+		} else {
+
+			// The item on the commandline isa filename, test if files exist
 			inputfile_full_path,_ := filepath.Abs(commandline_option)
 			fileinfo, err := os.Stat(inputfile_full_path)
 
@@ -1778,61 +1800,61 @@ func main() {
 	// Help text for the commandline option
 	// Address of the variable defined at the beginning of the line. This is used when the commandline option is followed by a value. The variable address is used to point the variable to the user defined value.
 	// Audio options
-	audio_language_str = store_options_and_help_text_string("Audio", "-a", "", "Audio language: -a fin or -a eng or -a ita  Find audio stream corresponding the language code. Only use option -an or -a not both.", &audio_language_str)
-	audio_stream_number_str = store_options_and_help_text_string("Audio", "-an", "0", "Audio stream number, -an 1. Only use option -an or -a not both.", &audio_stream_number_str)
-	audio_compression_ac3 = store_options_and_help_text_bool("Audio", "-ac3", false, "Compress audio as ac3. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate. 6 channels uses the ac3 max bitrate of 640k.", &audio_compression_ac3)
-	audio_compression_aac = store_options_and_help_text_bool("Audio", "-aac", false, "Compress audio as aac. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.", &audio_compression_aac)
-	audio_compression_opus = store_options_and_help_text_bool("Audio", "-opus", false, "Compress audio as opus. Opus support in mp4 container is experimental as of FFmpeg vesion 4.2.1. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.", &audio_compression_opus)
-	audio_compression_flac = store_options_and_help_text_bool("Audio", "-flac", false, "Compress audio in lossless Flac - format", &audio_compression_flac)
-	no_audio = store_options_and_help_text_bool("Audio", "-na", false, "Disable audio processing. The resulting file will have no audio, only video.", &no_audio)
+	audio_language_str = store_options_and_help_text_string("Audio", "a", "", "Audio language: -a fin or -a eng or -a ita  Find audio stream corresponding the language code. Only use option -an or -a not both.", &audio_language_str)
+	audio_stream_number_str = store_options_and_help_text_string("Audio", "an", "0", "Audio stream number, -an 1. Only use option -an or -a not both.", &audio_stream_number_str)
+	audio_compression_ac3 = store_options_and_help_text_bool("Audio", "ac3", false, "Compress audio as ac3. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate. 6 channels uses the ac3 max bitrate of 640k.", &audio_compression_ac3)
+	audio_compression_aac = store_options_and_help_text_bool("Audio", "aac", false, "Compress audio as aac. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.", &audio_compression_aac)
+	audio_compression_opus = store_options_and_help_text_bool("Audio", "opus", false, "Compress audio as opus. Opus support in mp4 container is experimental as of FFmpeg vesion 4.2.1. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.", &audio_compression_opus)
+	audio_compression_flac = store_options_and_help_text_bool("Audio", "flac", false, "Compress audio in lossless Flac - format", &audio_compression_flac)
+	no_audio = store_options_and_help_text_bool("Audio", "na", false, "Disable audio processing. The resulting file will have no audio, only video.", &no_audio)
 
 	// Video options
-	autocrop_bool = store_options_and_help_text_bool("Video", "-ac", false, "Autocrop. Find crop values automatically by doing 10 second spot checks in 10 places for the duration of the file.", &autocrop_bool)
-	crf_bool = store_options_and_help_text_bool("Video", "-crf", false, "Use Constant Quality instead of 2-pass encoding. The default value for crf is 18, which produces the same quality as default 2-pass but a bigger file. CRF is much faster that 2-pass encoding.", &crf_bool)
-	denoise_bool = store_options_and_help_text_bool("Video", "-dn", false, "Denoise. Use HQDN3D - filter to remove noise from the picture. This option is equal to Hanbrakes 'medium' noise reduction settings.", &denoise_bool)
-	grayscale_bool = store_options_and_help_text_bool("Video", "-gr", false, "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.", &grayscale_bool)
-	inverse_telecine = store_options_and_help_text_bool("Video", "-it", false, "Perform inverse telecine on 29.97 fps material to return it back to original 24 fps.", &inverse_telecine)
-	user_main_bitrate = store_options_and_help_text_string("Video", "-mbr", "", "Override main videoprocessing automatic bitrate calculation and define bitrate manually.", &user_main_bitrate)
-	no_deinterlace_bool = store_options_and_help_text_bool("Video", "-nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.", &no_deinterlace_bool)
-	parallel_sd = store_options_and_help_text_bool("Video", "-psd", false, "Parallel SD. Create SD version in parallel to HD processing. This creates an additional version of the video downconverted to SD resolution. The SD file is stored in directory: sd", &parallel_sd)
-	user_sd_bitrate = store_options_and_help_text_string("Video", "-sbr", "", "Override parallel sd videoprocessing automatic bitrate calculation and define bitrate manually. SD - video is stored in directory 'sd'", &user_sd_bitrate)
-	split_times = store_options_and_help_text_string("Video", "-sf", "", "Split out parts of the file. Give colon separated start and stop times for the parts of the file to use, for example: -sf 0,10:00,01:35:12.800,01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.", &split_times)
-	scale_to_sd = store_options_and_help_text_bool("Video", "-ssd", false, "Scale to SD. Scale video down to SD resolution. Calculates resolution automatically. Video is stored in directory 'sd'", &scale_to_sd)
-	burn_timecode_bool = store_options_and_help_text_bool("Video", "-tc", false, "Burn timecode on top of the video. Timecode can be used to look for exact edit points for the file split feature", &burn_timecode_bool)
+	autocrop_bool = store_options_and_help_text_bool("Video", "ac", false, "Autocrop. Find crop values automatically by doing 10 second spot checks in 10 places for the duration of the file.", &autocrop_bool)
+	crf_bool = store_options_and_help_text_bool("Video", "crf", false, "Use Constant Quality instead of 2-pass encoding. The default value for crf is 18, which produces the same quality as default 2-pass but a bigger file. CRF is much faster that 2-pass encoding.", &crf_bool)
+	denoise_bool = store_options_and_help_text_bool("Video", "dn", false, "Denoise. Use HQDN3D - filter to remove noise from the picture. This option is equal to Hanbrakes 'medium' noise reduction settings.", &denoise_bool)
+	grayscale_bool = store_options_and_help_text_bool("Video", "gr", false, "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.", &grayscale_bool)
+	inverse_telecine = store_options_and_help_text_bool("Video", "it", false, "Perform inverse telecine on 29.97 fps material to return it back to original 24 fps.", &inverse_telecine)
+	user_main_bitrate = store_options_and_help_text_string("Video", "mbr", "", "Override main videoprocessing automatic bitrate calculation and define bitrate manually.", &user_main_bitrate)
+	no_deinterlace_bool = store_options_and_help_text_bool("Video", "nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.", &no_deinterlace_bool)
+	parallel_sd = store_options_and_help_text_bool("Video", "psd", false, "Parallel SD. Create SD version in parallel to HD processing. This creates an additional version of the video downconverted to SD resolution. The SD file is stored in directory: sd", &parallel_sd)
+	user_sd_bitrate = store_options_and_help_text_string("Video", "sbr", "", "Override parallel sd videoprocessing automatic bitrate calculation and define bitrate manually. SD - video is stored in directory 'sd'", &user_sd_bitrate)
+	split_times = store_options_and_help_text_string("Video", "sf", "", "Split out parts of the file. Give colon separated start and stop times for the parts of the file to use, for example: -sf 0,10:00,01:35:12.800,01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.", &split_times)
+	scale_to_sd = store_options_and_help_text_bool("Video", "ssd", false, "Scale to SD. Scale video down to SD resolution. Calculates resolution automatically. Video is stored in directory 'sd'", &scale_to_sd)
+	burn_timecode_bool = store_options_and_help_text_bool("Video", "tc", false, "Burn timecode on top of the video. Timecode can be used to look for exact edit points for the file split feature", &burn_timecode_bool)
 
 	// Options that affect both video and audio
-	force_lossless_bool = store_options_and_help_text_bool("Audio and Video", "-ls", false, "Force encoding to use lossless 'utvideo' compression for video and 'flac' compression for audio. This also turns on -fe. This option only affects the main video if used with the -psd option.", &force_lossless_bool)
+	force_lossless_bool = store_options_and_help_text_bool("Audio and Video", "ls", false, "Force encoding to use lossless 'utvideo' compression for video and 'flac' compression for audio. This also turns on -fe. This option only affects the main video if used with the -psd option.", &force_lossless_bool)
 
 	// Subtitle options
-	subtitle_burn_language_str = store_options_and_help_text_string("Subtitle", "-s", "", "Burn subtitle with this language code on top of video. Example: -s fin or -s eng or -s ita  Only use option -sn or -s not both.", &subtitle_burn_language_str)
-	subtitle_burn_downscale = store_options_and_help_text_bool("Subtitle", "-sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font. This option affects only subtitle burned on top of video.", &subtitle_burn_downscale)
-	subtitle_burn_grayscale = store_options_and_help_text_bool("Subtitle", "-sgr", false, "Subtitle Grayscale. Remove color from subtitle by converting it to grayscale. This option only works with subtitle burned on top of video. This option may also help if you experience jerky video every time subtitle picture changes.", &subtitle_burn_grayscale)
-	subtitle_burn_str = store_options_and_help_text_string("Subtitle", "-sn", "-1", "Burn subtitle with this stream number on top of video. Example: -sn 1. Use subtitle number 1 from the source file. Only use option -sn or -s not both.", &subtitle_burn_str)
-	subtitle_burn_vertical_offset_str = store_options_and_help_text_string("Subtitle", "-so", "0", "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up). This option affects only subtitle burned on top of video.", &subtitle_burn_vertical_offset_str)
-	user_subtitle_mux_languages_str = store_options_and_help_text_string("Subtitle", "-sm", "", "Mux subtitles with these language codes into the target file. Example: -sm eng, or -sm eng,fra,fin. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the -mkv option.", &user_subtitle_mux_languages_str)
-	user_subtitle_mux_numbers_str = store_options_and_help_text_string("Subtitle", "-smn", "", "Mux subtitles with these stream numbers into the target file. Example: -smn 1 or -smn 3,1,7. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the -mkv option.", &user_subtitle_mux_numbers_str)
-	subtitle_burn_palette = store_options_and_help_text_string("Subtitle", "-palette", "", "Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: -palette f,0,f  This option affects only subtitle burned on top of video.", &subtitle_burn_palette)
-	subtitle_burn_split = store_options_and_help_text_bool("Subtitle", "-sp", false, "Subtile Split. Have you ever been annoyed when a subtitle is displayed on top of a actors face ? With this option you can automatically move subtitles further up and down at the edge of the screen. Distance from the screen edge will be picture height divided by 100 and rounded down to nearest integer. Minimum distance is 5 pixels and max 20 pixels. Subtitles will be automatically centered horizontally. You can also resize subtitles with the -sr option when usind Subtitle Split. The -sr option requires installing ImageMacick. The -sp option affects only subtitles burned on top of video.", &subtitle_burn_split)
-	subtitle_burn_resize = store_options_and_help_text_string("Subtitle", "-sr", "", "Subtitle Resize. Values less than 1 makes subtitles smaller, values bigger than 1 makes subtitle larger. This option can only be user with the -sp option. Example: make subtitle 25% smaller: -sr 0.75   make subtitle 50% smaller: -sr 0.50   make subtitle 75% larger: -sr 1.75. This option affects only subtitle burned on top of video.", &subtitle_burn_resize)
+	subtitle_burn_language_str = store_options_and_help_text_string("Subtitle", "s", "", "Burn subtitle with this language code on top of video. Example: -s fin or -s eng or -s ita  Only use option -sn or -s not both.", &subtitle_burn_language_str)
+	subtitle_burn_downscale = store_options_and_help_text_bool("Subtitle", "sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font. This option affects only subtitle burned on top of video.", &subtitle_burn_downscale)
+	subtitle_burn_grayscale = store_options_and_help_text_bool("Subtitle", "sgr", false, "Subtitle Grayscale. Remove color from subtitle by converting it to grayscale. This option only works with subtitle burned on top of video. This option may also help if you experience jerky video every time subtitle picture changes.", &subtitle_burn_grayscale)
+	subtitle_burn_str = store_options_and_help_text_string("Subtitle", "sn", "-1", "Burn subtitle with this stream number on top of video. Example: -sn 1. Use subtitle number 1 from the source file. Only use option -sn or -s not both.", &subtitle_burn_str)
+	subtitle_burn_vertical_offset_str = store_options_and_help_text_string("Subtitle", "so", "0", "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up). This option affects only subtitle burned on top of video.", &subtitle_burn_vertical_offset_str)
+	user_subtitle_mux_languages_str = store_options_and_help_text_string("Subtitle", "sm", "", "Mux subtitles with these language codes into the target file. Example: -sm eng, or -sm eng,fra,fin. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the -mkv option.", &user_subtitle_mux_languages_str)
+	user_subtitle_mux_numbers_str = store_options_and_help_text_string("Subtitle", "smn", "", "Mux subtitles with these stream numbers into the target file. Example: -smn 1 or -smn 3,1,7. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the -mkv option.", &user_subtitle_mux_numbers_str)
+	subtitle_burn_palette = store_options_and_help_text_string("Subtitle", "palette", "", "Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: -palette f,0,f  This option affects only subtitle burned on top of video.", &subtitle_burn_palette)
+	subtitle_burn_split = store_options_and_help_text_bool("Subtitle", "sp", false, "Subtile Split. Have you ever been annoyed when a subtitle is displayed on top of a actors face ? With this option you can automatically move subtitles further up and down at the edge of the screen. Distance from the screen edge will be picture height divided by 100 and rounded down to nearest integer. Minimum distance is 5 pixels and max 20 pixels. Subtitles will be automatically centered horizontally. You can also resize subtitles with the -sr option when usind Subtitle Split. The -sr option requires installing ImageMacick. The -sp option affects only subtitles burned on top of video.", &subtitle_burn_split)
+	subtitle_burn_resize = store_options_and_help_text_string("Subtitle", "sr", "", "Subtitle Resize. Values less than 1 makes subtitles smaller, values bigger than 1 makes subtitle larger. This option can only be user with the -sp option. Example: make subtitle 25% smaller: -sr 0.75   make subtitle 50% smaller: -sr 0.50   make subtitle 75% larger: -sr 1.75. This option affects only subtitle burned on top of video.", &subtitle_burn_resize)
 
 	// Scan options
-	fast_bool = store_options_and_help_text_bool("Scan", "-f", false, "This is the same as using options -fs and -fe at the same time.", &fast_bool)
-	fast_encode_bool = store_options_and_help_text_bool("Scan", "-fe", false, "Fast encoding mode. Encode video using 1-pass encoding.", &fast_encode_bool)
-	fast_search_bool = store_options_and_help_text_bool("Scan", "-fs", false, "Fast seek mode. When using the -fs option with -st do not decode video before the point we are trying to locate, but instead try to jump directly to it. This search method might or might not be accurate depending on the file format.", &fast_search_bool)
-	scan_mode_only_bool = store_options_and_help_text_bool("Scan", "-scan", false, "Only scan input file and print video and audio stream info.", &scan_mode_only_bool)
-	search_start_str = store_options_and_help_text_string("Scan", "-st", "", "Start time. Start video processing from this timecode. Example -st 30:00 starts processing from 30 minutes from the start of the file.", &search_start_str)
-	processing_stop_time_str = store_options_and_help_text_string("Scan", "-et", "", "End time. Stop video processing to this timecode. Example -et 01:30:00 stops processing at 1 hour 30 minutes. You can define a time range like this: -st 10:09 -et 01:22:49.500 This results in a video file that starts at 10 minutes 9 seconds and stops at 1 hour 22 minutes, 49 seconds and 500 milliseconds.", &processing_stop_time_str)
-	processing_time_str = store_options_and_help_text_string("Scan", "-d", "", "Duration of video to process. Example -d 01:02 process 1 minutes and 2 seconds of the file. Use either -et or -d option not both.", &processing_time_str)
+	fast_bool = store_options_and_help_text_bool("Scan", "f", false, "This is the same as using options -fs and -fe at the same time.", &fast_bool)
+	fast_encode_bool = store_options_and_help_text_bool("Scan", "fe", false, "Fast encoding mode. Encode video using 1-pass encoding.", &fast_encode_bool)
+	fast_search_bool = store_options_and_help_text_bool("Scan", "fs", false, "Fast seek mode. When using the -fs option with -st do not decode video before the point we are trying to locate, but instead try to jump directly to it. This search method might or might not be accurate depending on the file format.", &fast_search_bool)
+	scan_mode_only_bool = store_options_and_help_text_bool("Scan", "scan", false, "Only scan input file and print video and audio stream info.", &scan_mode_only_bool)
+	search_start_str = store_options_and_help_text_string("Scan", "st", "", "Start time. Start video processing from this timecode. Example -st 30:00 starts processing from 30 minutes from the start of the file.", &search_start_str)
+	processing_stop_time_str = store_options_and_help_text_string("Scan", "et", "", "End time. Stop video processing to this timecode. Example -et 01:30:00 stops processing at 1 hour 30 minutes. You can define a time range like this: -st 10:09 -et 01:22:49.500 This results in a video file that starts at 10 minutes 9 seconds and stops at 1 hour 22 minutes, 49 seconds and 500 milliseconds.", &processing_stop_time_str)
+	processing_time_str = store_options_and_help_text_string("Scan", "d", "", "Duration of video to process. Example -d 01:02 process 1 minutes and 2 seconds of the file. Use either -et or -d option not both.", &processing_time_str)
 
 	// Misc options
 	// If you want to print debug info then change debug to "true" below
-	debug_mode_on = store_options_and_help_text_bool("Misc", "-debug", false, "Turn on debug mode and show info about internal variables and the FFmpeg commandlines used.", &debug_mode_on)
-	use_matroska_container = store_options_and_help_text_bool("Misc", "-mkv", false, "Use matroska (mkv) as the output file wrapper format.", &use_matroska_container)
-	only_print_commands = store_options_and_help_text_bool("Misc", "-print", false, "Only print FFmpeg commands that would be used for processing, don't process any files.", &only_print_commands)
-	show_program_version_short = store_options_and_help_text_bool("Misc", "-v", false, "Show the version of this program.", &show_program_version_short)
-	show_program_version_long = store_options_and_help_text_bool("Misc", "-version", false, "Show the version of this program.", &show_program_version_long)
-	temp_file_directory = store_options_and_help_text_string("Misc", "-td", "", "Path to directory for temporary files, example_ -td PathToDir. This option directs temporary files created with 2-pass encoding and subtitle processing with the -sp switch to a separate directory. If the temp dir is a ram or a fast ssd disk then it speeds up processing with the -sp switch. Processing files with the -sp switch extracts every frame of the movie as a picture, so you need to have lots of space in the temp directory. For a FullHD movie you need to have 20 GB or more free storage. If you run multiple instances of this program simultaneously each instance processing one FullHD movie then you need 20 GB or more free storage for each movie that is processed at the same time. -sp switch extracts movie subtitle frames with FFmpeg and FFmpeg fails silently if it runs out of storage space. If this happens then some of the last subtitles won't be available when the video is compressed and this results the last available subtitle to be 'stuck' on top of video to the end of the movie.", &temp_file_directory)
-	help = store_options_and_help_text_bool("Misc", "-h", false, "Display help text", &help)
+	debug_mode_on = store_options_and_help_text_bool("Misc", "debug", false, "Turn on debug mode and show info about internal variables and the FFmpeg commandlines used.", &debug_mode_on)
+	use_matroska_container = store_options_and_help_text_bool("Misc", "mkv", false, "Use matroska (mkv) as the output file wrapper format.", &use_matroska_container)
+	only_print_commands = store_options_and_help_text_bool("Misc", "print", false, "Only print FFmpeg commands that would be used for processing, don't process any files.", &only_print_commands)
+	show_program_version_short = store_options_and_help_text_bool("Misc", "v", false, "Show the version of this program.", &show_program_version_short)
+	show_program_version_long = store_options_and_help_text_bool("Misc", "version", false, "Show the version of this program.", &show_program_version_long)
+	temp_file_directory = store_options_and_help_text_string("Misc", "td", "", "Path to directory for temporary files, example_ -td PathToDir. This option directs temporary files created with 2-pass encoding and subtitle processing with the -sp switch to a separate directory. If the temp dir is a ram or a fast ssd disk then it speeds up processing with the -sp switch. Processing files with the -sp switch extracts every frame of the movie as a picture, so you need to have lots of space in the temp directory. For a FullHD movie you need to have 20 GB or more free storage. If you run multiple instances of this program simultaneously each instance processing one FullHD movie then you need 20 GB or more free storage for each movie that is processed at the same time. -sp switch extracts movie subtitle frames with FFmpeg and FFmpeg fails silently if it runs out of storage space. If this happens then some of the last subtitles won't be available when the video is compressed and this results the last available subtitle to be 'stuck' on top of video to the end of the movie.", &temp_file_directory)
+	help = store_options_and_help_text_bool("Misc", "h", false, "Display help text", &help)
 
 	//////////////////////
 	// Define variables //
