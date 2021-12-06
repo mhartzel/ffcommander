@@ -1,3 +1,6 @@
+// (C) Mikael Hartzell 2018
+// This program is distributed under the GNU General Public License, version 3 (GPLv3)
+
 package main
 
 import (
@@ -86,7 +89,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.25" // This is the version of this program
+var version_number string = "2.30" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -691,7 +694,7 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 		}
 	}
 
-	// Convert second to timecode values
+	// Convert seconds to timecode values
 	cut_positions_as_timecodes = convert_cut_positions_to_timecode(cut_positions_after_processing_seconds)
 
 	if *debug_mode_on == true {
@@ -1209,7 +1212,7 @@ func main() {
 	//////////////////////////////////////////
 	// Audio options
 	var audio_language_str = flag.String("a", "", "Audio language: -a fin or -a eng or -a ita  Find audio stream corresponding the language code. Only use option -an or -a not both.")
-	var audio_stream_number_str = flag.String("an", "0", "Audio stream number, -a 1. Only use option -an or -a not both.")
+	var audio_stream_number_str = flag.String("an", "0", "Audio stream number, -an 1. Only use option -an or -a not both.")
 	var audio_compression_ac3 = flag.Bool("ac3", false, "Compress audio as ac3. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate. 6 channels uses the ac3 max bitrate of 640k.")
 	var audio_compression_aac = flag.Bool("aac", false, "Compress audio as aac. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.")
 	var audio_compression_opus = flag.Bool("opus", false, "Compress audio as opus. Opus support in mp4 container is experimental as of FFmpeg vesion 4.2.1. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.")
