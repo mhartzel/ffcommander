@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"bufio"
 	"crypto/md5"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -89,12 +88,26 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.30" // This is the version of this program
+var version_number string = "2.31" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
 var subtitle_stream_info_map = make(map[string]string)
 var wrapper_info_map = make(map[string]string)
+var helptext_categories_map = make(map[string][]string) // The key is commandline option category (video, audio, subtitle) and the slice contains commandline options that belong to this category
+var commandline_option_map = make(map[string]*commandline_struct) // The key is the commandline option and the struct contains all variables and helptext belonging to that option
+var debug_mode_on *bool
+
+type commandline_struct struct {
+	variable_type string
+	pointer_to_int_variable **int
+	pointer_to_bool_variable **bool
+	pointer_to_string_variable **string
+	int_value int
+	bool_value bool
+	string_value string
+	help_text string
+}
 
 // Create a slice for storing all video, audio and subtitle stream infos for each input file.
 // There can be many audio and subtitle streams in a file.
@@ -1200,6 +1213,518 @@ func remove_duplicate_subtitle_images (original_subtitles_absolute_path string, 
 	return files_remaining
 }
 
+func store_options_and_help_text_int(category string, option string, value int, help_text string, pointer_to_variable **int) *int {
+
+	// This function does what flag.Int does in go and extends it a little
+	// The function stores category, option name, variables and help text for a commandline option.
+	// It also returns pointer to the value default value for the commandline option
+	// so that it can be assigned to a variable.
+
+	if category == "" {
+		fmt.Println("Error, help_text category is empty")
+		os.Exit(0)
+	}
+
+	if option == "" {
+		fmt.Println("Error, help_text option is empty")
+		os.Exit(0)
+	}
+
+	if help_text == "" {
+		fmt.Println("Error, help_text message is empty")
+		os.Exit(0)
+	}
+
+	commandline_option_variables := new(commandline_struct)
+	commandline_option_variables.variable_type = "int"
+	commandline_option_variables.pointer_to_int_variable = pointer_to_variable
+	commandline_option_variables.int_value = value
+	commandline_option_variables.help_text = help_text
+
+	// Store options for each category
+	if len(helptext_categories_map) == 0 {
+		// The list of options is empty, store the first option in the category
+		var temp_slice []string
+		temp_slice = append(temp_slice, option)
+		helptext_categories_map[category] = temp_slice
+	} else {
+		// There already are some options in the list, store the new one at the end of the list
+		var temp_slice = helptext_categories_map[category]
+
+		for _, item := range temp_slice {
+			if option == item {
+				fmt.Println("Error, option defined twice")
+				os.Exit(0)
+			}
+		}
+
+		temp_slice = append(temp_slice, option)
+		helptext_categories_map[category] = temp_slice
+	}
+
+	// Store helptext for the option
+	commandline_option_map[option] = commandline_option_variables
+
+	return &commandline_option_variables.int_value
+}
+
+func store_options_and_help_text_bool(category string, option string, value bool, help_text string, pointer_to_variable **bool) *bool {
+
+	// This function does what flag.Bool does in go and extends it a little
+	// The function stores category, option name, variables and help text for a commandline option.
+	// It also returns pointer to the value default value for the commandline option
+	// so that it can be assigned to a variable.
+
+	if category == "" {
+		fmt.Println("Error, help_text category is empty")
+		os.Exit(0)
+	}
+
+	if option == "" {
+		fmt.Println("Error, help_text option is empty")
+		os.Exit(0)
+	}
+
+	if help_text == "" {
+		fmt.Println("Error, help_text message is empty")
+		os.Exit(0)
+	}
+
+	commandline_option_variables := new(commandline_struct)
+	commandline_option_variables.variable_type = "bool"
+	commandline_option_variables.pointer_to_bool_variable = pointer_to_variable
+	commandline_option_variables.bool_value = value
+	commandline_option_variables.help_text = help_text
+
+	// Store options for each category
+	if len(helptext_categories_map) == 0 {
+		// The list of options is empty, store the first option in the category
+		var temp_slice []string
+		temp_slice = append(temp_slice, option)
+		helptext_categories_map[category] = temp_slice
+	} else {
+		// There already are some options in the list, store the new one at the end of the list
+		var temp_slice = helptext_categories_map[category]
+
+		for _, item := range temp_slice {
+			if option == item {
+				fmt.Println("Error, option defined twice")
+				os.Exit(0)
+			}
+		}
+
+		temp_slice = append(temp_slice, option)
+		helptext_categories_map[category] = temp_slice
+	}
+
+	// Store helptext for the option
+	commandline_option_map[option] = commandline_option_variables
+
+	return &commandline_option_variables.bool_value
+}
+
+func store_options_and_help_text_string(category string, option string, value string, help_text string, pointer_to_variable **string) *string {
+
+	// This function does what flag.String does in go and extends it a little
+	// The function stores category, option name, variables and help text for a commandline option.
+	// It also returns pointer to the value default value for the commandline option
+	// so that it can be assigned to a variable.
+
+	if category == "" {
+		fmt.Println("Error, help_text category is empty")
+		os.Exit(0)
+	}
+
+	if option == "" {
+		fmt.Println("Error, help_text option is empty")
+		os.Exit(0)
+	}
+
+	if help_text == "" {
+		fmt.Println("Error, help_text message is empty")
+		os.Exit(0)
+	}
+
+	commandline_option_variables := new(commandline_struct)
+	commandline_option_variables.variable_type = "string"
+	commandline_option_variables.pointer_to_string_variable = pointer_to_variable
+	commandline_option_variables.string_value = value
+	commandline_option_variables.help_text = help_text
+
+	// Store options for each category
+	if len(helptext_categories_map) == 0 {
+		// The list of options is empty, store the first option in the category
+		var temp_slice []string
+		temp_slice = append(temp_slice, option)
+		helptext_categories_map[category] = temp_slice
+	} else {
+		// There already are some options in the list, store the new one at the end of the list
+		var temp_slice = helptext_categories_map[category]
+
+		for _, item := range temp_slice {
+			if option == item {
+				fmt.Println("Error, option defined twice")
+				os.Exit(0)
+			}
+		}
+
+		temp_slice = append(temp_slice, option)
+		helptext_categories_map[category] = temp_slice
+	}
+
+	// Store helptext for the option
+	commandline_option_map[option] = commandline_option_variables
+
+	return &commandline_option_variables.string_value
+}
+
+func display_help_text() {
+
+	// Prepare text formatting
+	value_slice_int := get_terminal_window_dimensions()
+	terminal_width_int := value_slice_int[0]
+	// terminal_height_int := value_slice_int[1]
+
+	var second_paragraph_start, helptext_start, helptext_end int
+	var textline string
+
+	// Get map keys and sort them
+	categories := make ([]string, 0, len(helptext_categories_map))
+
+	for category := range helptext_categories_map {
+		categories = append(categories, category)
+	}
+
+	sort.Strings(categories)
+
+	///////////////////////////////////////////////////////////
+	// Find the longest option and adjust help text printing //
+	// start point in reference to that                      //
+	///////////////////////////////////////////////////////////
+	for _, category := range categories {
+		option_list := helptext_categories_map[category]
+
+		for _, option := range option_list {
+			if len(option) > second_paragraph_start {
+				second_paragraph_start = len(option)
+			}
+		}
+	}
+
+	second_paragraph_start = second_paragraph_start + 4
+
+	/////////////////////////////////////////////////////////
+	// Print sorted categories and options in each of them //
+	/////////////////////////////////////////////////////////
+	for _, category := range categories {
+		option_list := helptext_categories_map[category]
+
+		fmt.Println()
+		fmt.Println(category + ":")
+		fmt.Println(strings.Repeat("-", len(category) + 1))
+
+		for _, option := range option_list {
+
+			///////////////////////////////////////
+			// Print the first line of help text //
+			///////////////////////////////////////
+			commandline_option_variables := commandline_option_map[option]
+			textline = option + strings.Repeat(" ", second_paragraph_start - len(option))
+			helptext_start = 0
+			helptext_end = terminal_width_int - len(textline)
+
+			if helptext_end > len(commandline_option_variables.help_text) {
+				helptext_end = len(commandline_option_variables.help_text)
+			}
+
+			// Make sure we wont cut the last word in the middle at the end of the line
+			if helptext_end > 0 && helptext_end < len(commandline_option_variables.help_text) {
+
+				for commandline_option_variables.help_text[helptext_end - 1] != ' ' {
+					helptext_end--
+
+					if helptext_end <= 0 {
+						helptext_end = 0
+						break
+					}
+				}
+			}
+
+			fmt.Println(option + strings.Repeat(" ", second_paragraph_start - len(option)) + commandline_option_variables.help_text[helptext_start:helptext_end])
+
+			// If this was the last line, start printing the next option help text
+			if helptext_end >= len(commandline_option_variables.help_text) {
+				fmt.Println()
+				continue
+			}
+
+			//////////////////////////////////////////////////////
+			// Print second help text line and lines after that //
+			//////////////////////////////////////////////////////
+			if helptext_end < len(commandline_option_variables.help_text) {
+
+				for {
+					helptext_start = helptext_end
+					helptext_end = helptext_start + terminal_width_int - second_paragraph_start - 1
+
+					if helptext_end > len(commandline_option_variables.help_text) {
+						helptext_end = len(commandline_option_variables.help_text)
+					}
+
+					// If the first character on the line is a space then skip it
+					// and start from the first character of the next word instead
+					if commandline_option_variables.help_text[helptext_start] == ' ' {
+						helptext_start++
+
+						if helptext_start > len(commandline_option_variables.help_text) {
+							helptext_start = len(commandline_option_variables.help_text)
+						}
+					}
+
+					// Make sure we wont cut the last word in the middle at the end of the line
+					if helptext_end < len(commandline_option_variables.help_text) {
+
+						for commandline_option_variables.help_text[helptext_end] != ' ' {
+						helptext_end--
+
+							if helptext_end <= 0 {
+								helptext_end = 0
+								break
+							}
+						}
+					}
+
+					fmt.Println(strings.Repeat(" ", second_paragraph_start - 1), commandline_option_variables.help_text[helptext_start:helptext_end])
+
+					// If this was the last line, start printing the next option help text
+					if helptext_end >= len(commandline_option_variables.help_text) {
+						break
+					}
+				}
+			}
+			fmt.Println()
+		}
+	}
+	os.Exit(0)
+}
+
+func get_terminal_window_dimensions() []int {
+
+	var value_slice_int []int
+
+	// Get terminal window size with the stty - command, if it does not exist return 1000,1000
+	if _, error := exec.LookPath("stty"); error == nil {
+
+		cmd := exec.Command("stty", "size")
+		cmd.Stdin = os.Stdin
+		out, err := cmd.Output()
+
+		if err != nil {
+			fmt.Println("Error getting terminal window width and height")
+			os.Exit(0)                                                                                                                                                                                                                     
+		}
+
+		first_line := strings.Split(string(out), "\n")
+		values_slice := strings.Split(first_line[0], " ")
+
+		height_string := values_slice[0]
+		width_string := values_slice[1]
+
+		height_int, error_happened := strconv.Atoi(height_string)
+
+		if error_happened != nil {                                                                                                                                                                                                             
+			fmt.Println("Error converting terminal window height to int")
+			os.Exit(0)                                                                                                                                                                                                                     
+		} 
+
+		width_int, error_happened := strconv.Atoi(width_string)
+
+		if error_happened != nil {                                                                                                                                                                                                             
+			fmt.Println("Error converting terminal window width to int")
+			os.Exit(0)                                                                                                                                                                                                                     
+		} 
+
+		value_slice_int = append(value_slice_int, width_int)
+		value_slice_int = append (value_slice_int, height_int)
+	} else {
+		value_slice_int = append(value_slice_int, 1000)
+		value_slice_int = append(value_slice_int, 1000)
+	}
+
+	return value_slice_int
+}
+
+func parse_options() []string {
+
+	///////////////////////////////
+	// Parse commandline options //
+	///////////////////////////////
+
+	if *debug_mode_on == true {
+
+		var arguments []string
+		arguments = os.Args
+		fmt.Println()
+		fmt.Println("Arguments:", arguments)
+		fmt.Println()
+
+		fmt.Println("Argument slice items:")
+		fmt.Println("---------------------")
+
+		for counter, item := range arguments {
+			fmt.Println(counter, item)
+		}
+		fmt.Println()
+		fmt.Println("Parsed arguments")
+		fmt.Println("----------------")
+	}
+
+	var input_filenames []string
+	var commandline_option_variables *commandline_struct
+	var predefined_option string
+	var option_found, string_option_found, int_option_found bool
+	string_option_found = false
+	int_option_found = false
+
+	for _, commandline_option := range os.Args[1:] {
+
+		option_found = false
+
+		// This part assigns int or string value following an option to the commandline variable 
+		// After the assingment the next option is fetched from the commandline
+		if string_option_found == true {
+			commandline_option_variables.string_value = commandline_option
+			*commandline_option_variables.pointer_to_string_variable =  &commandline_option_variables.string_value
+			fmt.Println(**commandline_option_variables.pointer_to_string_variable)
+			string_option_found = false
+			continue
+		}
+
+		if int_option_found == true {
+			temp_int, error_happened := strconv.Atoi(commandline_option)
+
+			if error_happened != nil {
+				fmt.Println("Error could not convert option to integer:", commandline_option)
+				os.Exit(0)
+			}
+
+			commandline_option_variables.int_value = temp_int
+			*commandline_option_variables.pointer_to_int_variable =  &commandline_option_variables.int_value
+
+			if *debug_mode_on == true {
+				fmt.Println(**commandline_option_variables.pointer_to_int_variable)
+			}
+
+			int_option_found = false
+			continue
+		}
+
+		// This part recognizes an option on the commandline and sets boolean values so that 
+		// the int or string following the option is handled at the next round of the for loop
+		for predefined_option, commandline_option_variables = range commandline_option_map {
+
+			if commandline_option == predefined_option {
+
+				if commandline_option_variables.variable_type == "int" {
+
+					if *debug_mode_on == true {
+						fmt.Print("found int variable:", commandline_option, " ")
+					}
+
+					int_option_found = true
+					option_found = true
+					break
+				}
+
+				if commandline_option_variables.variable_type == "bool" {
+
+					if *debug_mode_on == true {
+						fmt.Println("found bool variable", commandline_option, " ")
+					}
+
+					// Store value: true to this options struct and switch the variable connected
+					// to this commandline option to point to the value in struct
+					commandline_option_variables.bool_value = true
+					*commandline_option_variables.pointer_to_bool_variable =  &commandline_option_variables.bool_value
+					option_found = true
+					break
+				}
+
+				if commandline_option_variables.variable_type == "string" {
+
+					if *debug_mode_on == true {
+						fmt.Print("found string variable:", commandline_option, " ")
+					}
+
+					string_option_found = true
+					option_found = true
+					break
+				}
+			}
+		}
+
+		// The rest of the items on the commandline are filenames, test if files exist
+		if option_found == false {
+
+			inputfile_full_path,_ := filepath.Abs(commandline_option)
+			fileinfo, err := os.Stat(inputfile_full_path)
+
+			// Test if input files exist
+			if os.IsNotExist(err) == true {
+
+				fmt.Println()
+				fmt.Println("Error !!!!!!!")
+				fmt.Println("File: '" + inputfile_full_path + "' does not exist")
+				fmt.Println()
+
+				os.Exit(1)
+			}
+
+			// Test if name is a directory
+			if fileinfo.IsDir() == true {
+
+				fmt.Println()
+				fmt.Println("Error !!!!!!!")
+				fmt.Println(inputfile_full_path + " is not a file it is a directory.")
+				fmt.Println()
+
+				os.Exit(1)
+			}
+
+			// Add all existing input file names to a slice
+			input_filenames = append(input_filenames, inputfile_full_path)
+		}
+	}
+
+	return input_filenames
+}
+
+func print_commandline_variables() {
+
+	for option, commandline_option_variables := range commandline_option_map {
+		fmt.Println()
+		fmt.Println("Option:", option)
+
+		if commandline_option_variables.variable_type == "int" {
+			fmt.Println("\tType:", commandline_option_variables.variable_type)
+			fmt.Println("\tValue:",  **commandline_option_variables.pointer_to_int_variable)
+			fmt.Println("\tHelp text:", commandline_option_variables.help_text)
+		}
+
+		if commandline_option_variables.variable_type == "bool" {
+			fmt.Println("\tType:", commandline_option_variables.variable_type)
+			fmt.Println("\tValue:",  **commandline_option_variables.pointer_to_bool_variable)
+			fmt.Println("\tHelp text:", commandline_option_variables.help_text)
+		}
+
+		if commandline_option_variables.variable_type == "string" {
+			fmt.Println("\tType:", commandline_option_variables.variable_type)
+			fmt.Println("\tValue:",  **commandline_option_variables.pointer_to_string_variable)
+			fmt.Println("\tHelp text:", commandline_option_variables.help_text)
+		}
+	}
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 func main() {
@@ -1210,60 +1735,104 @@ func main() {
 	//////////////////////////////////////////
 	// Define and parse commandline options //
 	//////////////////////////////////////////
+	// Create variables that are tied to the commandline options
+	// Audio bool
+	var audio_compression_ac3, audio_compression_aac, audio_compression_opus, audio_compression_flac, no_audio *bool
+
+	// Video bool
+	var autocrop_bool, crf_bool, denoise_bool, grayscale_bool, inverse_telecine, no_deinterlace_bool, parallel_sd, scale_to_sd, burn_timecode_bool *bool
+
+	// Video + Audio bool
+	var force_lossless_bool *bool
+
+	// Subtitle bool
+	var subtitle_burn_downscale, subtitle_burn_grayscale, subtitle_burn_split  *bool
+
+	// Audio string
+	var audio_language_str, audio_stream_number_str *string
+
+	// Video string
+	var user_main_bitrate, user_sd_bitrate, split_times *string
+
+	// Subtitle string
+	var subtitle_burn_language_str, subtitle_burn_str, subtitle_burn_vertical_offset_str, user_subtitle_mux_languages_str, user_subtitle_mux_numbers_str, subtitle_burn_palette, subtitle_burn_resize *string
+
+	// Scan bool
+	var fast_bool, fast_encode_bool, fast_search_bool, scan_mode_only_bool *bool
+
+	// Scan string
+	var search_start_str, processing_stop_time_str, processing_time_str *string
+
+	// Misc bool
+	var use_matroska_container, only_print_commands, show_program_version_short, show_program_version_long, help *bool
+
+	// Misc string
+	var temp_file_directory *string
+
+	// Below are variable, and helpt text definitions tied to a commandline option
+	// Definitions from left to right are:
+	// Variable that gets the default value defined later on the line
+	// Category. Help text will be printed a category at a time
+	// Commandline option name.
+	// Default value for the variable. The function "store_options_and_help_text_string()" returns this value to the variable defined at the beginning of the line
+	// Help text for the commandline option
+	// Address of the variable defined at the beginning of the line. This is used when the commandline option is followed by a value. The variable address is used to point the variable to the user defined value.
 	// Audio options
-	var audio_language_str = flag.String("a", "", "Audio language: -a fin or -a eng or -a ita  Find audio stream corresponding the language code. Only use option -an or -a not both.")
-	var audio_stream_number_str = flag.String("an", "0", "Audio stream number, -an 1. Only use option -an or -a not both.")
-	var audio_compression_ac3 = flag.Bool("ac3", false, "Compress audio as ac3. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate. 6 channels uses the ac3 max bitrate of 640k.")
-	var audio_compression_aac = flag.Bool("aac", false, "Compress audio as aac. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.")
-	var audio_compression_opus = flag.Bool("opus", false, "Compress audio as opus. Opus support in mp4 container is experimental as of FFmpeg vesion 4.2.1. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.")
-	var audio_compression_flac = flag.Bool("flac", false, "Compress audio in lossless Flac - format")
-	var no_audio = flag.Bool("na", false, "Disable audio processing. The resulting file will have no audio, only video.")
+	audio_language_str = store_options_and_help_text_string("Audio", "-a", "", "Audio language: -a fin or -a eng or -a ita  Find audio stream corresponding the language code. Only use option -an or -a not both.", &audio_language_str)
+	audio_stream_number_str = store_options_and_help_text_string("Audio", "-an", "0", "Audio stream number, -an 1. Only use option -an or -a not both.", &audio_stream_number_str)
+	audio_compression_ac3 = store_options_and_help_text_bool("Audio", "-ac3", false, "Compress audio as ac3. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate. 6 channels uses the ac3 max bitrate of 640k.", &audio_compression_ac3)
+	audio_compression_aac = store_options_and_help_text_bool("Audio", "-aac", false, "Compress audio as aac. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.", &audio_compression_aac)
+	audio_compression_opus = store_options_and_help_text_bool("Audio", "-opus", false, "Compress audio as opus. Opus support in mp4 container is experimental as of FFmpeg vesion 4.2.1. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.", &audio_compression_opus)
+	audio_compression_flac = store_options_and_help_text_bool("Audio", "-flac", false, "Compress audio in lossless Flac - format", &audio_compression_flac)
+	no_audio = store_options_and_help_text_bool("Audio", "-na", false, "Disable audio processing. The resulting file will have no audio, only video.", &no_audio)
 
 	// Video options
-	var autocrop_bool = flag.Bool("ac", false, "Autocrop. Find crop values automatically by doing 10 second spot checks in 10 places for the duration of the file.")
-	var crf_bool = flag.Bool("crf", false, "Use Constant Quality instead of 2-pass encoding. The default value for crf is 18, which produces the same quality as default 2-pass but a bigger file. CRF is much faster that 2-pass encoding.")
-	var denoise_bool = flag.Bool("dn", false, "Denoise. Use HQDN3D - filter to remove noise from the picture. This option is equal to Hanbrakes 'medium' noise reduction settings.")
-	var grayscale_bool = flag.Bool("gr", false, "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.")
-	var inverse_telecine = flag.Bool("it", false, "Perform inverse telecine on 29.97 fps material to return it back to original 24 fps.")
-	var user_main_bitrate = flag.String("mbr", "", "Override main videoprocessing automatic bitrate calculation and define bitrate manually.")
-	var no_deinterlace_bool = flag.Bool("nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.")
-	var parallel_sd = flag.Bool("psd", false, "Parallel SD. Create SD version in parallel to HD processing. This creates an additional version of the video downconverted to SD resolution. The SD file is stored in directory: sd")
-	var user_sd_bitrate = flag.String("sbr", "", "Override parallel sd videoprocessing automatic bitrate calculation and define bitrate manually. SD - video is stored in directory 'sd'")
-	var split_times = flag.String("sf", "", "Split out parts of the file. Give colon separated start and stop times for the parts of the file to use, for example: -sf 0,10:00,01:35:12.800,01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.")
-	var scale_to_sd = flag.Bool("ssd", false, "Scale to SD. Scale video down to SD resolution. Calculates resolution automatically. Video is stored in directory 'sd'")
-	var burn_timecode_bool = flag.Bool("tc", false, "Burn timecode on top of the video. Timecode can be used to look for exact edit points for the file split feature")
+	autocrop_bool = store_options_and_help_text_bool("Video", "-ac", false, "Autocrop. Find crop values automatically by doing 10 second spot checks in 10 places for the duration of the file.", &autocrop_bool)
+	crf_bool = store_options_and_help_text_bool("Video", "-crf", false, "Use Constant Quality instead of 2-pass encoding. The default value for crf is 18, which produces the same quality as default 2-pass but a bigger file. CRF is much faster that 2-pass encoding.", &crf_bool)
+	denoise_bool = store_options_and_help_text_bool("Video", "-dn", false, "Denoise. Use HQDN3D - filter to remove noise from the picture. This option is equal to Hanbrakes 'medium' noise reduction settings.", &denoise_bool)
+	grayscale_bool = store_options_and_help_text_bool("Video", "-gr", false, "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.", &grayscale_bool)
+	inverse_telecine = store_options_and_help_text_bool("Video", "-it", false, "Perform inverse telecine on 29.97 fps material to return it back to original 24 fps.", &inverse_telecine)
+	user_main_bitrate = store_options_and_help_text_string("Video", "-mbr", "", "Override main videoprocessing automatic bitrate calculation and define bitrate manually.", &user_main_bitrate)
+	no_deinterlace_bool = store_options_and_help_text_bool("Video", "-nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.", &no_deinterlace_bool)
+	parallel_sd = store_options_and_help_text_bool("Video", "-psd", false, "Parallel SD. Create SD version in parallel to HD processing. This creates an additional version of the video downconverted to SD resolution. The SD file is stored in directory: sd", &parallel_sd)
+	user_sd_bitrate = store_options_and_help_text_string("Video", "-sbr", "", "Override parallel sd videoprocessing automatic bitrate calculation and define bitrate manually. SD - video is stored in directory 'sd'", &user_sd_bitrate)
+	split_times = store_options_and_help_text_string("Video", "-sf", "", "Split out parts of the file. Give colon separated start and stop times for the parts of the file to use, for example: -sf 0,10:00,01:35:12.800,01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.", &split_times)
+	scale_to_sd = store_options_and_help_text_bool("Video", "-ssd", false, "Scale to SD. Scale video down to SD resolution. Calculates resolution automatically. Video is stored in directory 'sd'", &scale_to_sd)
+	burn_timecode_bool = store_options_and_help_text_bool("Video", "-tc", false, "Burn timecode on top of the video. Timecode can be used to look for exact edit points for the file split feature", &burn_timecode_bool)
 
 	// Options that affect both video and audio
-	var force_lossless_bool = flag.Bool("ls", false, "Force encoding to use lossless 'utvideo' compression for video and 'flac' compression for audio. This also turns on -fe. This option only affects the main video if used with the -psd option.")
+	force_lossless_bool = store_options_and_help_text_bool("Audio and Video", "-ls", false, "Force encoding to use lossless 'utvideo' compression for video and 'flac' compression for audio. This also turns on -fe. This option only affects the main video if used with the -psd option.", &force_lossless_bool)
 
 	// Subtitle options
-	var subtitle_burn_language_str = flag.String("s", "", "Burn subtitle with this language code on top of video. Example: -s fin or -s eng or -s ita  Only use option -sn or -s not both.")
-	var subtitle_burn_downscale = flag.Bool("sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font. This option affects only subtitle burned on top of video.")
-	var subtitle_burn_grayscale = flag.Bool("sgr", false, "Subtitle Grayscale. Remove color from subtitle by converting it to grayscale. This option only works with subtitle burned on top of video. This option may also help if you experience jerky video every time subtitle picture changes.")
-	var subtitle_burn_str = flag.String("sn", "-1", "Burn subtitle with this stream number on top of video. Example: -sn 1. Use subtitle number 1 from the source file. Only use option -sn or -s not both.")
-	var subtitle_burn_vertical_offset_str = flag.String("so", "0", "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up). This option affects only subtitle burned on top of video.")
-	var user_subtitle_mux_languages_str = flag.String("sm", "", "Mux subtitles with these language codes into the target file. Example: -sm eng, or -sm eng,fra,fin. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the -mkv option.")
-	var user_subtitle_mux_numbers_str = flag.String("smn", "", "Mux subtitles with these stream numbers into the target file. Example: -smn 1 or -smn 3,1,7. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the -mkv option.")
-	var subtitle_burn_palette = flag.String("palette", "", "Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: -palette f,0,f  This option affects only subtitle burned on top of video.")
-	var subtitle_burn_split = flag.Bool("sp", false, "Subtitle Split. Move subtitles that are above the center of the screen up to the top of the screen and subtitles below center down on the bottom of the screen. Distance from the screen edge will be picture height divided by 100 and rounded down to nearest integer. Minimum distance is 5 pixels and max 20 pixels. Subtitles will be automatically centered horizontally. You can resize subtitles with the -sr option when usind Subtitle Split. This option requires installing ImageMacick. This option affects only subtitle burned on top of video.")
-	var subtitle_burn_resize = flag.String("sr", "", "Subtitle Resize. Values less than 1 makes subtitles smaller, values bigger than 1 makes subtitle larger. This option can only be user with the -sp option. Example: make subtitle 25% smaller: -sr 0.75   make subtitle 50% smaller: -sr 0.50   make subtitle 75% larger: -sr 1.75. This option affects only subtitle burned on top of video.")
+	subtitle_burn_language_str = store_options_and_help_text_string("Subtitle", "-s", "", "Burn subtitle with this language code on top of video. Example: -s fin or -s eng or -s ita  Only use option -sn or -s not both.", &subtitle_burn_language_str)
+	subtitle_burn_downscale = store_options_and_help_text_bool("Subtitle", "-sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font. This option affects only subtitle burned on top of video.", &subtitle_burn_downscale)
+	subtitle_burn_grayscale = store_options_and_help_text_bool("Subtitle", "-sgr", false, "Subtitle Grayscale. Remove color from subtitle by converting it to grayscale. This option only works with subtitle burned on top of video. This option may also help if you experience jerky video every time subtitle picture changes.", &subtitle_burn_grayscale)
+	subtitle_burn_str = store_options_and_help_text_string("Subtitle", "-sn", "-1", "Burn subtitle with this stream number on top of video. Example: -sn 1. Use subtitle number 1 from the source file. Only use option -sn or -s not both.", &subtitle_burn_str)
+	subtitle_burn_vertical_offset_str = store_options_and_help_text_string("Subtitle", "-so", "0", "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up). This option affects only subtitle burned on top of video.", &subtitle_burn_vertical_offset_str)
+	user_subtitle_mux_languages_str = store_options_and_help_text_string("Subtitle", "-sm", "", "Mux subtitles with these language codes into the target file. Example: -sm eng, or -sm eng,fra,fin. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the -mkv option.", &user_subtitle_mux_languages_str)
+	user_subtitle_mux_numbers_str = store_options_and_help_text_string("Subtitle", "-smn", "", "Mux subtitles with these stream numbers into the target file. Example: -smn 1 or -smn 3,1,7. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the -mkv option.", &user_subtitle_mux_numbers_str)
+	subtitle_burn_palette = store_options_and_help_text_string("Subtitle", "-palette", "", "Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: -palette f,0,f  This option affects only subtitle burned on top of video.", &subtitle_burn_palette)
+	subtitle_burn_split = store_options_and_help_text_bool("Subtitle", "-sp", false, "Subtile Split. Have you ever been annoyed when a subtitle is displayed on top of a actors face ? With this option you can automatically move subtitles further up and down at the edge of the screen. Distance from the screen edge will be picture height divided by 100 and rounded down to nearest integer. Minimum distance is 5 pixels and max 20 pixels. Subtitles will be automatically centered horizontally. You can also resize subtitles with the -sr option when usind Subtitle Split. The -sr option requires installing ImageMacick. The -sp option affects only subtitles burned on top of video.", &subtitle_burn_split)
+	subtitle_burn_resize = store_options_and_help_text_string("Subtitle", "-sr", "", "Subtitle Resize. Values less than 1 makes subtitles smaller, values bigger than 1 makes subtitle larger. This option can only be user with the -sp option. Example: make subtitle 25% smaller: -sr 0.75   make subtitle 50% smaller: -sr 0.50   make subtitle 75% larger: -sr 1.75. This option affects only subtitle burned on top of video.", &subtitle_burn_resize)
 
 	// Scan options
-	var fast_bool = flag.Bool("f", false, "This is the same as using options -fs and -fe at the same time.")
-	var fast_encode_bool = flag.Bool("fe", false, "Fast encoding mode. Encode video using 1-pass encoding.")
-	var fast_search_bool = flag.Bool("fs", false, "Fast seek mode. When using the -fs option with -st do not decode video before the point we are trying to locate, but instead try to jump directly to it. This search method might or might not be accurate depending on the file format.")
-	var scan_mode_only_bool = flag.Bool("scan", false, "Only scan input file and print video and audio stream info.")
-	var search_start_str = flag.String("st", "", "Start time. Start video processing from this timecode. Example -st 30:00 starts processing from 30 minutes from the start of the file.")
-	var processing_stop_time_str = flag.String("et", "", "End time. Stop video processing to this timecode. Example -et 01:30:00 stops processing at 1 hour 30 minutes. You can define a time range like this: -st 10:09 -et 01:22:49.500 This results in a video file that starts at 10 minutes 9 seconds and stops at 1 hour 22 minutes, 49 seconds and 500 milliseconds.")
-	var processing_time_str = flag.String("d", "", "Duration of video to process. Example -d 01:02 process 1 minutes and 2 seconds of the file. Use either -et or -d option not both.")
+	fast_bool = store_options_and_help_text_bool("Scan", "-f", false, "This is the same as using options -fs and -fe at the same time.", &fast_bool)
+	fast_encode_bool = store_options_and_help_text_bool("Scan", "-fe", false, "Fast encoding mode. Encode video using 1-pass encoding.", &fast_encode_bool)
+	fast_search_bool = store_options_and_help_text_bool("Scan", "-fs", false, "Fast seek mode. When using the -fs option with -st do not decode video before the point we are trying to locate, but instead try to jump directly to it. This search method might or might not be accurate depending on the file format.", &fast_search_bool)
+	scan_mode_only_bool = store_options_and_help_text_bool("Scan", "-scan", false, "Only scan input file and print video and audio stream info.", &scan_mode_only_bool)
+	search_start_str = store_options_and_help_text_string("Scan", "-st", "", "Start time. Start video processing from this timecode. Example -st 30:00 starts processing from 30 minutes from the start of the file.", &search_start_str)
+	processing_stop_time_str = store_options_and_help_text_string("Scan", "-et", "", "End time. Stop video processing to this timecode. Example -et 01:30:00 stops processing at 1 hour 30 minutes. You can define a time range like this: -st 10:09 -et 01:22:49.500 This results in a video file that starts at 10 minutes 9 seconds and stops at 1 hour 22 minutes, 49 seconds and 500 milliseconds.", &processing_stop_time_str)
+	processing_time_str = store_options_and_help_text_string("Scan", "-d", "", "Duration of video to process. Example -d 01:02 process 1 minutes and 2 seconds of the file. Use either -et or -d option not both.", &processing_time_str)
 
 	// Misc options
-	var debug_mode_on = flag.Bool("debug", false, "Turn on debug mode and show info about internal variables and the FFmpeg commandlines used.")
-	var use_matroska_container = flag.Bool("mkv", false, "Use matroska (mkv) as the output file wrapper format.")
-	var only_print_commands = flag.Bool("print", false, "Only print FFmpeg commands that would be used for processing, don't process any files.")
-	var show_program_version_short = flag.Bool("v", false, "Show the version of this program.")
-	var show_program_version_long = flag.Bool("version", false, "Show the version of this program.")
-	var temp_file_directory = flag.String("td", "", "Path to directory for temporary files, example_ -td PathToDir. This option directs temporary files created with 2-pass encoding and subtitle processing with the -sp switch to a separate directory. If the temp dir is a ram or a fast ssd disk then it speeds up processing with the -sp switch. Processing files with the -sp switch extracts every frame of the movie as a picture, so you need to have lots of space in the temp directory. For a FullHD movie you need to have 20 GB or more free storage. If you run multiple instances of this program simultaneously each instance processing one FullHD movie then you need 20 GB or more free storage for each movie that is processed at the same time. -sp switch extracts movie subtitle frames with FFmpeg and FFmpeg fails silently if it runs out of storage space. If this happens then some of the last subtitles won't be available when the video is compressed and this results the last available subtitle to be 'stuck' on top of video to the end of the movie.")
+	// If you want to print debug info then change debug to "true" below
+	debug_mode_on = store_options_and_help_text_bool("Misc", "-debug", false, "Turn on debug mode and show info about internal variables and the FFmpeg commandlines used.", &debug_mode_on)
+	use_matroska_container = store_options_and_help_text_bool("Misc", "-mkv", false, "Use matroska (mkv) as the output file wrapper format.", &use_matroska_container)
+	only_print_commands = store_options_and_help_text_bool("Misc", "-print", false, "Only print FFmpeg commands that would be used for processing, don't process any files.", &only_print_commands)
+	show_program_version_short = store_options_and_help_text_bool("Misc", "-v", false, "Show the version of this program.", &show_program_version_short)
+	show_program_version_long = store_options_and_help_text_bool("Misc", "-version", false, "Show the version of this program.", &show_program_version_long)
+	temp_file_directory = store_options_and_help_text_string("Misc", "-td", "", "Path to directory for temporary files, example_ -td PathToDir. This option directs temporary files created with 2-pass encoding and subtitle processing with the -sp switch to a separate directory. If the temp dir is a ram or a fast ssd disk then it speeds up processing with the -sp switch. Processing files with the -sp switch extracts every frame of the movie as a picture, so you need to have lots of space in the temp directory. For a FullHD movie you need to have 20 GB or more free storage. If you run multiple instances of this program simultaneously each instance processing one FullHD movie then you need 20 GB or more free storage for each movie that is processed at the same time. -sp switch extracts movie subtitle frames with FFmpeg and FFmpeg fails silently if it runs out of storage space. If this happens then some of the last subtitles won't be available when the video is compressed and this results the last available subtitle to be 'stuck' on top of video to the end of the movie.", &temp_file_directory)
+	help = store_options_and_help_text_bool("Misc", "-h", false, "Display help text", &help)
 
 	//////////////////////
 	// Define variables //
@@ -1329,40 +1898,11 @@ func main() {
 	///////////////////////////////
 	// Parse commandline options //
 	///////////////////////////////
-	flag.Parse()
+	input_filenames = parse_options()
 
-	// The unparsed options left on the commandline are filenames, store them in a slice.
-	for _, file_name := range flag.Args() {
-
-		inputfile_full_path,_ := filepath.Abs(file_name)
-		fileinfo, err := os.Stat(inputfile_full_path)
-
-		// Test if input files exist
-		if os.IsNotExist(err) == true {
-
-			fmt.Println()
-			fmt.Println("Error !!!!!!!")
-			fmt.Println("File: '" + inputfile_full_path + "' does not exist")
-			fmt.Println()
-
-			os.Exit(1)
-		}
-
-		// Test if name is a directory
-		if fileinfo.IsDir() == true {
-
-			fmt.Println()
-			fmt.Println("Error !!!!!!!")
-			fmt.Println(inputfile_full_path + " is not a file it is a directory.")
-			fmt.Println()
-
-			os.Exit(1)
-		}
-
-		// Add all existing input file names to a slice
-		input_filenames = append(input_filenames, inputfile_full_path)
+	if *help == true {
+		display_help_text()
 	}
-
 	/////////////////////////////////////////////////////////
 	// Test if needed executables can be found in the path //
 	/////////////////////////////////////////////////////////
