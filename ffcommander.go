@@ -88,7 +88,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.32" // This is the version of this program
+var version_number string = "2.33" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1592,14 +1592,17 @@ func parse_options() []string {
 		item_is_an_option = false
 
 		// Remove leading "-" characters from the option
-		if commandline_option[0] == '-' {
-			commandline_option = commandline_option[1:]
-			item_is_an_option = true
+		var option_as_runes []rune
+
+		for _, item := range commandline_option {
+
+			if item != rune('-') {
+				option_as_runes = append(option_as_runes, item)
+				item_is_an_option = true
+			}
 		}
 
-		if commandline_option[0] == '-' {
-			commandline_option = commandline_option[1:]
-		}
+		commandline_option = string(option_as_runes)
 
 		// This part assigns int or string value following an option to the commandline variable 
 		// After the assingment the next option is fetched from the commandline
