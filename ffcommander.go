@@ -88,7 +88,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.35" // This is the version of this program
+var version_number string = "2.37" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1466,7 +1466,7 @@ func display_help_text() {
 				}
 			}
 
-			fmt.Println(option + strings.Repeat(" ", second_paragraph_start - len(option)) + commandline_option_variables.help_text[helptext_start:helptext_end])
+			fmt.Println("-" + option + strings.Repeat(" ", second_paragraph_start - len(option)) + commandline_option_variables.help_text[helptext_start:helptext_end])
 
 			// If this was the last line, start printing the next option help text
 			if helptext_end >= len(commandline_option_variables.help_text) {
