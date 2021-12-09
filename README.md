@@ -21,7 +21,7 @@ I wrote FFcommander out of frustration to Handbrake and its limitations. FFcomma
 # What FFcommander can do for you
 Imho these things set FFcommander apart from other video processing programs I've used:
 
-- The **-sp** and **-sr** options let you burn subtitles on top of video while resizing and moving subs up or down right to the edge of the screen. This prevents subtitles ever being displayed on top of an actors face. The subtitle position at the edge of the video is automatically calculated based on video resolution.   
+- The **-sp** and **-sr** options let you burn subtitles on top of video while resizing and moving subs up or down right to the edge of the screen. This prevents subtitles ever being displayed on top of an actors face. The subtitle position at the edge of the video is automatically calculated based on video resolution. [See picture here](https://raw.githubusercontent.com/mhartzel/ffcommander/master/pictures/Options-sp_and-sr_repositions_and_resizes_subtitles-2.png)  
 
 - Cut out parts of a longer video and create a compilation of these parts (option **-sf**).
 
@@ -242,38 +242,38 @@ FFcommander source code does not have any external dependencies so building the 
 ## Display FFmpeg commands Example 1  
 - First a simple example: **ffcommander -print videofile.mkv**
 
->ffcommander version 2.37
+`ffcommander version 2.37`
 
->\################################################################################
+`################################################################################`
 
->Processing file 1/1  'videofile.mkv'
+`Processing file 1/1  'videofile.mkv'`
 
->ffmpeg_pass_1_commandline:
-ffmpeg -y -loglevel level+error -threads 8 -i videofile.mkv -filter_complex '[0:v:0]idet,yadif=0:deint=all[main_processed_video_out]' -map [main_processed_video_out] -sn -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1620k -acodec copy -map 0:a:0 -passlogfile 00-processed_files/videofile -f mp4 -pass 1 /dev/null
+`ffmpeg_pass_1_commandline:
+ffmpeg -y -loglevel level+error -threads 8 -i videofile.mkv -filter_complex '[0:v:0]idet,yadif=0:deint=all[main_processed_video_out]' -map [main_processed_video_out] -sn -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1620k -acodec copy -map 0:a:0 -passlogfile 00-processed_files/videofile -f mp4 -pass 1 /dev/null`
 
 
->ffmpeg_pass_2_commandline:
-ffmpeg -y -loglevel level+error -threads 8 -i videofile.mkv -filter_complex '[0:v:0]idet,yadif=0:deint=all[main_processed_video_out]' -map [main_processed_video_out] -sn -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1620k -acodec copy -map 0:a:0 -passlogfile 00-processed_files/videofile -f mp4 -pass 2 00-processed_files/videofile.mp4
+`ffmpeg_pass_2_commandline:
+ffmpeg -y -loglevel level+error -threads 8 -i videofile.mkv -filter_complex '[0:v:0]idet,yadif=0:deint=all[main_processed_video_out]' -map [main_processed_video_out] -sn -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1620k -acodec copy -map 0:a:0 -passlogfile 00-processed_files/videofile -f mp4 -pass 2 00-processed_files/videofile.mp4`
 
 ## Display FFmpeg commands Example 2  
 - Display FFmpeg commands FFcommander creates for "Complex processing example 1": **ffcommander -a eng -s eng -sp -sr 0.5 -ac -psd -print videofile-2.mkv**
 - This displays something like:
 
->ffcommander version 2.38
+`ffcommander version 2.38`
 
->\################################################################################
+`################################################################################`
 
->Processing file 1/1  'videofile-2.mkv'
-Finding crop values for: videofile-2.mkv   Top: 140 , Bottom: 140 , Left: 0 , Right: 0
+`Processing file 1/1  'videofile-2.mkv'`
+`Finding crop values for: videofile-2.mkv   Top: 140 , Bottom: 140 , Left: 0 , Right: 0`
 
->FFmpeg Subtitle Extract Commandline:
-ffmpeg -y -loglevel level+error -threads 16 -i videofile-2.mkv -vn -an -filter_complex [0:s:0]copy[subtitle_processing_stream] -map [subtitle_processing_stream] 00-processed_files/subtitles/videofile-2.mkv-original_subtitles/subtitle-%10d.tiff
+`FFmpeg Subtitle Extract Commandline:
+ffmpeg -y -loglevel level+error -threads 16 -i videofile-2.mkv -vn -an -filter_complex [0:s:0]copy[subtitle_processing_stream] -map [subtitle_processing_stream] 00-processed_files/subtitles/videofile-2.mkv-original_subtitles/subtitle-%10d.tiff`
 
->ffmpeg_pass_1_commandline:
-ffmpeg -y -loglevel level+error -threads 16 -i videofile-2.mkv -thread_queue_size 4096 -f image2 -i 00-processed_files/subtitles/videofile-2.mkv-fixed_subtitles/subtitle-%10d.tiff -filter_complex '[1:v:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=0:main_h-overlay_h+0,split=2[main_processed_video_out][sd_input],[sd_input]scale=1024:-2[sd_scaled_out]' -map [main_processed_video_out] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 6000k -acodec copy -map 0:a:0 -passlogfile 00-processed_files/videofile-2 -f mp4 -pass 1 /dev/null -map [sd_scaled_out] -sws_flags lanczos -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1620k -acodec copy -map 0:a:0 -passlogfile 00-processed_files/videofile-2-sd -f mp4 -pass 1 /dev/null
+`ffmpeg_pass_1_commandline:
+ffmpeg -y -loglevel level+error -threads 16 -i videofile-2.mkv -thread_queue_size 4096 -f image2 -i 00-processed_files/subtitles/videofile-2.mkv-fixed_subtitles/subtitle-%10d.tiff -filter_complex '[1:v:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=0:main_h-overlay_h+0,split=2[main_processed_video_out][sd_input],[sd_input]scale=1024:-2[sd_scaled_out]' -map [main_processed_video_out] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 6000k -acodec copy -map 0:a:0 -passlogfile 00-processed_files/videofile-2 -f mp4 -pass 1 /dev/null -map [sd_scaled_out] -sws_flags lanczos -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1620k -acodec copy -map 0:a:0 -passlogfile 00-processed_files/videofile-2-sd -f mp4 -pass 1 /dev/null`
 
->ffmpeg_pass_2_commandline:
-ffmpeg -y -loglevel level+error -threads 16 -i videofile-2.mkv -thread_queue_size 4096 -f image2 -i 00-processed_files/subtitles/videofile-2.mkv-fixed_subtitles/subtitle-%10d.tiff -filter_complex '[1:v:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=0:main_h-overlay_h+0,split=2[main_processed_video_out][sd_input],[sd_input]scale=1024:-2[sd_scaled_out]' -map [main_processed_video_out] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 6000k -acodec copy -map 0:a:0 -passlogfile 00-processed_files/videofile-2 -f mp4 -pass 2 00-processed_files/videofile-2.mp4 -map [sd_scaled_out] -sws_flags lanczos -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1620k -acodec copy -map 0:a:0 -passlogfile 00-processed_files/videofile-2-sd -f mp4 -pass 2 00-processed_files/sd/videofile-2.mp4
+`ffmpeg_pass_2_commandline:
+ffmpeg -y -loglevel level+error -threads 16 -i videofile-2.mkv -thread_queue_size 4096 -f image2 -i 00-processed_files/subtitles/videofile-2.mkv-fixed_subtitles/subtitle-%10d.tiff -filter_complex '[1:v:0]copy[subtitle_processing_stream];[0:v:0]idet,yadif=0:deint=all,crop=1920:800:0:140[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=0:main_h-overlay_h+0,split=2[main_processed_video_out][sd_input],[sd_input]scale=1024:-2[sd_scaled_out]' -map [main_processed_video_out] -c:v libx264 -preset medium -profile:v high -level 4.1 -b:v 6000k -acodec copy -map 0:a:0 -passlogfile 00-processed_files/videofile-2 -f mp4 -pass 2 00-processed_files/videofile-2.mp4 -map [sd_scaled_out] -sws_flags lanczos -c:v libx264 -preset medium -profile:v main -level 4.0 -b:v 1620k -acodec copy -map 0:a:0 -passlogfile 00-processed_files/videofile-2-sd -f mp4 -pass 2 00-processed_files/sd/videofile-2.mp4`
 
 - You can modify and run these commands to learn how FFmpeg commandline options work.
 
