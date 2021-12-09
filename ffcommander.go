@@ -88,7 +88,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.38" // This is the version of this program
+var version_number string = "2.39" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1839,7 +1839,7 @@ func main() {
 	no_deinterlace_bool = store_options_and_help_text_bool("Video", "nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.", &no_deinterlace_bool)
 	parallel_sd = store_options_and_help_text_bool("Video", "psd", false, "Parallel SD. Create SD version in parallel to HD processing. This creates an additional version of the video downconverted to SD resolution. The SD file is stored in directory: sd", &parallel_sd)
 	user_sd_bitrate = store_options_and_help_text_string("Video", "sbr", "", "Override parallel sd videoprocessing automatic bitrate calculation and define bitrate manually. SD - video is stored in directory 'sd'", &user_sd_bitrate)
-	split_times = store_options_and_help_text_string("Video", "sf", "", "Split out parts of the file. Give colon separated start and stop times for the parts of the file to use, for example: -sf 0,10:00,01:35:12.800,01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.", &split_times)
+	split_times = store_options_and_help_text_string("Video", "sf", "", "Split out parts of the file. Give start and stop times for the parts of the file to use. Use either commas and slashes or only commas to separate time values. Example: -sf 0-10:00,01:35:12.800-01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.", &split_times)
 	scale_to_sd = store_options_and_help_text_bool("Video", "ssd", false, "Scale to SD. Scale video down to SD resolution. Calculates resolution automatically. Video is stored in directory 'sd'", &scale_to_sd)
 	burn_timecode_bool = store_options_and_help_text_bool("Video", "tc", false, "Burn timecode on top of the video. Timecode can be used to look for exact edit points for the file split feature", &burn_timecode_bool)
 
