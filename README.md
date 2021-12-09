@@ -143,9 +143,31 @@ FFcommander source code does not have any external dependencies so building the 
 
 **-td** Path to directory for temporary files, example_ -td PathToDir. This option directs temporary files created with 2-pass encoding and subtitle processing with the -sp switch to a separate directory. If the temp dir is a ram or a fast ssd disk then it speeds up processing with the -sp switch. Processing files with the -sp switch extracts every frame of the movie as a picture, so you need to have lots of space in the temp directory. For a FullHD movie you need to have 20 GB or more free storage. If you run multiple instances of this program simultaneously each instance processing one FullHD movie then you need 20 GB or more free storage for each movie that is processed at the same time. -sp switch extracts movie subtitle frames with FFmpeg and FFmpeg fails silently if it runs out of storage space. If this happens then some of the last subtitles won't be available when the video is compressed and this results the last available subtitle to be 'stuck' on top of video to the end of the movie.  
 
-**-h** Display help text.
+**-h** or **-help** Display help text.
 
 # Examples
+## Scan files to find out available stream languages
+- The command: **ffcommander -scan title_t00.mkv** prints something like:  
+
+>ffcommander version 2.37  
+
+>File name 'title_t00.mkv'  
+>\--------------------------------------------------------------------------------------  
+>Video width: 720, height: 576, codec: mpeg2video, color subsampling: yuv420p, color space: unknown, fps: 25.000, average fps: 25.000  
+
+>Audio stream number: 0, language: eng, for visually impared: 0, number of channels: 2, audio codec: ac3  
+
+>Subtitle stream number: 0, language: eng, for hearing impared: 0, codec name: dvd_subtitle  
+>Subtitle stream number: 1, language: cze, for hearing impared: 0, codec name: dvd_subtitle  
+>Subtitle stream number: 2, language: dan, for hearing impared: 0, codec name: dvd_subtitle  
+>Subtitle stream number: 3, language: dut, for hearing impared: 0, codec name: dvd_subtitle  
+>Subtitle stream number: 4, language: fin, for hearing impared: 0, codec name: dvd_subtitle  
+>Subtitle stream number: 5, language: nor, for hearing impared: 0, codec name: dvd_subtitle  
+>Subtitle stream number: 6, language: pol, for hearing impared: 0, codec name: dvd_subtitle  
+>Subtitle stream number: 7, language: swe, for hearing impared: 0, codec name: dvd_subtitle  
+>Subtitle stream number: 8, language: eng, for hearing impared: 0, codec name: dvd_subtitle  
+
+
 ### Burn DVD, Bluray or DVB subtitle on top of video
 - Display information about video files to find out if they can all be processed in one go: **ffcommander -scan videofiles\*** Sample display below for one file.
 
@@ -236,7 +258,7 @@ FFcommander started as a shell script to automate creating these complex command
 All this means that FFcommander still is my personal project and I might not accept any feature requests for it. Since FFcommander is released under GPL 3 you are welcome to make your own modifications or a fork of it.
 
 # Bugs
-There probably are some. There is a plethora on commandline options and I have not been able to test each in combination with each other. FIXME minne ilmoitetaan bugit ?
+There probably are some. FIXME minne ilmoitetaan bugit ?
 
 # Author and copyright
 (C) 2018 Mikael Hartzell, Espoo, Finland.  
@@ -244,3 +266,9 @@ This program is distributed under the GNU General Public License version 3 (GPLv
 
 # See Also
 To find my other work visit: https://github.com/mhartzel There you can find FreeLCS that lets you automatically adjust audio loudness according to EBU R128 and my scripts to setup Vim as my C, C++, Go and Python3 development environment (IDE).
+
+# FIXME
+Subtitlejen asemointi on peräisin putkinäyttöjen ajalta. Näyttö ei pystynyt näyttämään 100% kuvasta ja siks subtitlet sijoitettiin keskemmälle kuvaa safety zonelle, joka varmasti näkyy joka töllöstä. Nykyään näytöt on isoja ja pystyvät näyttämään 100% kuvasta, joten subtitlet voi olla paljon pienempiä ja ne voi sijoittaa aivan kuvan laitaan pois häiritsemästä.
+
+mpv on kätevä työkalu videota leikatessa, kerro miten sen saa näyttämään millisekunnit.
+

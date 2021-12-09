@@ -88,7 +88,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.37" // This is the version of this program
+var version_number string = "2.38" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1396,10 +1396,11 @@ func store_options_and_help_text_string(category string, option string, value st
 
 func display_help_text() {
 
-	// Prepare text formatting
+	// Get terminal window dimensions
 	value_slice_int := get_terminal_window_dimensions()
-	terminal_width_int := value_slice_int[0]
-	// terminal_height_int := value_slice_int[1]
+	// Don't print at the last character on the line because terminal will then automatically insert a line feed messing our print output.
+	terminal_width_int := value_slice_int[0] - 1
+	// terminal_height_int := value_slice_int[1] // We don't use terminal height on anything at this point
 
 	var second_paragraph_start, helptext_start, helptext_end int
 	var textline string
@@ -1481,7 +1482,7 @@ func display_help_text() {
 
 				for {
 					helptext_start = helptext_end
-					helptext_end = helptext_start + terminal_width_int - second_paragraph_start - 1
+					helptext_end = helptext_start + terminal_width_int - second_paragraph_start
 
 					if helptext_end > len(commandline_option_variables.help_text) {
 						helptext_end = len(commandline_option_variables.help_text)
@@ -1510,7 +1511,7 @@ func display_help_text() {
 						}
 					}
 
-					fmt.Println(strings.Repeat(" ", second_paragraph_start - 1), commandline_option_variables.help_text[helptext_start:helptext_end])
+					fmt.Println(strings.Repeat(" ", second_paragraph_start), commandline_option_variables.help_text[helptext_start:helptext_end])
 
 					// If this was the last line, start printing the next option help text
 					if helptext_end >= len(commandline_option_variables.help_text) {
@@ -1875,6 +1876,7 @@ func main() {
 	show_program_version_long = store_options_and_help_text_bool("Misc", "version", false, "Show the version of this program.", &show_program_version_long)
 	temp_file_directory = store_options_and_help_text_string("Misc", "td", "", "Path to directory for temporary files, example_ -td PathToDir. This option directs temporary files created with 2-pass encoding and subtitle processing with the -sp switch to a separate directory. If the temp dir is a ram or a fast ssd disk then it speeds up processing with the -sp switch. Processing files with the -sp switch extracts every frame of the movie as a picture, so you need to have lots of space in the temp directory. For a FullHD movie you need to have 20 GB or more free storage. If you run multiple instances of this program simultaneously each instance processing one FullHD movie then you need 20 GB or more free storage for each movie that is processed at the same time. -sp switch extracts movie subtitle frames with FFmpeg and FFmpeg fails silently if it runs out of storage space. If this happens then some of the last subtitles won't be available when the video is compressed and this results the last available subtitle to be 'stuck' on top of video to the end of the movie.", &temp_file_directory)
 	help = store_options_and_help_text_bool("Misc", "h", false, "Display help text", &help)
+	help = store_options_and_help_text_bool("Misc", "help", false, "Display help text", &help)
 
 	//////////////////////
 	// Define variables //
@@ -4692,7 +4694,10 @@ func main() {
 			}
 
 			pass_1_elapsed_time = time.Since(pass_1_start_time)
-			fmt.Printf("took %s", pass_1_elapsed_time.Round(time.Millisecond))
+
+			if *only_print_commands == false {
+				fmt.Printf("took %s", pass_1_elapsed_time.Round(time.Millisecond))
+			}
 			fmt.Println()
 
 			// Add pass 2 messages to processing log.
