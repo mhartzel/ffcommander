@@ -5,6 +5,9 @@
 # Name
 ffcommander - An easy frontend to FFmpeg and Imagemagick to automatically process video and manipulate subtitles. FFcommander supports all video formats FFmpeg recognizes including: DVD and Bluray rips (mkv), DVB files, etc.
 
+# Supported operating systems
+Linux.
+
 # Synopsis
 ffcommander \[ options ] \[ file names ]  
 The output files are places in directory: **00-processed_files**
