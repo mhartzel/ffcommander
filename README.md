@@ -197,7 +197,7 @@ FFcommander source code does not have any external dependencies so building the 
 - **-sp** checks if the subtitle is above or below the center of the screen and moves the subtitle in the same direction at the edge of the video. Distance from the edge depends on video resolution.
 - **-sr 0.7** resizes the subtitle to 70% of the original size. -sr 1.2 would resize subs to 120 % of the original size.
 - **-st 05:10** start processing at 5min 10 seconds, **-et 05:40** end processing at 5 mins 40 secs, **-f** enables 1-Pass compression that is twice as fast as 2-pass but video quality is worse.
-- Play the resulting file to see if the subtitle is the right size. Adjust the number after -sr until you've found the correct size and then process the whole file: **ffcommander -sp -sr 0.65 videofile.mkv**
+- Play the resulting file to see if the subtitle is the right size. Adjust the number after -sr until you've found the correct size and then process the whole file: **ffcommander -s eng -sp -sr 0.65 videofile.mkv**
 
 ### Mux multiple DVD, DVB or Bluray subtitles in the video file
 - Having multiple (bitmap) subtitles in a file lets you select one when you play the video. Example: **ffcommander -sm eng,fra,fin videofile(s)** This muxes English, French and Finnish subtiles into the file(s).
@@ -226,18 +226,18 @@ FFcommander source code does not have any external dependencies so building the 
 - This means that the video was probably shot using 24 frames / second and was later converted to 29.970 fps to be compatible with NTSC televion refresh rate. The conversion was done duplicating fields every now and then and this process needs to be reversed for the file to play smoothly on modern TV's.
 - Use the -it option to remove extra fields and return the video to the original 24 (or 23.976) frame rate: **ffcommander -it videofiles**
 
-### Define video bitrate manually and recompress audio to aac
-- **ffcommander -nd -mbr 2500 -aac videofiles** This selects 2500 kbps video bitrate.  
+### Disable deinterlace, define video bitrate manually and recompress audio to aac
+- **ffcommander -nd -mbr 2500k -aac videofiles** This selects 2500 kbps video bitrate.  
 
 ## Use constant quality video compression and recompress audio to aac
-- **ffcommander -nd -crf -aac videofiles** This uses constant quality 18 for the video compression. Constant quality compression is faster than 2-pass compression nut the file size will be bigger. Also imho 2-pass produces slightly better quality that CRF.  
+- **ffcommander -crf -aac videofiles** This uses constant quality 18 for the video compression. Constant quality compression is faster than 2-pass compression nut the file size will be bigger. Also imho 2-pass produces slightly better quality that CRF.  
 
 ## Complex processing example 1
 - You can do many types of processing at the same time:
 - Use English audio (**-a eng**)
 - Burn English subtitle on top of video (**-s eng**). 
 - Reposition subtitles at top and bottom edge of screen (**-sp**)
-- Resize subtitle to be 50% of the original size (**-sr 0.5**).
+- Resize subtitle to 50% of the original size (**-sr 0.5**).
 - Remove black bars using autocrop (**-ac**)
 - And create SD - versions of the videos simultaneously with the HD one (**-psd**).
 - **ffcommander -a eng -s eng -sp -sr 0.5 -ac -psd videofiles\***
@@ -286,7 +286,7 @@ Sane exit values are still on my to do list.
 # Why this program exists
 I grew tired of using Handbrake because of it's limitations and quirks. I've been using FFmpeg in my other projects (FreeLCS) and have become familiar with its immense power. There aren't many things you can't do with it. But the commandline options become very complicated very fast when doing complex things with it.  
 
-FFcommander started as a shell script to automate creating these complex commandlines for FFmpeg. After getting tired of Bash's strange syntax I rewrote the program in Go and added features whenever I needed some new type of processing. Now a couple of years later I find that FFcommander is a very capable program and I never need anything else for processing my videos. At this point I think the program is probably useful to other people as well and ready to publish.  
+FFcommander started as a shell script to automate creating these complex commandlines for FFmpeg. After getting tired of Bash's strange syntax I rewrote the program in Go and added features whenever I needed some new type of processing. Now a couple of years later I find that FFcommander is a very capable program and I never need anything else for processing my videos. At this point I think the program is probably useful to other people as well and ready to be published.  
 
 FFcommander still is my personal project and I might not accept feature requests for it. Since FFcommander is released under GPL 3 you are welcome to make your own modifications or a fork of it.
 
