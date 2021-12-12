@@ -1,9 +1,9 @@
-% FFCOMMANDER(1) ffcommander 2.39
+% FFCOMMANDER(1) ffcommander 2.40
 % Mikael Hartzell (C) 2018
 % 2021
 
 # Name
-ffcommander - An easy frontend to FFmpeg and Imagemagick to automatically process video and manipulate subtitles. FFcommander supports all video formats FFmpeg recognizes including: DVD and Bluray rips (mkv), DVB files, etc.
+FFcommander is an easy frontend to FFmpeg and Imagemagick to automatically compress videos to H.264 - format and manipulate DVD, Bluray and DVB subtitles. FFcommander supports all video formats FFmpeg recognizes including: DVD and Bluray rips (mkv), DVB files, etc.
 
 # Supported operating systems
 Linux.
@@ -22,8 +22,6 @@ I wrote FFcommander out of frustration to Handbrake and its limitations. FFcomma
 - Always copy original audio to the processed video to keep audio quality at its best. You can also recompress audio and let FFcommander automatically calculate bitrate based on the number of channels (**-aac** or **-ac3** or **-opus**).  
 
 # What FFcommander can do for you
-Imho these things set FFcommander apart from other video processing programs I've used:
-
 - The **-sp** and **-sr** options let you burn subtitles on top of video while resizing and moving subs up or down right to the edge of the screen. This prevents subtitles ever being displayed on top of an actors face. The subtitle position at the edge of the video is automatically calculated based on video resolution. [See picture here](https://raw.githubusercontent.com/mhartzel/ffcommander/master/pictures/Options-sp_and-sr_repositions_and_resizes_subtitles-2.png)  
 
 - Cut out parts of a longer video and create a compilation of these parts (option **-sf**).
@@ -79,7 +77,7 @@ FFcommander source code does not have any external dependencies so building the 
 
 **-sbr** Override parallel sd videoprocessing automatic bitrate calculation and define bitrate manually. SD - video is stored in directory 'sd'
 
-**-sf** Split out parts of the file. Give start and stop times for the parts of the file to use. Use either commas and slashes or only commas to separate time values. Example: **-sf 0-10:00,01:35:12.800-01:52:14** defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.
+**-sf** Split out parts of the file. Give start and stop times for the parts of the file to use. Use either commas and slashes or only commas to separate time values. Example: **-sf 0-10:00,01:35:12.800-01:52:14** defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined. Warning. If your cut point is in the middle of a subtitle (even when muxing subtitles) you may get a video glitch.
 
 **-ssd** Scale to SD. Scale video down to SD resolution. Calculates resolution automatically. Video is stored in directory 'sd'
 

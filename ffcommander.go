@@ -88,7 +88,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.39" // This is the version of this program
+var version_number string = "2.40" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -2689,7 +2689,7 @@ func main() {
 		////////////////////////////////////////////////////////////////////////////////////////////////////
 		if audio_stream_number_int, atoi_error = strconv.Atoi(*audio_stream_number_str) ; atoi_error != nil {
 
-			// If user did not give us a subtitle number use 0 as the default
+			// If user did not give us a audio number use 0 as the default
 			audio_stream_number_int = 0
 		}
 
@@ -3212,7 +3212,7 @@ func main() {
 		if split_video == true {
 
 			file_split_start_time = time.Now()
-			counter_2 := 0
+			file_index_counter := 0
 			list_of_splitfiles = nil
 
 			// Open split_infofile for appending info about file splits
@@ -3238,11 +3238,16 @@ func main() {
 			log_messages_str_slice = append(log_messages_str_slice, "Creating splitfiles:")
 			log_messages_str_slice = append(log_messages_str_slice, "--------------------")
 
+			if subtitle_burn_bool == true || subtitle_mux_bool == true {
+				fmt.Println("\033[7mWarning: If your cut point is in the middle of a subtitle (even when muxing subtitles) you may get a video glitch\033[0m")
+				log_messages_str_slice = append(log_messages_str_slice,"Warning. If your cut point is in the middle of a subtitle (even when muxing subtitles) you may get a video glitch.\n")
+			}
+
 			audio_codec = "flac"
 
 			for counter := 0; counter < len(cut_list_seconds_str_slice); counter = counter + 2 {
-				counter_2++
-				splitfile_name := strings.TrimSuffix(strings.Replace(inputfile_name, "'", "", -1), input_filename_extension) + "-splitfile-" + strconv.Itoa(counter_2) + output_matroska_filename_extension
+				file_index_counter++
+				splitfile_name := strings.TrimSuffix(strings.Replace(inputfile_name, "'", "", -1), input_filename_extension) + "-splitfile-" + strconv.Itoa(file_index_counter) + output_matroska_filename_extension
 				split_file_path := filepath.Join(inputfile_path, output_directory_name, splitfile_name)
 				list_of_splitfiles = append(list_of_splitfiles, split_file_path)
 
@@ -3255,11 +3260,28 @@ func main() {
 					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-t", cut_list_seconds_str_slice[counter+1])
 				}
 
-				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-vcodec", "utvideo", "-acodec", "flac", "-scodec", "copy", "-map", "0", split_file_path)
+				if subtitle_burn_bool == true {
+					// Subtitle burn
+					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-vcodec", "utvideo", "-acodec", "flac", "-scodec", "copy", "-map", "0:v:0", "-map", "0:a:" + strconv.Itoa(audio_stream_number_int), "-map", "0:s:" + strconv.Itoa(subtitle_burn_number), split_file_path)
 
+				} else if subtitle_mux_bool == true {
+					// Subtitle mux
+					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-vcodec", "utvideo", "-acodec", "flac", "-map", "0:v:0", "-map", "0:a:" + strconv.Itoa(audio_stream_number_int), "-scodec", "copy")
+
+					for _, subtitle_mux_number := range user_subtitle_mux_numbers_slice {
+						ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-map", "0:s:"+ subtitle_mux_number)
+					}
+
+					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, split_file_path)
+
+				} else {
+					// No subtitle
+					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-sn", "-vcodec", "utvideo", "-acodec", "flac", "-map", "0:v:0", "-map", "0:a:" + strconv.Itoa(audio_stream_number_int), split_file_path)
+				}
 
 				if *only_print_commands == false {
 					fmt.Println("Creating splitfile: " + splitfile_name)
+
 				}
 
 				log_messages_str_slice = append(log_messages_str_slice, strings.Join(ffmpeg_file_split_commandline, " "))
@@ -3303,6 +3325,24 @@ func main() {
 					os.Exit(1)
 				}
 
+			}
+
+			audio_stream_number_int = 0
+
+			if subtitle_burn_bool == true {
+				// Audio and subtitle stream numbers will now change to 0 in the splitfiles as all other streams have been left out.
+				subtitle_burn_number = 0
+			}
+
+			if subtitle_mux_bool == true {
+				// Muxed subtitles will now be numbered; 0, 1, 2, 3... in the splitfiles. Store the new order in the slice.
+				number_of_subtitles := len(user_subtitle_mux_numbers_slice)
+				user_subtitle_mux_numbers_slice = nil
+
+				for counter := 0 ; counter < number_of_subtitles ; counter++ {
+					user_subtitle_mux_numbers_slice = append(user_subtitle_mux_numbers_slice, strconv.Itoa(counter))
+
+				}
 			}
 
 			file_split_elapsed_time = time.Since(file_split_start_time)
