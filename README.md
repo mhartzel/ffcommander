@@ -1,4 +1,4 @@
-% FFCOMMANDER(1) ffcommander 2.40
+% FFCOMMANDER(1) ffcommander 2.41
 % Mikael Hartzell (C) 2018
 % 2021
 
@@ -77,7 +77,7 @@ FFcommander source code does not have any external dependencies so building the 
 
 **-sbr** Override parallel sd videoprocessing automatic bitrate calculation and define bitrate manually. SD - video is stored in directory 'sd'
 
-**-sf** Split out parts of the file. Give start and stop times for the parts of the file to use. Use either commas and slashes or only commas to separate time values. Example: **-sf 0-10:00,01:35:12.800-01:52:14** defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined. Warning. If your cut point is in the middle of a subtitle (even when muxing subtitles) you may get a video glitch.
+**-sf** Split out parts of the file. Give start and stop times for the parts of the file to use. Use either commas and slashes or only commas to separate time values. Example: **-sf 0-10:00,01:35:12.800-01:52:14** defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined. Warning: If your cut point is in the middle of a subtitle (even when muxing subtitles) you may get a video glitch.
 
 **-ssd** Scale to SD. Scale video down to SD resolution. Calculates resolution automatically. Video is stored in directory 'sd'
 
@@ -110,7 +110,7 @@ FFcommander source code does not have any external dependencies so building the 
 
 **-sn** Burn subtitle with this stream number on top of video. Example: **-sn 1**. Use subtitle number 1 from the source file. Only use option **-sn** or **-s** not both.  
 
-**-so** Subtitle `offset`, **-so 55** (move subtitle 55 pixels down), **-so -55** (move subtitle 55 pixels up). This option affects only subtitle burned on top of video.  
+**-so** Subtitle `offset`, **-so 55** (move subtitle 55 pixels down), **-so -55** (move subtitle 55 pixels up). This option affects only subtitle burned on top of video. Also check the -sp option that moves subtitles automatically near the edge of the screen.  
 
 **-sm** Mux subtitles with these language codes into the target file. Example: **-sm eng** or **-sm eng,fra,fin**. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the **-mkv** option.  
 
@@ -118,9 +118,9 @@ FFcommander source code does not have any external dependencies so building the 
 
 **-palette** Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: **-palette f,0,f**  This option affects only subtitle burned on top of video.  
 
-**-sp** Subtile Split. Have you ever been annoyed when a subtitle is displayed on top of a actors face ? With this option you can automatically move subtitles further up and down at the edge of the screen. Distance from the screen edge will be picture height divided by 100 and rounded down to nearest integer. Minimum distance is 5 pixels and max 20 pixels. Subtitles will be automatically centered horizontally. You can also resize subtitles with the **-sr** option when usind Subtitle Split. The **-sr** option requires installing ImageMacick. The **-sp** option affects only subtitles burned on top of video.
+**-sp** Subtile Split. Subtitles on DVD's and Blurays often use an unnecessary large font and are positioned too far from the edge of the screen covering too much of the picture. Sometimes subtitles are also displayed on the upper part of the screen and may even cover the actors face. [See picture here](https://raw.githubusercontent.com/mhartzel/ffcommander/master/pictures/Options-sp_and-sr_repositions_and_resizes_subtitles-2.png). The -sp option detects whether the subtitle is on top or bottom half of the screen and then moves it towards the edge of the screen so that it covers less of the picture area. Distance from the screen edge will be picture height divided by 100 and rounded down to nearest integer. Minimum distance is 5 pixels and max 20 pixels. Subtitles will be automatically centered horizontally. You can also resize the subtitles with the **-sr** option when using Subtitle Split. The **-sp** option affects only subtitles burned on top of video.  
 
-**-sr** Subtitle Resize. Values less than 1 makes subtitles smaller, values bigger than 1 makes subtitle larger. This option can only be user with the **-sp** option. Example: make subtitle 25% smaller: **-sr 0.75**   make subtitle 50% smaller: **-sr 0.50** make subtitle 75% larger: **-sr 1.75**. This option affects only subtitle burned on top of video.  
+**-sr** Subtitle Resize. Values less than 1 makes subtitles smaller, values bigger than 1 makes subtitles larger. This option can only be used with the **-sp** option. Example: make subtitle 25% smaller: **-sr 0.75**   make subtitle 50% smaller: **-sr 0.50** make subtitle 75% larger: **-sr 1.75**. This option affects only subtitle burned on top of video.  
 
 # Scan options                                                        
 **-f** This is the same as using options **-fs** and **-fe** at the same time.  
@@ -129,7 +129,7 @@ FFcommander source code does not have any external dependencies so building the 
 
 **-fs** Fast seek mode. When using the **-fs** option with **-st** do not decode video before the point we are trying to locate, but instead try to jump directly to it. This search method might or might not be accurate depending on the file format.  
 
-**-scan** Only scan input file and print video and audio stream info.  
+**-scan** Only scan input files and print video, audio and subtitle stream info.  
 
 **-st** Start time. Start video processing from this timecode. Example **-st 30:00** starts processing from 30 minutes from the start of the file.  
 
