@@ -88,7 +88,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.41" // This is the version of this program
+var version_number string = "2.42" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -3304,24 +3304,39 @@ func main() {
 					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-t", cut_list_seconds_str_slice[counter+1])
 				}
 
+				// Put video and subtitle options on FFmpeg commandline
 				if subtitle_burn_bool == true {
 					// Subtitle burn
-					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-vcodec", "utvideo", "-acodec", "flac", "-scodec", "copy", "-map", "0:v:0", "-map", "0:a:" + strconv.Itoa(audio_stream_number_int), "-map", "0:s:" + strconv.Itoa(subtitle_burn_number), split_file_path)
+					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-vcodec", "utvideo", "-map", "0:v:0", "-scodec", "copy", "-map", "0:s:" + strconv.Itoa(subtitle_burn_number))
 
 				} else if subtitle_mux_bool == true {
 					// Subtitle mux
-					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-vcodec", "utvideo", "-acodec", "flac", "-map", "0:v:0", "-map", "0:a:" + strconv.Itoa(audio_stream_number_int), "-scodec", "copy")
+					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-vcodec", "utvideo", "-map", "0:v:0", "-scodec", "copy")
 
 					for _, subtitle_mux_number := range user_subtitle_mux_numbers_slice {
 						ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-map", "0:s:"+ subtitle_mux_number)
 					}
 
-					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, split_file_path)
-
 				} else {
 					// No subtitle
-					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-sn", "-vcodec", "utvideo", "-acodec", "flac", "-map", "0:v:0", "-map", "0:a:" + strconv.Itoa(audio_stream_number_int), split_file_path)
+					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, "-vcodec", "utvideo", "-map", "0:v:0", "-sn")
 				}
+
+				// Put audio options on FFmpeg commandline
+				var audio_options []string
+
+				if *no_audio == true {
+					audio_options = append(audio_options, "-an")
+				} else {
+					audio_options = append(audio_options, "-acodec", "flac", "-map", "0:a:" + strconv.Itoa(audio_stream_number_int))
+				}
+
+				for _, item := range audio_options {
+					ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, item)
+				}
+
+				// Put target file path on FFmpeg commandline
+				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, split_file_path)
 
 				if *only_print_commands == false {
 					fmt.Println("Creating splitfile: " + splitfile_name)
@@ -4491,8 +4506,10 @@ func main() {
 				// Add audio compression options to ffmpeg commandline
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, audio_compression_options...)
 
-				// Add audiomapping options on the commanline
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(audio_stream_number_int))
+				if *no_audio == false {
+					// Add audiomapping options on the commanline
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(audio_stream_number_int))
+				}
 			}
 
 			// Add color subsampling options to SD commandline if needed
@@ -4502,6 +4519,7 @@ func main() {
 
 			// Add audio compression options to SD commandline
 			if *parallel_sd == true || *scale_to_sd == true {
+
 				if *force_lossless_bool == true {
 
 					// If main video audio is lossless use aac compression for the SD video
@@ -4514,7 +4532,10 @@ func main() {
 
 			// Add audiomapping options on the SD commanline
 			if *parallel_sd == true || *scale_to_sd == true {
-				sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(audio_stream_number_int))
+
+				if *no_audio == false {
+					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(audio_stream_number_int))
+				}
 			}
 
 			if *scale_to_sd == false {
