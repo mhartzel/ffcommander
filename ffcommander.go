@@ -88,7 +88,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.42" // This is the version of this program
+var version_number string = "2.43" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -96,16 +96,13 @@ var subtitle_stream_info_map = make(map[string]string)
 var wrapper_info_map = make(map[string]string)
 var helptext_categories_map = make(map[string][]string) // The key is commandline option category (video, audio, subtitle) and the slice contains commandline options that belong to this category
 var commandline_option_map = make(map[string]*commandline_struct) // The key is the commandline option and the struct contains all variables and helptext belonging to that option
-var debug_mode_on *bool
+var debug_option *bool
 
 type commandline_struct struct {
-	variable_type string
-	pointer_to_int_variable **int
-	pointer_to_bool_variable **bool
-	pointer_to_string_variable **string
-	int_value int
-	bool_value bool
-	string_value string
+	is_turned_on bool
+	option_type string
+	user_int int
+	user_string string
 	help_text string
 }
 
@@ -569,7 +566,7 @@ func convert_seconds_to_timecode(item string) string {
 	return timecode
 }
 
-func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []string) {
+func process_split_times(split_times string, debug_option bool) ([]string, []string) {
 
 	var cut_list_string_slice, cut_list_seconds_str_slice, cut_list_positions_and_durations_seconds, cut_positions_after_processing_seconds, cut_positions_as_timecodes []string
 	var seconds_total_str, error_happened string
@@ -579,7 +576,7 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 	// The time values have characters 0-9 and : and . in them. Recognize these characters as time values.
 	// This lets the user use any other character to separate time values from each other,
 	// excluding characters that the shell tries to interpret: ()#!<>*/
-	for _, item := range *split_times {
+	for _, item := range split_times {
 
 		switch item {
 		case rune('0'),rune('1'),rune('2'),rune('3'),rune('4'),rune('5'),rune('6'),rune('7'),rune('8'),rune('9'),rune(':'),rune('.'):
@@ -626,7 +623,7 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 
 	var previous_item string
 
-	if *debug_mode_on == true {
+	if debug_option == true {
 		fmt.Println("")
 		fmt.Println("process_split_times: cut_list_seconds_str_slice:", cut_list_seconds_str_slice)
 	}
@@ -643,7 +640,7 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 			temp_str_slice = append(temp_str_slice, previous_item, current_item)
 			temp_2_str_slice := convert_cut_positions_to_timecode(temp_str_slice)
 
-			if *debug_mode_on == true {
+			if debug_option == true {
 				fmt.Println("process_split_times: temp_str_slice:", temp_str_slice, "process_split_times: temp_2_str_slice:", temp_2_str_slice)
 			}
 
@@ -726,8 +723,8 @@ func process_split_times(split_times *string, debug_mode_on *bool) ([]string, []
 	// Convert seconds to timecode values
 	cut_positions_as_timecodes = convert_cut_positions_to_timecode(cut_positions_after_processing_seconds)
 
-	if *debug_mode_on == true {
-		fmt.Println("process_split_times: split_times:", *split_times)
+	if debug_option == true {
+		fmt.Println("process_split_times: split_times:", split_times)
 		fmt.Println("process_split_times: cut_list_positions_and_durations_seconds:", cut_list_positions_and_durations_seconds)
 		fmt.Println("process_split_times: cut_positions_after_processing_seconds:", cut_positions_after_processing_seconds)
 		fmt.Println("process_split_times: cut_positions_as_timecodes:", cut_positions_as_timecodes)
@@ -1229,7 +1226,7 @@ func remove_duplicate_subtitle_images (original_subtitles_absolute_path string, 
 	return files_remaining
 }
 
-func store_options_and_help_text_int(category string, option string, value int, help_text string, pointer_to_variable **int) *int {
+func store_options_and_help_text_int(category string, option string, value int, help_text string) *commandline_struct {
 
 	// This function does what flag.Int does in go and extends it a little
 	// The function stores category, option name, variables and help text for a commandline option.
@@ -1251,11 +1248,10 @@ func store_options_and_help_text_int(category string, option string, value int, 
 		os.Exit(0)
 	}
 
-	commandline_option_variables := new(commandline_struct)
-	commandline_option_variables.variable_type = "int"
-	commandline_option_variables.pointer_to_int_variable = pointer_to_variable
-	commandline_option_variables.int_value = value
-	commandline_option_variables.help_text = help_text
+	commandline_option_struct := new(commandline_struct)
+	commandline_option_struct.option_type = "int"
+	commandline_option_struct.user_int = value
+	commandline_option_struct.help_text = help_text
 
 	// Store options for each category
 	if len(helptext_categories_map) == 0 {
@@ -1279,12 +1275,12 @@ func store_options_and_help_text_int(category string, option string, value int, 
 	}
 
 	// Store helptext for the option
-	commandline_option_map[option] = commandline_option_variables
+	commandline_option_map[option] = commandline_option_struct
 
-	return &commandline_option_variables.int_value
+	return commandline_option_struct
 }
 
-func store_options_and_help_text_bool(category string, option string, value bool, help_text string, pointer_to_variable **bool) *bool {
+func store_options_and_help_text_bool(category string, option string, help_text string) *commandline_struct {
 
 	// This function does what flag.Bool does in go and extends it a little
 	// The function stores category, option name, variables and help text for a commandline option.
@@ -1306,11 +1302,9 @@ func store_options_and_help_text_bool(category string, option string, value bool
 		os.Exit(0)
 	}
 
-	commandline_option_variables := new(commandline_struct)
-	commandline_option_variables.variable_type = "bool"
-	commandline_option_variables.pointer_to_bool_variable = pointer_to_variable
-	commandline_option_variables.bool_value = value
-	commandline_option_variables.help_text = help_text
+	commandline_option_struct := new(commandline_struct)
+	commandline_option_struct.option_type = "bool"
+	commandline_option_struct.help_text = help_text
 
 	// Store options for each category
 	if len(helptext_categories_map) == 0 {
@@ -1334,12 +1328,12 @@ func store_options_and_help_text_bool(category string, option string, value bool
 	}
 
 	// Store helptext for the option
-	commandline_option_map[option] = commandline_option_variables
+	commandline_option_map[option] = commandline_option_struct
 
-	return &commandline_option_variables.bool_value
+	return commandline_option_struct
 }
 
-func store_options_and_help_text_string(category string, option string, value string, help_text string, pointer_to_variable **string) *string {
+func store_options_and_help_text_string(category string, option string, value string, help_text string) *commandline_struct {
 
 	// This function does what flag.String does in go and extends it a little
 	// The function stores category, option name, variables and help text for a commandline option.
@@ -1361,11 +1355,10 @@ func store_options_and_help_text_string(category string, option string, value st
 		os.Exit(0)
 	}
 
-	commandline_option_variables := new(commandline_struct)
-	commandline_option_variables.variable_type = "string"
-	commandline_option_variables.pointer_to_string_variable = pointer_to_variable
-	commandline_option_variables.string_value = value
-	commandline_option_variables.help_text = help_text
+	commandline_option_struct := new(commandline_struct)
+	commandline_option_struct.option_type = "string"
+	commandline_option_struct.user_string = value
+	commandline_option_struct.help_text = help_text
 
 	// Store options for each category
 	if len(helptext_categories_map) == 0 {
@@ -1389,9 +1382,9 @@ func store_options_and_help_text_string(category string, option string, value st
 	}
 
 	// Store helptext for the option
-	commandline_option_map[option] = commandline_option_variables
+	commandline_option_map[option] = commandline_option_struct
 
-	return &commandline_option_variables.string_value
+	return commandline_option_struct
 }
 
 func display_help_text() {
@@ -1445,19 +1438,19 @@ func display_help_text() {
 			///////////////////////////////////////
 			// Print the first line of help text //
 			///////////////////////////////////////
-			commandline_option_variables := commandline_option_map[option]
+			commandline_option_struct := commandline_option_map[option]
 			textline = option + strings.Repeat(" ", second_paragraph_start - len(option))
 			helptext_start = 0
 			helptext_end = terminal_width_int - len(textline)
 
-			if helptext_end > len(commandline_option_variables.help_text) {
-				helptext_end = len(commandline_option_variables.help_text)
+			if helptext_end > len(commandline_option_struct.help_text) {
+				helptext_end = len(commandline_option_struct.help_text)
 			}
 
 			// Make sure we wont cut the last word in the middle at the end of the line
-			if helptext_end > 0 && helptext_end < len(commandline_option_variables.help_text) {
+			if helptext_end > 0 && helptext_end < len(commandline_option_struct.help_text) {
 
-				for commandline_option_variables.help_text[helptext_end - 1] != ' ' {
+				for commandline_option_struct.help_text[helptext_end - 1] != ' ' {
 					helptext_end--
 
 					if helptext_end <= 0 {
@@ -1467,10 +1460,10 @@ func display_help_text() {
 				}
 			}
 
-			fmt.Println("-" + option + strings.Repeat(" ", second_paragraph_start - len(option)) + commandline_option_variables.help_text[helptext_start:helptext_end])
+			fmt.Println("-" + option + strings.Repeat(" ", second_paragraph_start - len(option)) + commandline_option_struct.help_text[helptext_start:helptext_end])
 
 			// If this was the last line, start printing the next option help text
-			if helptext_end >= len(commandline_option_variables.help_text) {
+			if helptext_end >= len(commandline_option_struct.help_text) {
 				fmt.Println()
 				continue
 			}
@@ -1478,30 +1471,30 @@ func display_help_text() {
 			//////////////////////////////////////////////////////
 			// Print second help text line and lines after that //
 			//////////////////////////////////////////////////////
-			if helptext_end < len(commandline_option_variables.help_text) {
+			if helptext_end < len(commandline_option_struct.help_text) {
 
 				for {
 					helptext_start = helptext_end
 					helptext_end = helptext_start + terminal_width_int - second_paragraph_start
 
-					if helptext_end > len(commandline_option_variables.help_text) {
-						helptext_end = len(commandline_option_variables.help_text)
+					if helptext_end > len(commandline_option_struct.help_text) {
+						helptext_end = len(commandline_option_struct.help_text)
 					}
 
 					// If the first character on the line is a space then skip it
 					// and start from the first character of the next word instead
-					if commandline_option_variables.help_text[helptext_start] == ' ' {
+					if commandline_option_struct.help_text[helptext_start] == ' ' {
 						helptext_start++
 
-						if helptext_start > len(commandline_option_variables.help_text) {
-							helptext_start = len(commandline_option_variables.help_text)
+						if helptext_start > len(commandline_option_struct.help_text) {
+							helptext_start = len(commandline_option_struct.help_text)
 						}
 					}
 
 					// Make sure we wont cut the last word in the middle at the end of the line
-					if helptext_end < len(commandline_option_variables.help_text) {
+					if helptext_end < len(commandline_option_struct.help_text) {
 
-						for commandline_option_variables.help_text[helptext_end] != ' ' {
+						for commandline_option_struct.help_text[helptext_end] != ' ' {
 						helptext_end--
 
 							if helptext_end <= 0 {
@@ -1511,10 +1504,10 @@ func display_help_text() {
 						}
 					}
 
-					fmt.Println(strings.Repeat(" ", second_paragraph_start), commandline_option_variables.help_text[helptext_start:helptext_end])
+					fmt.Println(strings.Repeat(" ", second_paragraph_start), commandline_option_struct.help_text[helptext_start:helptext_end])
 
 					// If this was the last line, start printing the next option help text
-					if helptext_end >= len(commandline_option_variables.help_text) {
+					if helptext_end >= len(commandline_option_struct.help_text) {
 						break
 					}
 				}
@@ -1573,15 +1566,16 @@ func get_terminal_window_dimensions() []int {
 
 func parse_options() []string {
 
-	// Debug mode for this subroutine cannot ne set on the commandline
+	// Debug mode for this subroutine cannot be set on the commandline
 	// because we have not parsed the commandline when we enter here
-	// Instead turn debug to true in the debug variable, helptext defintion line
+	// Instead turn debug to true in the debug variable.
 
 	///////////////////////////////
 	// Parse commandline options //
 	///////////////////////////////
+	debug := false
 
-	if *debug_mode_on == true {
+	if debug == true {
 
 		var arguments []string
 		arguments = os.Args
@@ -1601,7 +1595,7 @@ func parse_options() []string {
 	}
 
 	var input_filenames []string
-	var commandline_option_variables *commandline_struct
+	var commandline_option_struct *commandline_struct
 	var predefined_option string
 	var option_found, string_option_found, int_option_found, item_is_an_option bool
 	string_option_found = false
@@ -1637,8 +1631,7 @@ func parse_options() []string {
 		// This part assigns int or string value following an option to the commandline variable 
 		// After the assingment the next option is fetched from the commandline
 		if string_option_found == true {
-			commandline_option_variables.string_value = commandline_option
-			*commandline_option_variables.pointer_to_string_variable =  &commandline_option_variables.string_value
+			commandline_option_struct.user_string = commandline_option
 			string_option_found = false
 			continue
 		}
@@ -1651,12 +1644,7 @@ func parse_options() []string {
 				os.Exit(0)
 			}
 
-			commandline_option_variables.int_value = temp_int
-			*commandline_option_variables.pointer_to_int_variable =  &commandline_option_variables.int_value
-
-			if *debug_mode_on == true {
-				fmt.Println(**commandline_option_variables.pointer_to_int_variable)
-			}
+			commandline_option_struct.user_int = temp_int
 
 			int_option_found = false
 			continue
@@ -1666,41 +1654,42 @@ func parse_options() []string {
 		// the int or string following the option is handled at the next round of the for loop
 		if item_is_an_option == true {
 
-			for predefined_option, commandline_option_variables = range commandline_option_map {
+			for predefined_option, commandline_option_struct = range commandline_option_map {
 
 				if commandline_option == predefined_option {
 
-					if commandline_option_variables.variable_type == "int" {
+					if commandline_option_struct.option_type == "int" {
 
-						if *debug_mode_on == true {
+						if debug == true {
 							fmt.Print("found int variable:", commandline_option, " ")
 						}
 
+						commandline_option_struct.is_turned_on = true
 						int_option_found = true
 						option_found = true
 						break
 					}
 
-					if commandline_option_variables.variable_type == "bool" {
+					if commandline_option_struct.option_type == "bool" {
 
-						if *debug_mode_on == true {
+						if debug == true {
 							fmt.Println("found bool variable", commandline_option, " ")
 						}
 
 						// Store value: true to this options struct and switch the variable connected
 						// to this commandline option to point to the value in struct
-						commandline_option_variables.bool_value = true
-						*commandline_option_variables.pointer_to_bool_variable =  &commandline_option_variables.bool_value
+						commandline_option_struct.is_turned_on = true
 						option_found = true
 						break
 					}
 
-					if commandline_option_variables.variable_type == "string" {
+					if commandline_option_struct.option_type == "string" {
 
-						if *debug_mode_on == true {
+						if debug == true {
 							fmt.Print("found string variable:", commandline_option, " ")
 						}
 
+						commandline_option_struct.is_turned_on = true
 						string_option_found = true
 						option_found = true
 						break
@@ -1750,11 +1739,24 @@ func parse_options() []string {
 		}
 	}
 
-	if *debug_mode_on == true {
+	if debug == true {
 
-		// Print all commandline options and their values in alphabetical order
+		// Print commandline options and their values in alphabetical order
+		// Print only those options that the user has turned on
 		var sorted_options []string
 		var longest_option int
+		var title_to_print string
+
+		fmt.Println("\n")
+		title_to_print = "All option variables and text:"
+		fmt.Println(title_to_print)
+		fmt.Println(strings.Repeat("-", len(title_to_print)))
+		print_all_commandline_variables()
+
+		fmt.Println("\n")
+		title_to_print = "Options that the user turned on:"
+		fmt.Println(title_to_print)
+		fmt.Println(strings.Repeat("-", len(title_to_print)))
 
 		for option := range commandline_option_map {
 			sorted_options = append(sorted_options, option)
@@ -1768,17 +1770,20 @@ func parse_options() []string {
 
 		for _, option := range sorted_options {
 
-			commandline_option_variables = commandline_option_map[option]
+			commandline_option_struct = commandline_option_map[option]
 
-			fmt.Printf("-" + option + strings.Repeat(" ", longest_option - len(option)))
-			fmt.Printf("   " + commandline_option_variables.variable_type + "   ")
+			if commandline_option_struct.is_turned_on == true {
 
-			if commandline_option_variables.variable_type == "int" {
-				fmt.Println("     ", **commandline_option_variables.pointer_to_int_variable)
-			} else if commandline_option_variables.variable_type == "bool" {
-				fmt.Println("     ", **commandline_option_variables.pointer_to_bool_variable)
-			} else if commandline_option_variables.variable_type == "string" {
-				fmt.Println("   ", **commandline_option_variables.pointer_to_string_variable)
+				fmt.Printf("-" + option + strings.Repeat(" ", longest_option - len(option)))
+				fmt.Printf("   " + commandline_option_struct.option_type + "   ")
+
+				if commandline_option_struct.option_type == "int" {
+					fmt.Println("     ", commandline_option_struct.user_int)
+				} else if commandline_option_struct.option_type == "bool" {
+					fmt.Println("     ", commandline_option_struct.is_turned_on)
+				} else if commandline_option_struct.option_type == "string" {
+					fmt.Println("   ", commandline_option_struct.user_string)
+				}
 			}
 		}
 	}
@@ -1786,28 +1791,29 @@ func parse_options() []string {
 	return input_filenames
 }
 
-func print_commandline_variables() {
+func print_all_commandline_variables() {
 
-	for option, commandline_option_variables := range commandline_option_map {
+	// This subroutine is used to debug option variables and help text.
+	for option, commandline_option_struct := range commandline_option_map {
 		fmt.Println()
 		fmt.Println("Option:", option)
 
-		if commandline_option_variables.variable_type == "int" {
-			fmt.Println("\tType:", commandline_option_variables.variable_type)
-			fmt.Println("\tValue:",  **commandline_option_variables.pointer_to_int_variable)
-			fmt.Println("\tHelp text:", commandline_option_variables.help_text)
+		if commandline_option_struct.option_type == "bool" {
+			fmt.Println("\tType:", commandline_option_struct.option_type)
+			fmt.Println("\tValue:", commandline_option_struct.is_turned_on)
+			fmt.Println("\tHelp text:", commandline_option_struct.help_text)
 		}
 
-		if commandline_option_variables.variable_type == "bool" {
-			fmt.Println("\tType:", commandline_option_variables.variable_type)
-			fmt.Println("\tValue:",  **commandline_option_variables.pointer_to_bool_variable)
-			fmt.Println("\tHelp text:", commandline_option_variables.help_text)
+		if commandline_option_struct.option_type == "int" {
+			fmt.Println("\tType:", commandline_option_struct.option_type)
+			fmt.Println("\tValue:", commandline_option_struct.user_int)
+			fmt.Println("\tHelp text:", commandline_option_struct.help_text)
 		}
 
-		if commandline_option_variables.variable_type == "string" {
-			fmt.Println("\tType:", commandline_option_variables.variable_type)
-			fmt.Println("\tValue:",  **commandline_option_variables.pointer_to_string_variable)
-			fmt.Println("\tHelp text:", commandline_option_variables.help_text)
+		if commandline_option_struct.option_type == "string" {
+			fmt.Println("\tType:", commandline_option_struct.option_type)
+			fmt.Println("\tValue:", commandline_option_struct.user_string)
+			fmt.Println("\tHelp text:", commandline_option_struct.help_text)
 		}
 	}
 }
@@ -1819,43 +1825,9 @@ func main() {
 	// Print executable name and version
 	fmt.Println(filepath.Base(os.Args[0]), "version", version_number)
 
-	//////////////////////////////////////////
-	// Define and parse commandline options //
-	//////////////////////////////////////////
-	// Create variables that are tied to the commandline options
-	// Audio bool
-	var audio_compression_ac3, audio_compression_aac, audio_compression_opus, audio_compression_flac, no_audio *bool
-
-	// Video bool
-	var autocrop_bool, crf_bool, denoise_bool, grayscale_bool, inverse_telecine, no_deinterlace_bool, parallel_sd, scale_to_sd, burn_timecode_bool *bool
-
-	// Video + Audio bool
-	var force_lossless_bool *bool
-
-	// Subtitle bool
-	var subtitle_burn_downscale, subtitle_burn_grayscale, subtitle_burn_split  *bool
-
-	// Audio string
-	var audio_language_str, audio_stream_number_str *string
-
-	// Video string
-	var user_main_bitrate, user_sd_bitrate, split_times *string
-
-	// Subtitle string
-	var subtitle_burn_language_str, subtitle_burn_str, subtitle_burn_vertical_offset_str, user_subtitle_mux_languages_str, user_subtitle_mux_numbers_str, subtitle_burn_palette, subtitle_burn_resize *string
-
-	// Scan bool
-	var fast_bool, fast_encode_bool, fast_search_bool, scan_mode_only_bool *bool
-
-	// Scan string
-	var search_start_str, processing_stop_time_str, processing_time_str *string
-
-	// Misc bool
-	var use_matroska_container, only_print_commands, show_program_version_short, show_program_version_long, help *bool
-
-	// Misc string
-	var temp_file_directory *string
-
+	////////////////////////////////
+	// Define commandline options //
+	////////////////////////////////
 	// Below are variable, and helpt text definitions tied to a commandline option
 	// Definitions from left to right are:
 	// Variable that gets the default value defined later on the line
@@ -1865,62 +1837,61 @@ func main() {
 	// Help text for the commandline option
 	// Address of the variable defined at the beginning of the line. This is used when the commandline option is followed by a value. The variable address is used to point the variable to the user defined value.
 	// Audio options
-	audio_language_str = store_options_and_help_text_string("Audio", "a", "", "Audio language: -a fin or -a eng or -a ita  Find audio stream corresponding the language code. Only use option -an or -a not both.", &audio_language_str)
-	audio_stream_number_str = store_options_and_help_text_string("Audio", "an", "0", "Audio stream number, -an 1. Only use option -an or -a not both.", &audio_stream_number_str)
-	audio_compression_ac3 = store_options_and_help_text_bool("Audio", "ac3", false, "Compress audio as ac3. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate. 6 channels uses the ac3 max bitrate of 640k.", &audio_compression_ac3)
-	audio_compression_aac = store_options_and_help_text_bool("Audio", "aac", false, "Compress audio as aac. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.", &audio_compression_aac)
-	audio_compression_opus = store_options_and_help_text_bool("Audio", "opus", false, "Compress audio as opus. Opus support in mp4 container is experimental as of FFmpeg vesion 4.2.1. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.", &audio_compression_opus)
-	audio_compression_flac = store_options_and_help_text_bool("Audio", "flac", false, "Compress audio in lossless Flac - format", &audio_compression_flac)
-	no_audio = store_options_and_help_text_bool("Audio", "na", false, "Disable audio processing. The resulting file will have no audio, only video.", &no_audio)
+	audio_language_option := store_options_and_help_text_string("Audio", "a", "", "Audio language: -a fin or -a eng or -a ita  Find audio stream corresponding the language code. Only use option -an or -a not both.")
+	audio_stream_number_option := store_options_and_help_text_string("Audio", "an", "0", "Audio stream number, -an 1. Only use option -an or -a not both.")
+	audio_compression_ac3 := store_options_and_help_text_bool("Audio", "ac3", "Compress audio as ac3. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate. 6 channels uses the ac3 max bitrate of 640k.")
+	audio_compression_aac := store_options_and_help_text_bool("Audio", "aac", "Compress audio as aac. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.", )
+	audio_compression_opus := store_options_and_help_text_bool("Audio", "opus", "Compress audio as opus. Opus support in mp4 container is experimental as of FFmpeg vesion 4.2.1. Bitrate of 128k is used for each audio channel meaning 2 channels is compressed using 256k bitrate, 6 channels uses 768k bitrate.")
+	audio_compression_flac := store_options_and_help_text_bool("Audio", "flac", "Compress audio in lossless Flac - format")
+	no_audio := store_options_and_help_text_bool("Audio", "na", "Disable audio processing. The resulting file will have no audio, only video.")
 
 	// Video options
-	autocrop_bool = store_options_and_help_text_bool("Video", "ac", false, "Autocrop. Find crop values automatically by doing 10 second spot checks in 10 places for the duration of the file.", &autocrop_bool)
-	crf_bool = store_options_and_help_text_bool("Video", "crf", false, "Use Constant Quality instead of 2-pass encoding. The default value for crf is 18, which produces the same quality as default 2-pass but a bigger file. CRF is much faster that 2-pass encoding.", &crf_bool)
-	denoise_bool = store_options_and_help_text_bool("Video", "dn", false, "Denoise. Use HQDN3D - filter to remove noise from the picture. This option is equal to Hanbrakes 'medium' noise reduction settings.", &denoise_bool)
-	grayscale_bool = store_options_and_help_text_bool("Video", "gr", false, "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.", &grayscale_bool)
-	inverse_telecine = store_options_and_help_text_bool("Video", "it", false, "Perform inverse telecine on 29.97 fps material to return it back to original 24 fps.", &inverse_telecine)
-	user_main_bitrate = store_options_and_help_text_string("Video", "mbr", "", "Override main videoprocessing automatic bitrate calculation and define bitrate manually.", &user_main_bitrate)
-	no_deinterlace_bool = store_options_and_help_text_bool("Video", "nd", false, "No Deinterlace. By default deinterlace is always used. This option disables it.", &no_deinterlace_bool)
-	parallel_sd = store_options_and_help_text_bool("Video", "psd", false, "Parallel SD. Create SD version in parallel to HD processing. This creates an additional version of the video downconverted to SD resolution. The SD file is stored in directory: sd", &parallel_sd)
-	user_sd_bitrate = store_options_and_help_text_string("Video", "sbr", "", "Override parallel sd videoprocessing automatic bitrate calculation and define bitrate manually. SD - video is stored in directory 'sd'", &user_sd_bitrate)
-	split_times = store_options_and_help_text_string("Video", "sf", "", "Split out parts of the file. Give start and stop times for the parts of the file to use. Use either commas and slashes or only commas to separate time values. Example: -sf 0-10:00,01:35:12.800-01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.", &split_times)
-	scale_to_sd = store_options_and_help_text_bool("Video", "ssd", false, "Scale to SD. Scale video down to SD resolution. Calculates resolution automatically. Video is stored in directory 'sd'", &scale_to_sd)
-	burn_timecode_bool = store_options_and_help_text_bool("Video", "tc", false, "Burn timecode on top of the video. Timecode can be used to look for exact edit points for the file split feature", &burn_timecode_bool)
+	autocrop_option := store_options_and_help_text_bool("Video", "ac", "Autocrop. Find crop values automatically by doing 10 second spot checks in 10 places for the duration of the file.")
+	crf_option := store_options_and_help_text_bool("Video", "crf", "Use Constant Quality instead of 2-pass encoding. The default value for crf is 18, which produces the same quality as default 2-pass but a bigger file. CRF is much faster that 2-pass encoding.")
+	denoise_option := store_options_and_help_text_bool("Video", "dn", "Denoise. Use HQDN3D - filter to remove noise from the picture. This option is equal to Hanbrakes 'medium' noise reduction settings.")
+	grayscale_option := store_options_and_help_text_bool("Video", "gr", "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.")
+	inverse_telecine := store_options_and_help_text_bool("Video", "it", "Perform inverse telecine on 29.97 fps material to return it back to original 24 fps.")
+	main_bitrate_option := store_options_and_help_text_string("Video", "mbr", "", "Override main videoprocessing automatic bitrate calculation and define bitrate manually.")
+	no_deinterlace := store_options_and_help_text_bool("Video", "nd", "No Deinterlace. By default deinterlace is always used. This option disables it.")
+	parallel_sd := store_options_and_help_text_bool("Video", "psd", "Parallel SD. Create SD version in parallel to HD processing. This creates an additional version of the video downconverted to SD resolution. The SD file is stored in directory: sd")
+	sd_bitrate_option := store_options_and_help_text_string("Video", "sbr", "", "Override parallel sd videoprocessing automatic bitrate calculation and define bitrate manually. SD - video is stored in directory 'sd'")
+	split_times := store_options_and_help_text_string("Video", "sf", "", "Split out parts of the file. Give start and stop times for the parts of the file to use. Use either commas and slashes or only commas to separate time values. Example: -sf 0-10:00,01:35:12.800-01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.")
+	scale_to_sd := store_options_and_help_text_bool("Video", "ssd", "Scale to SD. Scale video down to SD resolution. Calculates resolution automatically. Video is stored in directory 'sd'")
+	burn_timecode := store_options_and_help_text_bool("Video", "tc", "Burn timecode on top of the video. Timecode can be used to look for exact edit points for the file split feature")
 
 	// Options that affect both video and audio
-	force_lossless_bool = store_options_and_help_text_bool("Audio and Video", "ls", false, "Force encoding to use lossless 'utvideo' compression for video and 'flac' compression for audio. This also turns on -fe. This option only affects the main video if used with the -psd option.", &force_lossless_bool)
+	force_lossless := store_options_and_help_text_bool("Audio and Video", "ls", "Force encoding to use lossless 'utvideo' compression for video and 'flac' compression for audio. This also turns on -fe. This option only affects the main video if used with the -psd option.")
 
 	// Subtitle options
-	subtitle_burn_language_str = store_options_and_help_text_string("Subtitle", "s", "", "Burn subtitle with this language code on top of video. Example: -s fin or -s eng or -s ita  Only use option -sn or -s not both.", &subtitle_burn_language_str)
-	subtitle_burn_downscale = store_options_and_help_text_bool("Subtitle", "sd", false, "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font. This option affects only subtitle burned on top of video.", &subtitle_burn_downscale)
-	subtitle_burn_grayscale = store_options_and_help_text_bool("Subtitle", "sgr", false, "Subtitle Grayscale. Remove color from subtitle by converting it to grayscale. This option only works with subtitle burned on top of video. This option may also help if you experience jerky video every time subtitle picture changes.", &subtitle_burn_grayscale)
-	subtitle_burn_str = store_options_and_help_text_string("Subtitle", "sn", "-1", "Burn subtitle with this stream number on top of video. Example: -sn 1. Use subtitle number 1 from the source file. Only use option -sn or -s not both.", &subtitle_burn_str)
-	subtitle_burn_vertical_offset_str = store_options_and_help_text_string("Subtitle", "so", "0", "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up). This option affects only subtitle burned on top of video. Also check the -sp option that moves subtitles automatically near the edge of the screen.", &subtitle_burn_vertical_offset_str)
-	user_subtitle_mux_languages_str = store_options_and_help_text_string("Subtitle", "sm", "", "Mux subtitles with these language codes into the target file. Example: -sm eng, or -sm eng,fra,fin. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the -mkv option.", &user_subtitle_mux_languages_str)
-	user_subtitle_mux_numbers_str = store_options_and_help_text_string("Subtitle", "smn", "", "Mux subtitles with these stream numbers into the target file. Example: -smn 1 or -smn 3,1,7. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the -mkv option.", &user_subtitle_mux_numbers_str)
-	subtitle_burn_palette = store_options_and_help_text_string("Subtitle", "palette", "", "Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: -palette f,0,f  This option affects only subtitle burned on top of video.", &subtitle_burn_palette)
-	subtitle_burn_split = store_options_and_help_text_bool("Subtitle", "sp", false, "Subtile Split. Subtitles on DVD's and Blurays often use an unnecessary large font and are positioned too far from the edge of the screen covering too much of the picture. Sometimes subtitles are also displayed on the upper part of the screen and may even cover the actors face. [See picture here](https://raw.githubusercontent.com/mhartzel/ffcommander/master/pictures/Options-sp_and-sr_repositions_and_resizes_subtitles-2.png). The -sp option detects whether the subtitle is on top or bottom half of the screen and then moves it towards the edge of the screen so that it covers less of the picture area. Distance from the screen edge will be picture height divided by 100 and rounded down to nearest integer. Minimum distance is 5 pixels and max 20 pixels. Subtitles will be automatically centered horizontally. You can also resize the subtitles with the -sr option when using Subtitle Split. The -sp option affects only subtitles burned on top of video.", &subtitle_burn_split)
-	subtitle_burn_resize = store_options_and_help_text_string("Subtitle", "sr", "", "Subtitle Resize. Values less than 1 makes subtitles smaller, values bigger than 1 makes subtitles larger. This option can only be user with the -sp option. Example: make subtitle 25% smaller: -sr 0.75   make subtitle 50% smaller: -sr 0.50   make subtitle 75% larger: -sr 1.75. This option affects only subtitle burned on top of video.", &subtitle_burn_resize)
+	subtitle_language_option := store_options_and_help_text_string("Subtitle", "s", "", "Burn subtitle with this language code on top of video. Example: -s fin or -s eng or -s ita  Only use option -sn or -s not both.")
+	subtitle_burn_downscale := store_options_and_help_text_bool("Subtitle", "sd", "Subtitle `downscale`. When cropping video widthwise, scale down subtitle to fit on top of the cropped video instead of cropping the subtitle. This option results in smaller subtitle font. This option affects only subtitle burned on top of video.")
+	subtitle_burn_grayscale := store_options_and_help_text_bool("Subtitle", "sgr", "Subtitle Grayscale. Remove color from subtitle by converting it to grayscale. This option only works with subtitle burned on top of video. This option may also help if you experience jerky video every time subtitle picture changes.")
+	subtitle_stream_number_option := store_options_and_help_text_string("Subtitle", "sn", "-1", "Burn subtitle with this stream number on top of video. Example: -sn 1. Use subtitle number 1 from the source file. Only use option -sn or -s not both.")
+	subtitle_vertical_offset := store_options_and_help_text_string("Subtitle", "so", "0", "Subtitle `offset`, -so 55 (move subtitle 55 pixels down), -so -55 (move subtitle 55 pixels up). This option affects only subtitle burned on top of video. Also check the -sp option that moves subtitles automatically near the edge of the screen.")
+	subtitle_mux_language_option := store_options_and_help_text_string("Subtitle", "sm", "", "Mux subtitles with these language codes into the target file. Example: -sm eng, or -sm eng,fra,fin. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the -mkv option.")
+	subtitle_mux_numbers_option := store_options_and_help_text_string("Subtitle", "smn", "", "Mux subtitles with these stream numbers into the target file. Example: -smn 1 or -smn 3,1,7. This only works with dvd, dvb and bluray bitmap based subtitles. mp4 only supports DVD and DVB subtitles not Bluray. Bluray subtitles can be muxed into an mkv file using the -mkv option.")
+	subtitle_burn_palette := store_options_and_help_text_string("Subtitle", "palette", "", "Hack dvd subtitle color palette. Option takes 1-16 comma separated hex numbers ranging from 0 to f. Zero = black, f = white, so only shades between black -> gray -> white can be defined. FFmpeg requires 16 hex numbers, so f's are automatically appended to the end of user given numbers. Each dvd uses color mapping differently so you need to try which numbers control the colors you want to change. Usually the first 4 numbers control the colors. Example: -palette f,0,f  This option affects only subtitle burned on top of video.")
+	subtitle_burn_split := store_options_and_help_text_bool("Subtitle", "sp", "Subtile Split. Subtitles on DVD's and Blurays often use an unnecessary large font and are positioned too far from the edge of the screen covering too much of the picture. Sometimes subtitles are also displayed on the upper part of the screen and may even cover the actors face. [See picture here](https://raw.githubusercontent.com/mhartzel/ffcommander/master/pictures/Options-sp_and-sr_repositions_and_resizes_subtitles-2.png). The -sp option detects whether the subtitle is on top or bottom half of the screen and then moves it towards the edge of the screen so that it covers less of the picture area. Distance from the screen edge will be picture height divided by 100 and rounded down to nearest integer. Minimum distance is 5 pixels and max 20 pixels. Subtitles will be automatically centered horizontally. You can also resize the subtitles with the -sr option when using Subtitle Split. The -sp option affects only subtitles burned on top of video.")
+	subtitle_burn_resize := store_options_and_help_text_string("Subtitle", "sr", "", "Subtitle Resize. Values less than 1 makes subtitles smaller, values bigger than 1 makes subtitles larger. This option can only be user with the -sp option. Example: make subtitle 25% smaller: -sr 0.75   make subtitle 50% smaller: -sr 0.50   make subtitle 75% larger: -sr 1.75. This option affects only subtitle burned on top of video.")
 
 	// Scan options
-	fast_bool = store_options_and_help_text_bool("Scan", "f", false, "This is the same as using options -fs and -fe at the same time.", &fast_bool)
-	fast_encode_bool = store_options_and_help_text_bool("Scan", "fe", false, "Fast encoding mode. Encode video using 1-pass encoding.", &fast_encode_bool)
-	fast_search_bool = store_options_and_help_text_bool("Scan", "fs", false, "Fast seek mode. When using the -fs option with -st do not decode video before the point we are trying to locate, but instead try to jump directly to it. This search method might or might not be accurate depending on the file format.", &fast_search_bool)
-	scan_mode_only_bool = store_options_and_help_text_bool("Scan", "scan", false, "Only scan input files and print video, audio and subtitle stream info.", &scan_mode_only_bool)
-	search_start_str = store_options_and_help_text_string("Scan", "st", "", "Start time. Start video processing from this timecode. Example -st 30:00 starts processing from 30 minutes from the start of the file.", &search_start_str)
-	processing_stop_time_str = store_options_and_help_text_string("Scan", "et", "", "End time. Stop video processing to this timecode. Example -et 01:30:00 stops processing at 1 hour 30 minutes. You can define a time range like this: -st 10:09 -et 01:22:49.500 This results in a video file that starts at 10 minutes 9 seconds and stops at 1 hour 22 minutes, 49 seconds and 500 milliseconds.", &processing_stop_time_str)
-	processing_time_str = store_options_and_help_text_string("Scan", "d", "", "Duration of video to process. Example -d 01:02 process 1 minutes and 2 seconds of the file. Use either -et or -d option not both.", &processing_time_str)
+	fast_encode_and_search := store_options_and_help_text_bool("Scan", "f", "This is the same as using options -fs and -fe at the same time.")
+	fast_encode := store_options_and_help_text_bool("Scan", "fe", "Fast encoding mode. Encode video using 1-pass encoding.")
+	fast_search := store_options_and_help_text_bool("Scan", "fs", "Fast seek mode. When using the -fs option with -st do not decode video before the point we are trying to locate, but instead try to jump directly to it. This search method might or might not be accurate depending on the file format.")
+	scan_mode_only := store_options_and_help_text_bool("Scan", "scan", "Only scan input files and print video, audio and subtitle stream info.")
+	search_start_option := store_options_and_help_text_string("Scan", "st", "", "Start time. Start video processing from this timecode. Example -st 30:00 starts processing from 30 minutes from the start of the file.")
+	processing_stop_time := store_options_and_help_text_string("Scan", "et", "", "End time. Stop video processing to this timecode. Example -et 01:30:00 stops processing at 1 hour 30 minutes. You can define a time range like this: -st 10:09 -et 01:22:49.500 This results in a video file that starts at 10 minutes 9 seconds and stops at 1 hour 22 minutes, 49 seconds and 500 milliseconds.")
+	processing_duration := store_options_and_help_text_string("Scan", "d", "", "Duration of video to process. Example -d 01:02 process 1 minutes and 2 seconds of the file. Use either -et or -d option not both.")
 
 	// Misc options
 	// If you want to print debug info then change debug to "true" below
-	debug_mode_on = store_options_and_help_text_bool("Misc", "debug", false, "Turn on debug mode and show info about internal variables and the FFmpeg commandlines used.", &debug_mode_on)
-	use_matroska_container = store_options_and_help_text_bool("Misc", "mkv", false, "Use matroska (mkv) as the output file wrapper format.", &use_matroska_container)
-	only_print_commands = store_options_and_help_text_bool("Misc", "print", false, "Only print FFmpeg commands that would be used for processing, don't process any files.", &only_print_commands)
-	show_program_version_short = store_options_and_help_text_bool("Misc", "v", false, "Show the version of this program.", &show_program_version_short)
-	show_program_version_long = store_options_and_help_text_bool("Misc", "version", false, "Show the version of this program.", &show_program_version_long)
-	temp_file_directory = store_options_and_help_text_string("Misc", "td", "", "Path to directory for temporary files, example_ -td PathToDir. This option directs temporary files created with 2-pass encoding and subtitle processing with the -sp switch to a separate directory. If the temp dir is a ram or a fast ssd disk then it speeds up processing with the -sp switch. Processing files with the -sp switch extracts every frame of the movie as a picture, so you need to have lots of space in the temp directory. For a FullHD movie you need to have 20 GB or more free storage. If you run multiple instances of this program simultaneously each instance processing one FullHD movie then you need 20 GB or more free storage for each movie that is processed at the same time. -sp switch extracts movie subtitle frames with FFmpeg and FFmpeg fails silently if it runs out of storage space. If this happens then some of the last subtitles won't be available when the video is compressed and this results the last available subtitle to be 'stuck' on top of video to the end of the movie.", &temp_file_directory)
-	help = store_options_and_help_text_bool("Misc", "h", false, "Display help text", &help)
-	help = store_options_and_help_text_bool("Misc", "help", false, "Display help text", &help)
+	debug_option := store_options_and_help_text_bool("Misc", "debug", "Turn on debug mode and show info about internal variables and the FFmpeg commandlines used.")
+	use_matroska_container := store_options_and_help_text_bool("Misc", "mkv", "Use matroska (mkv) as the output file wrapper format.")
+	only_print_commands := store_options_and_help_text_bool("Misc", "print", "Only print FFmpeg commands that would be used for processing, don't process any files.")
+	show_program_version_short := store_options_and_help_text_bool("Misc", "v", "Show the version of this program.")
+	show_program_version_long := store_options_and_help_text_bool("Misc", "version", "Show the version of this program.")
+	temp_file_directory := store_options_and_help_text_string("Misc", "td", "", "Path to directory for temporary files, example_ -td PathToDir. This option directs temporary files created with 2-pass encoding and subtitle processing with the -sp switch to a separate directory. If the temp dir is a ram or a fast ssd disk then it speeds up processing with the -sp switch. Processing files with the -sp switch extracts every frame of the movie as a picture, so you need to have lots of space in the temp directory. For a FullHD movie you need to have 20 GB or more free storage. If you run multiple instances of this program simultaneously each instance processing one FullHD movie then you need 20 GB or more free storage for each movie that is processed at the same time. -sp switch extracts movie subtitle frames with FFmpeg and FFmpeg fails silently if it runs out of storage space. If this happens then some of the last subtitles won't be available when the video is compressed and this results the last available subtitle to be 'stuck' on top of video to the end of the movie.")
+	help := store_options_and_help_text_bool("Misc", "h", "Display help text")
 
 	//////////////////////
 	// Define variables //
@@ -1988,7 +1959,7 @@ func main() {
 	///////////////////////////////
 	input_filenames = parse_options()
 
-	if *help == true {
+	if help.is_turned_on == true {
 		display_help_text()
 	}
 	/////////////////////////////////////////////////////////
@@ -1997,28 +1968,28 @@ func main() {
 	find_executable_path("ffmpeg")
 	find_executable_path("ffprobe")
 
-	if *subtitle_burn_split == true {
+	if subtitle_burn_split.is_turned_on == true {
 		find_executable_path("magick") // Starting from ImageMagick 7 the "magick" command should be used instead of the "convert" - command.
 		find_executable_path("mogrify")
 		os.Setenv("MAGICK_THREAD_LIMIT", "1") // Disable ImageMagick multithreading it only makes processing slower. This sets an environment variable in the os.
 	}
 
 	// Test that user gave a string not a number for options -a and -s
-	if _, err := strconv.Atoi(*audio_language_str); err == nil {
+	if _, err := strconv.Atoi(audio_language_option.user_string); err == nil {
 		fmt.Println()
 		fmt.Println("The option -a requires a language code like: eng, fin, ita not a number.")
 		fmt.Println()
 		os.Exit(0)
 	}
 
-	if _, err := strconv.Atoi(*subtitle_burn_language_str); err == nil {
+	if _, err := strconv.Atoi(subtitle_language_option.user_string); err == nil {
 		fmt.Println()
 		fmt.Println("The option -s requires a language code like: eng, fin, ita not a number.")
 		fmt.Println()
 		os.Exit(0)
 	}
 
-	if *subtitle_burn_resize != "" && *subtitle_burn_split == false {
+	if subtitle_burn_resize.user_string != "" && subtitle_burn_split.is_turned_on == false {
 		fmt.Println()
 		fmt.Println("Subtitle resize can only be used with the -sp option, not alone.")
 		fmt.Println()
@@ -2026,37 +1997,37 @@ func main() {
 	}
 
 	// Test if user gave a valid float on the commandline
-	if *subtitle_burn_resize != "" {
+	if subtitle_burn_resize.user_string != "" {
 
-		subtitle_resize_float, float_parse_error := strconv.ParseFloat(*subtitle_burn_resize, 64)
+		subtitle_resize_float, float_parse_error := strconv.ParseFloat(subtitle_burn_resize.user_string, 64)
 
 		if  float_parse_error != nil || subtitle_resize_float == 0.0 {
 
-			fmt.Println("Error:", *subtitle_burn_resize, "is not a valid number.")
+			fmt.Println("Error:", subtitle_burn_resize.user_string, "is not a valid number.")
 			os.Exit(1)
 		}
 	}
 
 	// Convert time values used in splitting the inputfile to seconds
-	if *split_times != "" {
+	if split_times.user_string != "" {
 		split_video = true
-		*use_matroska_container = true
-		cut_list_seconds_str_slice, cut_positions_as_timecodes = process_split_times(split_times, debug_mode_on)
+		use_matroska_container.is_turned_on = true
+		cut_list_seconds_str_slice, cut_positions_as_timecodes = process_split_times(split_times.user_string, debug_option.is_turned_on)
 	}
 
 	// -f option turns on both options -fs and -fe
-	if *fast_bool == true {
-		*fast_search_bool = true
-		*fast_encode_bool = true
+	if fast_encode_and_search.is_turned_on == true {
+		fast_search.is_turned_on = true
+		fast_encode.is_turned_on = true
 	}
 
 	// Parallel SD processing requires defining inputfile seek for each output file or placing the seek before the inputfile.
 	// We choose to place the seek before the inputfile. This results using the fast but sometimes inaccurate FFmpeg seek.
-	if *parallel_sd == true || *scale_to_sd == true {
-		*fast_search_bool = true
+	if parallel_sd.is_turned_on == true || scale_to_sd.is_turned_on == true {
+		fast_search.is_turned_on = true
 	}
 
-	if *search_start_str == "" && *processing_stop_time_str != "" {
+	if search_start_option.user_string == "" && processing_stop_time.user_string != "" {
 			fmt.Println()
 			fmt.Println("Error, start time missing")
 			fmt.Println()
@@ -2064,14 +2035,14 @@ func main() {
 	}
 	// Convert processing end time to duration and store it in variable used with -d option (duration).
 	// FFmpeg does not understarnd end times, only start time + duration.
-	if *processing_stop_time_str != "" {
+	if processing_stop_time.user_string != "" {
 
 		start_time := ""
 		end_time := ""
 		error_happened := ""
 
-		if *search_start_str != "" {
-			start_time, error_happened = convert_timecode_to_seconds(*search_start_str)
+		if search_start_option.user_string != "" {
+			start_time, error_happened = convert_timecode_to_seconds(search_start_option.user_string)
 
 			if error_happened != "" {
 				fmt.Println("\nError when converting start time to seconds: " + error_happened + "\n")
@@ -2083,12 +2054,12 @@ func main() {
 
 		if atoi_error != nil {
 			fmt.Println()
-			fmt.Println("Error converting start time", *search_start_str, "to integer")
+			fmt.Println("Error converting start time", search_start_option.user_string, "to integer")
 			fmt.Println()
 			os.Exit(0)
 		}
 
-		end_time, error_happened = convert_timecode_to_seconds(*processing_stop_time_str)
+		end_time, error_happened = convert_timecode_to_seconds(processing_stop_time.user_string)
 
 		if error_happened != "" {
 			fmt.Println("\nError when converting end time to seconds: " + error_happened + "\n")
@@ -2099,7 +2070,7 @@ func main() {
 
 		if atoi_error != nil {
 			fmt.Println()
-			fmt.Println("Error converting end time", *processing_stop_time_str, "to integer")
+			fmt.Println("Error converting end time", processing_stop_time.user_string, "to integer")
 			fmt.Println()
 			os.Exit(0)
 		}
@@ -2113,21 +2084,21 @@ func main() {
 			os.Exit(0)
 		}
 
-		*processing_time_str = convert_seconds_to_timecode(strconv.Itoa(duration_int))
+		processing_duration.user_string = convert_seconds_to_timecode(strconv.Itoa(duration_int))
 	}
 
 	// Disable -st and -d options if user did use the -sf option and input some edit times
 	if split_video == true {
-		*search_start_str = ""
-		*processing_time_str = ""
+		search_start_option.user_string = ""
+		processing_duration.user_string = ""
 	}
 
 	// Always use 1-pass encoding with lossless encoding. Turn on option -fe.
-	if *force_lossless_bool == true {
-		*fast_encode_bool = true
+	if force_lossless.is_turned_on == true {
+		fast_encode.is_turned_on = true
 	}
 
-	if *subtitle_burn_split == true && *search_start_str != "" && *fast_bool == false && *crf_bool == false {
+	if subtitle_burn_split.is_turned_on == true && search_start_option.user_string != "" && fast_encode_and_search.is_turned_on == false && crf_option.is_turned_on == false {
 		fmt.Println("\nOptions -st -sp and 2-pass encoding won't work correctly together.")
 		fmt.Println("You options are:")
 		fmt.Println("disable 2-pass encoding with the -f option")
@@ -2137,9 +2108,9 @@ func main() {
 	}
 
 	// Check dvd palette hacking option string correctness.
-	if *subtitle_burn_palette != "" {
-		temp_slice := strings.Split(*subtitle_burn_palette, ",")
-		*subtitle_burn_palette = ""
+	if subtitle_burn_palette.user_string != "" {
+		temp_slice := strings.Split(subtitle_burn_palette.user_string, ",")
+		subtitle_burn_palette.user_string = ""
 		hex_characters := [17]string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"}
 
 		// Test that all characters are valid hex
@@ -2188,23 +2159,23 @@ func main() {
 		// The user is limited here to use only shades between black -> gray -> white.
 		for counter, character := range temp_slice {
 
-			*subtitle_burn_palette = *subtitle_burn_palette + strings.Repeat(strings.ToLower(character), 6)
+			subtitle_burn_palette.user_string = subtitle_burn_palette.user_string + strings.Repeat(strings.ToLower(character), 6)
 
 			if counter < len(temp_slice)-1 {
-				*subtitle_burn_palette = *subtitle_burn_palette + ","
+				subtitle_burn_palette.user_string = subtitle_burn_palette.user_string + ","
 			}
 
 		}
 
 		if len(temp_slice) < 16 {
 
-			*subtitle_burn_palette = *subtitle_burn_palette + ","
+			subtitle_burn_palette.user_string = subtitle_burn_palette.user_string + ","
 
 			for counter := len(temp_slice); counter < 16; counter++ {
-				*subtitle_burn_palette = *subtitle_burn_palette + "ffffff"
+				subtitle_burn_palette.user_string = subtitle_burn_palette.user_string + "ffffff"
 
 				if counter < 15 {
-					*subtitle_burn_palette = *subtitle_burn_palette + ","
+					subtitle_burn_palette.user_string = subtitle_burn_palette.user_string + ","
 				}
 			}
 		}
@@ -2217,7 +2188,7 @@ func main() {
 	subtitle_burn_bool := false
 	highest_subtitle_number_int := -1
 
-	if *user_subtitle_mux_numbers_str != "" && *user_subtitle_mux_languages_str != "" {
+	if subtitle_mux_numbers_option.user_string != "" && subtitle_mux_language_option.user_string != "" {
 		fmt.Println()
 		fmt.Println("Error, -sm and -smn cannot be used at the same time.")
 		fmt.Println()
@@ -2225,13 +2196,13 @@ func main() {
 	}
 
 	// Parse subtitle numbers list
-	if *user_subtitle_mux_numbers_str != "" {
+	if subtitle_mux_numbers_option.user_string != "" {
 
-		user_subtitle_mux_numbers_slice = strings.Split(*user_subtitle_mux_numbers_str, ",")
+		user_subtitle_mux_numbers_slice = strings.Split(subtitle_mux_numbers_option.user_string, ",")
 
 		if len(user_subtitle_mux_numbers_slice) == 0 {
 			fmt.Println()
-			fmt.Println("Error parsing subtitle numbers from: ", *user_subtitle_mux_numbers_str)
+			fmt.Println("Error parsing subtitle numbers from: ", subtitle_mux_numbers_option.user_string)
 			fmt.Println()
 			os.Exit(0)
 		}
@@ -2241,7 +2212,7 @@ func main() {
 
 			if number_int, atoi_error := strconv.Atoi(number) ; atoi_error != nil {
 				fmt.Println()
-				fmt.Println("Error parsing subtitle number:", number, "in:", *user_subtitle_mux_numbers_str)
+				fmt.Println("Error parsing subtitle number:", number, "in:", subtitle_mux_numbers_option.user_string)
 				fmt.Println()
 				os.Exit(0)
 
@@ -2254,13 +2225,13 @@ func main() {
 	}
 
 	// Parse subtitle language code list
-	if *user_subtitle_mux_languages_str != "" {
+	if subtitle_mux_language_option.user_string != "" {
 
-		user_subtitle_mux_languages_slice = strings.Split(*user_subtitle_mux_languages_str, ",")
+		user_subtitle_mux_languages_slice = strings.Split(subtitle_mux_language_option.user_string, ",")
 
 		if len(user_subtitle_mux_languages_slice) == 0 {
 			fmt.Println()
-			fmt.Println("Error parsing subtitle languages from: ", *user_subtitle_mux_languages_str)
+			fmt.Println("Error parsing subtitle languages from: ", subtitle_mux_language_option.user_string)
 			fmt.Println()
 			os.Exit(0)
 		}
@@ -2273,18 +2244,18 @@ func main() {
 	var atoi_error error
 	subtitle_burn_vertical_offset_int := 0
 
-	if subtitle_burn_number, atoi_error = strconv.Atoi(*subtitle_burn_str) ; atoi_error != nil {
+	if subtitle_burn_number, atoi_error = strconv.Atoi(subtitle_stream_number_option.user_string) ; atoi_error != nil {
 		fmt.Println()
-		fmt.Println("Error parsing subtitle number:", *subtitle_burn_str)
+		fmt.Println("Error parsing subtitle number:", subtitle_stream_number_option.user_string)
 		fmt.Println()
 		os.Exit(0)
 	}
 
-	if *subtitle_burn_language_str != "" || subtitle_burn_number  != -1 {
+	if subtitle_language_option.user_string != "" || subtitle_burn_number  != -1 {
 		subtitle_burn_bool = true
 	}
 
-	if subtitle_burn_bool == false && *subtitle_burn_grayscale == true {
+	if subtitle_burn_bool == false && subtitle_burn_grayscale.is_turned_on == true {
 		fmt.Println()
 		fmt.Println("Error, you need to define what subtitle to burn grayscale on top of video.")
 		fmt.Println()
@@ -2299,13 +2270,13 @@ func main() {
 	}
 
 	// Use the first subtitle if user wants subtitle split but did not specify subtitle number
-	if *subtitle_burn_split == true && subtitle_burn_number == -1 {
+	if subtitle_burn_split.is_turned_on == true && subtitle_burn_number == -1 {
 		subtitle_burn_number = 0
 	}
 
-	if subtitle_burn_vertical_offset_int, atoi_error = strconv.Atoi(*subtitle_burn_vertical_offset_str) ; atoi_error != nil {
+	if subtitle_burn_vertical_offset_int, atoi_error = strconv.Atoi(subtitle_vertical_offset.user_string) ; atoi_error != nil {
 		fmt.Println()
-		fmt.Println("Error parsing subtitle offset:", *subtitle_burn_vertical_offset_str)
+		fmt.Println("Error parsing subtitle offset:", subtitle_vertical_offset.user_string)
 		fmt.Println()
 		os.Exit(0)
 	}
@@ -2315,25 +2286,25 @@ func main() {
 
 
 	if default_video_processing == "crf" {
-		*crf_bool = true
+		crf_option.is_turned_on = true
 	}
 
 	// Check the validity of the user given main video bitrate
-	if len(*user_main_bitrate) > 0  && *crf_bool == false{
+	if len(main_bitrate_option.user_string) > 0  && crf_option.is_turned_on == false{
 
-		if strings.ToLower( string( *user_main_bitrate )[len( *user_main_bitrate) - 1 : ]) != "k" {
+		if strings.ToLower( string( main_bitrate_option.user_string )[len(main_bitrate_option.user_string) - 1 : ]) != "k" {
 			fmt.Println()
 			fmt.Println("The -mbr option takes a bitrate in the form of: 8000k don't forget the 'k' at the end of the value")
 			fmt.Println()
 			os.Exit(0)
 		}
 
-		number_str := string(*user_main_bitrate)[0:len(*user_main_bitrate) - 1]
+		number_str := string(main_bitrate_option.user_string)[0:len(main_bitrate_option.user_string) - 1]
 		number_int,err := strconv.Atoi(number_str)
 
 		if err != nil {
 			fmt.Println()
-			fmt.Println("Error cannot convert value", *user_main_bitrate, "to a number.")
+			fmt.Println("Error cannot convert value", main_bitrate_option.user_string, "to a number.")
 			fmt.Println()
 			os.Exit(0)
 		}
@@ -2348,21 +2319,21 @@ func main() {
 	}
 
 	// Check the validity of the user given sd - video bitrate
-	if len(*user_sd_bitrate) > 0  && *crf_bool == false {
+	if len(sd_bitrate_option.user_string) > 0  && crf_option.is_turned_on == false {
 
-		if strings.ToLower( string( *user_sd_bitrate )[len( *user_sd_bitrate) - 1 : ]) != "k" {
+		if strings.ToLower( string( sd_bitrate_option.user_string )[len( sd_bitrate_option.user_string) - 1 : ]) != "k" {
 			fmt.Println()
 			fmt.Println("The -sbr option takes a bitrate in the form of: 1600k don't forget the 'k' at the end of the value")
 			fmt.Println()
 			os.Exit(0)
 		}
 
-		number_str := string(*user_sd_bitrate)[0:len(*user_sd_bitrate) - 1]
+		number_str := string(sd_bitrate_option.user_string)[0:len(sd_bitrate_option.user_string) - 1]
 		number_int,err := strconv.Atoi(number_str)
 
 		if err != nil {
 			fmt.Println()
-			fmt.Println("Error cannot convert value", *user_sd_bitrate, "to a number.")
+			fmt.Println("Error cannot convert value", sd_bitrate_option.user_string, "to a number.")
 			fmt.Println()
 			os.Exit(0)
 		}
@@ -2376,28 +2347,28 @@ func main() {
 		user_sd_bitrate_bool = true
 	}
 
-	if *parallel_sd == false && *scale_to_sd == false && user_sd_bitrate_bool == true {
+	if parallel_sd.is_turned_on == false && scale_to_sd.is_turned_on == false && user_sd_bitrate_bool == true {
 		fmt.Println()
 		fmt.Println("Error: the -sbr option can be used only with the -psd or -ssd options.")
 		fmt.Println()
 		os.Exit(0)
 	}
 
-	if *scale_to_sd == true && *parallel_sd == true {
+	if scale_to_sd.is_turned_on == true && parallel_sd.is_turned_on == true {
 		fmt.Println()
 		fmt.Println("Error: options -psd and -ssd can't be used at the same time.")
 		fmt.Println()
 		os.Exit(0)
 	}
 
-	if *debug_mode_on == true && *only_print_commands == true {
+	if debug_option.is_turned_on == true && only_print_commands.is_turned_on == true {
 		fmt.Println()
 		fmt.Println("Error: options -debug and -print can't be used at the same time.")
 		fmt.Println()
 		os.Exit(0)
 	}
 
-	if *debug_mode_on == true {
+	if debug_option.is_turned_on == true {
 
 		fmt.Println()
 		fmt.Println("Subtitle numbers:")
@@ -2422,32 +2393,32 @@ func main() {
 	}
 
 	// Check if user given path to temp folder exists and if it is writable
-	if *temp_file_directory != "" {
+	if temp_file_directory.user_string != "" {
 
 		// Get directory info from filesystem
-		dir_stat, err := os.Stat(*temp_file_directory)
+		dir_stat, err := os.Stat(temp_file_directory.user_string)
 
 		if os.IsNotExist(err) {
 			fmt.Println()
-			fmt.Println("Path to temp file dir:", *temp_file_directory, "does not exist.")
+			fmt.Println("Path to temp file dir:", temp_file_directory.user_string, "does not exist.")
 			fmt.Println()
 			os.Exit(0)
 		}
 
 		if dir_stat.IsDir() == false {
 			fmt.Println()
-			fmt.Println("Path to -td option:", *temp_file_directory, "is not a directory.")
+			fmt.Println("Path to -td option:", temp_file_directory.user_string, "is not a directory.")
 			fmt.Println()
 			os.Exit(0)
 		}
 
 		// Test if temp dir is writable
-		testfile_path := filepath.Join(*temp_file_directory, "Testfile.txt")
+		testfile_path := filepath.Join(temp_file_directory.user_string, "Testfile.txt")
 		err = os.WriteFile(testfile_path, []byte("This is a test file and can be deleted\n"), 0644)
 
 		if err != nil {
 			fmt.Println()
-			fmt.Println("Tempfile path", *temp_file_directory, "is not writable.")
+			fmt.Println("Tempfile path", temp_file_directory.user_string, "is not writable.")
 			fmt.Println()
 			os.Exit(0)
 		}
@@ -2456,7 +2427,7 @@ func main() {
 	}
 
 	// Print program version and license info.
-	if *show_program_version_short == true || *show_program_version_long == true {
+	if show_program_version_short.is_turned_on == true || show_program_version_long.is_turned_on == true {
 		fmt.Println()
 		fmt.Println("(C) Mikael Hartzell 2018.")
 		fmt.Println()
@@ -2487,14 +2458,14 @@ func main() {
 	output_filename_extension := output_mp4_filename_extension
 	output_matroska_wrapper_format := "matroska"
 
-	if *force_lossless_bool == true || *use_matroska_container == true {
+	if force_lossless.is_turned_on == true || use_matroska_container.is_turned_on == true {
 		// Use matroska as the output file wrapper format
 		output_video_format = nil
 		output_video_format = append(output_video_format, "-f", output_matroska_wrapper_format)
 		output_filename_extension = output_matroska_filename_extension
 	}
 
-	if *no_deinterlace_bool == true {
+	if no_deinterlace.is_turned_on == true {
 		deinterlace_options = "copy"
 	} else {
 		// Deinterlacing options used to be: "idet,yadif=0:deint=interlaced"  which tries to detect
@@ -2555,7 +2526,7 @@ func main() {
 		}
 
 		// For parallel HD and SD compression use max 16 cores
-		if *parallel_sd == true {
+		if parallel_sd.is_turned_on == true {
 
 			if number_of_physical_processors >= 16 {
 				number_of_threads_to_use_for_video_compression = "16"
@@ -2563,13 +2534,13 @@ func main() {
 		}
 	}
 
-	if *debug_mode_on == true {
+	if debug_option.is_turned_on == true {
 		ffmpeg_commandline_start = append(ffmpeg_commandline_start, "ffmpeg", "-y", "-hide_banner", "-threads", number_of_threads_to_use_for_video_compression)
 	} else {
 		ffmpeg_commandline_start = append(ffmpeg_commandline_start, "ffmpeg", "-y", "-loglevel", "level+error", "-threads", number_of_threads_to_use_for_video_compression)
 	}
 
-	if *subtitle_burn_split == true && *search_start_str != "" {
+	if subtitle_burn_split.is_turned_on == true && search_start_option.user_string != "" {
 		ffmpeg_commandline_start = append(ffmpeg_commandline_start, "-fflags", "+genpts")
 	}
 
@@ -2583,7 +2554,7 @@ func main() {
 		command_to_run_str_slice = nil
 		command_to_run_str_slice = append(command_to_run_str_slice, "ffprobe", "-loglevel", "level+error", "-show_entries", "format:stream", "-print_format", "flat", "-i")
 
-		if *debug_mode_on == true {
+		if debug_option.is_turned_on == true {
 			fmt.Println()
 			fmt.Println("command_to_run_str_slice:", command_to_run_str_slice, inputfile_full_path)
 		}
@@ -2619,7 +2590,7 @@ func main() {
 
 	}
 
-	if *debug_mode_on == true {
+	if debug_option.is_turned_on == true {
 
 		fmt.Println()
 		fmt.Println("Complete_file_info_slices:")
@@ -2634,7 +2605,7 @@ func main() {
 	//////////////////////
 
 	// Only scan the input files, display their stream properties and exit.
-	if *scan_mode_only_bool == true {
+	if scan_mode_only.is_turned_on == true {
 
 		for _, file_info_slice := range Complete_file_info_slice {
 			video_slice_temp := file_info_slice[0]
@@ -2731,18 +2702,18 @@ func main() {
 		// If user gave us the audio language (fin, eng, ita), find the corresponding audio stream number //
 		// If no matching audio is found stop the program.                                                //
 		////////////////////////////////////////////////////////////////////////////////////////////////////
-		if audio_stream_number_int, atoi_error = strconv.Atoi(*audio_stream_number_str) ; atoi_error != nil {
+		if audio_stream_number_int, atoi_error = strconv.Atoi(audio_stream_number_option.user_string) ; atoi_error != nil {
 
 			// If user did not give us a audio number use 0 as the default
 			audio_stream_number_int = 0
 		}
 
-		if *audio_language_str != "" {
+		if audio_language_option.user_string != "" {
 
 			for audio_stream_number, audio_info := range audio_slice {
 				audio_language = audio_info[0]
 
-				if *audio_language_str == audio_language {
+				if audio_language_option.user_string == audio_language {
 					audio_stream_number_int = audio_stream_number
 					number_of_audio_channels = audio_info[2]
 					audio_codec = audio_info[4]
@@ -2759,13 +2730,13 @@ func main() {
 					error_messages = error_messages_map[inputfile_full_path]
 				}
 
-				error_messages = append(error_messages, "Error, file does not have audio language: " + *audio_language_str)
+				error_messages = append(error_messages, "Error, file does not have audio language: " + audio_language_option.user_string)
 				error_messages_map[inputfile_full_path] = error_messages
 			}
 
-			if *debug_mode_on == true {
+			if debug_option.is_turned_on == true {
 				fmt.Println()
-				fmt.Printf("Audio: %s was found in audio stream number: %d\n", *audio_language_str, audio_stream_number_int)
+				fmt.Printf("Audio: %s was found in audio stream number: %d\n", audio_language_option.user_string, audio_stream_number_int)
 				fmt.Println()
 			}
 
@@ -2798,9 +2769,9 @@ func main() {
 		}
 
 		if default_audio_processing == "aac" {
-			*audio_compression_aac = true
+			audio_compression_aac.is_turned_on = true
 		} else if default_audio_processing == "opus" {
-			*audio_compression_opus = true
+			audio_compression_opus.is_turned_on = true
 		}
 
 
@@ -2808,23 +2779,23 @@ func main() {
 			audio_codec = "ac3"
 		}
 
-		if *audio_compression_aac == true {
+		if audio_compression_aac.is_turned_on == true {
 			audio_codec = "aac"
 		}
 
-		if *audio_compression_opus == true {
+		if audio_compression_opus.is_turned_on == true {
 			audio_codec = "opus"
 		}
 
-		if *audio_compression_ac3 == true {
+		if audio_compression_ac3.is_turned_on == true {
 			audio_codec = "ac3"
 		}
 
-		if *force_lossless_bool == true {
+		if force_lossless.is_turned_on == true {
 			audio_codec = "flac"
 		}
 
-		if *audio_compression_flac == true {
+		if audio_compression_flac.is_turned_on == true {
 			audio_codec = "flac"
 		}
 
@@ -2881,7 +2852,7 @@ func main() {
 		// Test if output audio codec is compatible with the mp4 wrapper format
 		// MP4 supported audio formats: https://en.wikipedia.org/wiki/Comparison_of_video_container_formats
 		// Amr, mp1, mp2, mp3. aac, ac3, e-ac3, dts, opus, alac, mlp, Dolby TrueHD, DTS-HD, als, sls, lpcm, DV Audio.
-		if *use_matroska_container == false && audio_stream_found == true {
+		if use_matroska_container.is_turned_on == false && audio_stream_found == true {
 
 			if audio_codec != "aac" && audio_codec != "ac3" && audio_codec != "mp2" && audio_codec != "mp3" && audio_codec != "dts" && audio_codec != "opus" {
 
@@ -2903,7 +2874,7 @@ func main() {
 		// If user gave us the subtitle language (fin, eng, ita) to burn on top of video, find the corresponding subtitle stream number //
 		// If no matching subtitle is found stop the program.                                                                           //
 		//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-		if subtitle_burn_bool == true && *subtitle_burn_language_str != "" {
+		if subtitle_burn_bool == true && subtitle_language_option.user_string != "" {
 
 			subtitle_found := false
 			subtitle_palette_supported := true
@@ -2914,7 +2885,7 @@ func main() {
 				// Subtitle found
 				subtitle_language = subtitle_info[0]
 
-				if *subtitle_burn_language_str == subtitle_language {
+				if subtitle_language_option.user_string == subtitle_language {
 					subtitle_burn_number = counter
 					subtitle_found = true
 					subtitle_format = subtitle_info[2]
@@ -2923,7 +2894,7 @@ func main() {
 						subtitle_burn_supported = false
 					}
 
-					if *subtitle_burn_palette != "" {
+					if subtitle_burn_palette.user_string != "" {
 						if subtitle_format != "dvd_subtitle" || subtitle_format != "dvb_subtitle" {
 							subtitle_palette_supported = false
 						}
@@ -2940,7 +2911,7 @@ func main() {
 					error_messages = error_messages_map[inputfile_full_path]
 				}
 
-				error_messages = append(error_messages, "Error, file does not have subtitle language: " + *subtitle_burn_language_str)
+				error_messages = append(error_messages, "Error, file does not have subtitle language: " + subtitle_language_option.user_string)
 				error_messages_map[inputfile_full_path] = error_messages
 			}
 
@@ -2955,7 +2926,7 @@ func main() {
 				error_messages_map[inputfile_full_path] = error_messages
 			}
 
-			if *subtitle_burn_palette != "" && subtitle_palette_supported == false {
+			if subtitle_burn_palette.user_string != "" && subtitle_palette_supported == false {
 				var error_messages []string
 
 				if _, item_found := error_messages_map[inputfile_full_path]; item_found == true {
@@ -2966,9 +2937,9 @@ func main() {
 				error_messages_map[inputfile_full_path] = error_messages
 			}
 
-			if *debug_mode_on == true {
+			if debug_option.is_turned_on == true {
 				fmt.Println()
-				fmt.Printf("Subtitle: %s was found in file %s as number %s\n", *subtitle_burn_language_str, inputfile_full_path, strconv.Itoa(subtitle_burn_number))
+				fmt.Printf("Subtitle: %s was found in file %s as number %s\n", subtitle_language_option.user_string, inputfile_full_path, strconv.Itoa(subtitle_burn_number))
 				fmt.Println()
 			}
 
@@ -3006,7 +2977,7 @@ func main() {
 
 				}
 
-				if *subtitle_burn_palette != "" {
+				if subtitle_burn_palette.user_string != "" {
 
 					if subtitle_format != "dvd_subtitle" || subtitle_format != "dvb_subtitle" {
 
@@ -3063,14 +3034,14 @@ func main() {
 						error_messages_map[inputfile_full_path] = error_messages
 					}
 
-					if *debug_mode_on == true {
+					if debug_option.is_turned_on == true {
 						fmt.Println()
 						fmt.Printf("Subtitle: %s was found in file %s\n", user_sub_language, inputfile_full_path)
 						fmt.Println()
 					}
 
 					// Test if output subtitle type is compatible with the mp4 wrapper format
-					if *use_matroska_container == false && subtitle_type == "hdmv_pgs_subtitle" {
+					if use_matroska_container.is_turned_on == false && subtitle_type == "hdmv_pgs_subtitle" {
 
 						var error_messages []string
 
@@ -3184,14 +3155,14 @@ func main() {
 		sd_directory_path := filepath.Join(inputfile_path, output_directory_name, sd_directory_name)
 		sd_output_file_absolute_path := filepath.Join(sd_directory_path, strings.TrimSuffix(inputfile_name, input_filename_extension) + output_filename_extension)
 
-		if *temp_file_directory != "" {
-			subtitle_extract_base_path = filepath.Join(*temp_file_directory, output_directory_name, subtitle_extract_dir)
+		if temp_file_directory.user_string != "" {
+			subtitle_extract_base_path = filepath.Join(temp_file_directory.user_string, output_directory_name, subtitle_extract_dir)
 		}
 
 		original_subtitles_absolute_path := filepath.Join(subtitle_extract_base_path, inputfile_name + "-" + original_subtitles_dir)
 		fixed_subtitles_absolute_path := filepath.Join(subtitle_extract_base_path, inputfile_name + "-" + fixed_subtitles_dir)
 
-		if *debug_mode_on == true {
+		if debug_option.is_turned_on == true {
 			fmt.Println("inputfile_path:", inputfile_path)
 			fmt.Println("inputfile_name:", inputfile_name)
 			fmt.Println("output_file_absolute_path:", output_file_absolute_path)
@@ -3224,7 +3195,7 @@ func main() {
 			os.Mkdir(filepath.Join(inputfile_path, output_directory_name), 0777)
 		}
 
-		if *parallel_sd == true || *scale_to_sd == true {
+		if parallel_sd.is_turned_on == true || scale_to_sd.is_turned_on == true {
 			// If SD output directory does not exist path then create it.
 			if _, err := os.Stat(sd_directory_path); os.IsNotExist(err) {
 				os.Mkdir(sd_directory_path, 0777)
@@ -3325,7 +3296,7 @@ func main() {
 				// Put audio options on FFmpeg commandline
 				var audio_options []string
 
-				if *no_audio == true {
+				if no_audio.is_turned_on == true {
 					audio_options = append(audio_options, "-an")
 				} else {
 					audio_options = append(audio_options, "-acodec", "flac", "-map", "0:a:" + strconv.Itoa(audio_stream_number_int))
@@ -3338,7 +3309,7 @@ func main() {
 				// Put target file path on FFmpeg commandline
 				ffmpeg_file_split_commandline = append(ffmpeg_file_split_commandline, split_file_path)
 
-				if *only_print_commands == false {
+				if only_print_commands.is_turned_on == false {
 					fmt.Println("Creating splitfile: " + splitfile_name)
 
 				}
@@ -3353,7 +3324,7 @@ func main() {
 					os.Exit(0)
 				}
 
-				if *debug_mode_on == true || *only_print_commands == true {
+				if debug_option.is_turned_on == true || only_print_commands.is_turned_on == true {
 					fmt.Println(strings.Join(ffmpeg_file_split_commandline, " "), "\n")
 				}
 
@@ -3361,7 +3332,7 @@ func main() {
 				var file_split_error_output_temp []string
 				var error_code error
 
-				if *only_print_commands == false {
+				if only_print_commands.is_turned_on == false {
 					file_split_output_temp, file_split_error_output_temp, error_code = run_external_command(ffmpeg_file_split_commandline)
 				}
 
@@ -3406,12 +3377,12 @@ func main() {
 
 			file_split_elapsed_time = time.Since(file_split_start_time)
 
-			if *only_print_commands == false {
+			if only_print_commands.is_turned_on == false {
 				fmt.Printf("\nSplitfile creation took %s\n", file_split_elapsed_time.Round(time.Millisecond))
 				fmt.Println()
 			}
 
-			if *only_print_commands == true {
+			if only_print_commands.is_turned_on == true {
 
 				fmt.Println("Contents of textfile:", split_info_file_absolute_path)
 
@@ -3434,8 +3405,8 @@ func main() {
 			log_messages_str_slice = append(log_messages_str_slice, "\nSplitfile creation took "+file_split_elapsed_time.Round(time.Millisecond).String())
 
 			// If user has not defined audio output codec use aac rather than flac
-			if *audio_compression_flac != true && audio_codec == "flac" {
-				*audio_compression_aac = true
+			if audio_compression_flac.is_turned_on != true && audio_codec == "flac" {
+				audio_compression_aac.is_turned_on = true
 				audio_codec = "aac"
 			}
 		}
@@ -3466,7 +3437,7 @@ func main() {
 		// Pixels below this point will be cropped.
 		//
 
-		if *autocrop_bool == true {
+		if autocrop_option.is_turned_on == true {
 
 			// Create the FFmpeg commandline to scan for black areas at the borders of the video.
 			command_to_run_str_slice = nil
@@ -3491,7 +3462,7 @@ func main() {
 
 			video_duration_int, _ := strconv.Atoi(strings.Split(video_duration, ".")[0])
 
-			user_defined_search_start_str = *search_start_str
+			user_defined_search_start_str = search_start_option.user_string
 
 			if user_defined_search_start_str == "" {
 				user_defined_search_start_str ="0"
@@ -3519,7 +3490,7 @@ func main() {
 				}
 			}
 
-			user_defined_video_duration_str = *processing_time_str
+			user_defined_video_duration_str = processing_duration.user_string
 
 			if user_defined_video_duration_str == "" {
 				user_defined_video_duration_str = "0"
@@ -3566,7 +3537,7 @@ func main() {
 				crop_scan_stop_time_int = user_defined_video_duration_seconds_int + user_defined_search_start_seconds_int
 			}
 
-			if *debug_mode_on == true {
+			if debug_option.is_turned_on == true {
 				fmt.Println("user_defined_search_start_seconds_str:", user_defined_search_start_seconds_str)
 				fmt.Println("user_defined_search_start_seconds_int:", user_defined_search_start_seconds_int)
 				fmt.Println("user_defined_video_duration_seconds_str:", user_defined_video_duration_seconds_str)
@@ -3585,7 +3556,7 @@ func main() {
 				scan_duration_str := "10"                     // How many seconds of video to scan for each spot (default = 10 seconds)
 				scan_duration_int, _ := strconv.Atoi(scan_duration_str)
 
-				if *debug_mode_on == false {
+				if debug_option.is_turned_on == false {
 					fmt.Printf("Finding crop values for: " + inputfile_name + "   ")
 				}
 
@@ -3596,7 +3567,7 @@ func main() {
 					command_to_run_str_slice = nil
 					command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-ss", strconv.Itoa(time_to_jump_to), "-t", scan_duration_str, "-i", inputfile_full_path, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:8:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
 
-					if *debug_mode_on == true {
+					if debug_option.is_turned_on == true {
 						fmt.Println()
 						fmt.Println("FFmpeg crop command:", command_to_run_str_slice)
 						fmt.Println()
@@ -3670,11 +3641,11 @@ func main() {
 					command_to_run_str_slice = append(command_to_run_str_slice, "ffmpeg", "-ss", strconv.Itoa(crop_start_seconds_int), "-t", strconv.Itoa(crop_scan_duration_int), "-i", inputfile_full_path, "-f", "matroska", "-sn", "-an", "-filter_complex", "cropdetect=24:8:250", "-y", "-crf", "51", "-preset", "ultrafast", "/dev/null")
 				}
 
-				if *debug_mode_on == false {
+				if debug_option.is_turned_on == false {
 					fmt.Printf("Finding crop values for: " + inputfile_name + "   ")
 				}
 
-				if *debug_mode_on == true {
+				if debug_option.is_turned_on == true {
 					fmt.Println()
 					fmt.Println("FFmpeg crop command:", command_to_run_str_slice)
 					fmt.Println()
@@ -3764,7 +3735,7 @@ func main() {
 			/////////////////////////////////////////
 			// Print variable values in debug mode //
 			/////////////////////////////////////////
-			if *debug_mode_on == true {
+			if debug_option.is_turned_on == true {
 
 				fmt.Println()
 				fmt.Println("Crop values are:")
@@ -3788,7 +3759,7 @@ func main() {
 			// Subtitle placement is always relative to the left side of the picture,
 			// if left is cropped then the subtitle needs to be moved left the same amount of pixels
 			// Don't use subtitle offset if option -sp is active because it will center subtitles automatically.
-			if *subtitle_burn_split == false {
+			if subtitle_burn_split.is_turned_on == false {
 				subtitle_horizontal_offset_int = crop_values_width_offset * -1
 				subtitle_horizontal_offset_str = strconv.Itoa(subtitle_horizontal_offset_int)
 			}
@@ -3804,12 +3775,12 @@ func main() {
 		// Subtitle Split. Move subtitles that are above the center of the screen up to the top of the screen and subtitles below center down on the bottom of the screen //
 		////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-		if *subtitle_burn_split == true && subtitle_burn_number > -1 {
+		if subtitle_burn_split.is_turned_on == true && subtitle_burn_number > -1 {
 
 			var subtitle_extract_output []string
 			var subtitle_extract_error_output []string
 
-			if *only_print_commands == false {
+			if only_print_commands.is_turned_on == false {
 				// Remove subtitle directories if they were left over from the previous run
 				if _, err := os.Stat(original_subtitles_absolute_path); err == nil {
 					fmt.Printf("Deleting original subtitle files left over from previous run. ")
@@ -3848,9 +3819,9 @@ func main() {
 
 
 			// If the user wants to use the fast and inaccurate search, place the -ss option before the first -i on ffmpeg commandline.
-			if *search_start_str != "" {
-				if *fast_search_bool == true || *crf_bool == true {
-					ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-ss", *search_start_str)
+			if search_start_option.user_string != "" {
+				if fast_search.is_turned_on == true || crf_option.is_turned_on == true {
+					ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-ss", search_start_option.user_string)
 				}
 			}
 
@@ -3863,19 +3834,19 @@ func main() {
 			}
 
 			// The user wants to use the slow and accurate search, place the -ss option after the first -i on ffmpeg commandline.
-			if *search_start_str != "" {
-				if *fast_search_bool == false && *crf_bool == false {
-					ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-ss", *search_start_str)
+			if search_start_option.user_string != "" {
+				if fast_search.is_turned_on == false && crf_option.is_turned_on == false {
+					ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-ss", search_start_option.user_string)
 				}
 			}
 
-			if *processing_time_str != "" {
-				ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-t", *processing_time_str)
+			if processing_duration.user_string != "" {
+				ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-t", processing_duration.user_string)
 			}
 
 			ffmpeg_subtitle_extract_commandline = append(ffmpeg_subtitle_extract_commandline, "-vn", "-an", "-filter_complex", "[0:s:" + strconv.Itoa(subtitle_burn_number)+"]copy[subtitle_processing_stream]", "-map", "[subtitle_processing_stream]", filepath.Join(original_subtitles_absolute_path, "subtitle-%10d." + subtitle_stream_image_format))
 
-			if *debug_mode_on == true || *only_print_commands == true {
+			if debug_option.is_turned_on == true || only_print_commands.is_turned_on == true {
 				fmt.Println()
 				fmt.Println("FFmpeg Subtitle Extract Commandline:")
 				fmt.Println(strings.Join(ffmpeg_subtitle_extract_commandline, " "))
@@ -3887,7 +3858,7 @@ func main() {
 			log_messages_str_slice = append(log_messages_str_slice, "--------------------------------")
 			log_messages_str_slice = append(log_messages_str_slice, strings.Join(ffmpeg_subtitle_extract_commandline, " "))
 
-			if *only_print_commands == false {
+			if only_print_commands.is_turned_on == false {
 				fmt.Printf("Extracting subtitle stream as %s - images ", subtitle_stream_image_format)
 			}
 
@@ -3896,7 +3867,7 @@ func main() {
 			////////////////
 			// Run FFmpeg //
 			////////////////
-			if *only_print_commands == false {
+			if only_print_commands.is_turned_on == false {
 				subtitle_extract_output, subtitle_extract_error_output, error_code = run_external_command(ffmpeg_subtitle_extract_commandline)
 			}
 
@@ -3925,7 +3896,7 @@ func main() {
 
 			subtitle_extract_elapsed_time = time.Since(subtitle_extract_start_time)
 
-			if *only_print_commands == false {
+			if only_print_commands.is_turned_on == false {
 				fmt.Println("took", subtitle_extract_elapsed_time.Round(time.Millisecond))
 			}
 
@@ -3937,35 +3908,35 @@ func main() {
 			files_str_slice := read_filenames_in_a_dir(original_subtitles_absolute_path)
 
 			duplicate_removal_start_time := time.Now()
-			if *only_print_commands == false {
+			if only_print_commands.is_turned_on == false {
 				fmt.Printf("Removing duplicate subtitle slides ")
 			}
 
 			v_height := video_height
 			v_width := video_width
 
-			if *autocrop_bool == true {
+			if autocrop_option.is_turned_on == true {
 				v_height = strconv.Itoa(crop_values_picture_height)
 				v_width = strconv.Itoa(crop_values_picture_width)
 			}
 
 			var files_remaining []string
 
-			if *only_print_commands == false {
+			if only_print_commands.is_turned_on == false {
 				files_remaining = remove_duplicate_subtitle_images (original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_str_slice, v_width, v_height)
 			}
 
 			duplicate_removal_elapsed_time := time.Since(duplicate_removal_start_time)
 
-			if *only_print_commands == false {
+			if only_print_commands.is_turned_on == false {
 				fmt.Println("took", duplicate_removal_elapsed_time.Round(time.Millisecond))
 			}
 
 			subtitle_trimming_start_time := time.Now()
 
-			if *only_print_commands == false {
+			if only_print_commands.is_turned_on == false {
 
-				if *subtitle_burn_resize != "" {
+				if subtitle_burn_resize.user_string != "" {
 
 					fmt.Printf("Trimming and resizing subtitle images in " + strconv.Itoa(number_of_physical_processors) + " threads ")
 
@@ -3974,7 +3945,7 @@ func main() {
 					fmt.Printf("Trimming subtitle images in multiple threads ")
 				}
 
-				if *debug_mode_on == true {
+				if debug_option.is_turned_on == true {
 					fmt.Println()
 				}
 			}
@@ -4000,9 +3971,9 @@ func main() {
 					subtitle_end_number = number_of_subtitle_files
 				}
 
-				go subtitle_trim(original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_remaining[subtitle_start_number : subtitle_end_number], v_width, v_height, process_number, return_channel, *subtitle_burn_resize, *subtitle_burn_grayscale)
+				go subtitle_trim(original_subtitles_absolute_path, fixed_subtitles_absolute_path, files_remaining[subtitle_start_number : subtitle_end_number], v_width, v_height, process_number, return_channel, subtitle_burn_resize.user_string, subtitle_burn_grayscale.is_turned_on)
 
-				if *debug_mode_on == true {
+				if debug_option.is_turned_on == true {
 					fmt.Println("Process number:", process_number, "started. It processes subtitles:", subtitle_start_number + 1, "-", subtitle_end_number)
 				}
 
@@ -4013,14 +3984,14 @@ func main() {
 			// Wait for subtitle processing in goroutines to end
 			processes_stopped := 1
 
-			if *debug_mode_on == true {
+			if debug_option.is_turned_on == true {
 				fmt.Println()
 			}
 
 			for processes_stopped < process_number {
 				return_message := <- return_channel
 
-				if *debug_mode_on == true {
+				if debug_option.is_turned_on == true {
 					fmt.Println("Process number:", return_message, "ended.")
 				}
 
@@ -4029,19 +4000,19 @@ func main() {
 
 			subtitle_trimming_elapsed_time := time.Since(subtitle_trimming_start_time)
 
-			if *only_print_commands == false {
+			if only_print_commands.is_turned_on == false {
 				fmt.Println("took", subtitle_trimming_elapsed_time.Round(time.Millisecond))
 			}
 
 			subtitle_processing_elapsed_time = time.Since(subtitle_processing_start_time)
 
-			if *only_print_commands == false {
+			if only_print_commands.is_turned_on == false {
 				fmt.Printf("Complete subtitle processing took %s", subtitle_processing_elapsed_time.Round(time.Millisecond))
 				fmt.Println()
 			}
 
 
-			if *debug_mode_on == false && *only_print_commands == false {
+			if debug_option.is_turned_on == false && only_print_commands.is_turned_on == false {
 
 				if _, err := os.Stat(original_subtitles_absolute_path); err == nil {
 					fmt.Printf("Deleting original subtitles to recover disk space. ")
@@ -4061,7 +4032,7 @@ func main() {
 		// Create the first part of FFmpeg commandline //
 		/////////////////////////////////////////////////
 
-		if *scan_mode_only_bool == false {
+		if scan_mode_only.is_turned_on == false {
 
 			ffmpeg_pass_1_commandline = nil
 			ffmpeg_pass_2_commandline = nil
@@ -4078,26 +4049,26 @@ func main() {
 			ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_commandline_start...)
 
 			// If the user wants to use the fast and inaccurate search, place the -ss option before the first -i on ffmpeg commandline.
-			if *search_start_str != "" {
-				if *fast_search_bool == true || *crf_bool == true {
-					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-ss", *search_start_str)
+			if search_start_option.user_string != "" {
+				if fast_search.is_turned_on == true || crf_option.is_turned_on == true {
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-ss", search_start_option.user_string)
 				}
 			}
 
 			// Add possible dvd subtitle color palette hacking option to the FFmpeg commandline.
 			// It must be before the first input file to take effect for that file.
-			if *subtitle_burn_palette != "" && subtitle_mux_bool == false {
-				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-palette", *subtitle_burn_palette)
+			if subtitle_burn_palette.user_string != "" && subtitle_mux_bool == false {
+				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-palette", subtitle_burn_palette.user_string)
 			}
 
 			if split_video == true {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-f", "concat", "-safe", "0", "-i", split_info_file_absolute_path)
 
-				 if *subtitle_burn_split == true {
+				 if subtitle_burn_split.is_turned_on == true {
 					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-thread_queue_size", "4096", "-f", "image2", "-i", filepath.Join(fixed_subtitles_absolute_path, "subtitle-%10d." + subtitle_stream_image_format))
 				}
 
-			} else if *subtitle_burn_split == true {
+			} else if subtitle_burn_split.is_turned_on == true {
 
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-i", inputfile_full_path, "-thread_queue_size", "4096", "-f", "image2", "-i", filepath.Join(fixed_subtitles_absolute_path, "subtitle-%10d." + subtitle_stream_image_format))
 
@@ -4107,15 +4078,15 @@ func main() {
 			}
 
 			// The user wants to use the slow and accurate search, place the -ss option after the first -i on ffmpeg commandline.
-			if *search_start_str != "" {
-				if *fast_search_bool == false && *crf_bool == false {
-					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-ss", *search_start_str)
+			if search_start_option.user_string != "" {
+				if fast_search.is_turned_on == false && crf_option.is_turned_on == false {
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-ss", search_start_option.user_string)
 				}
 			}
 
-			if *parallel_sd == false && *scale_to_sd == false {
-				if *processing_time_str != "" {
-					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-t", *processing_time_str)
+			if parallel_sd.is_turned_on == false && scale_to_sd.is_turned_on == false {
+				if processing_duration.user_string != "" {
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-t", processing_duration.user_string)
 				}
 			}
 
@@ -4123,7 +4094,7 @@ func main() {
 			ffmpeg_filter_options_2 := ""
 
 			// Create grayscale FFmpeg - options
-			if *grayscale_bool == false {
+			if grayscale_option.is_turned_on == false {
 
 				grayscale_options = ""
 
@@ -4133,7 +4104,7 @@ func main() {
 			}
 
 			// Timecode burn options
-			if *burn_timecode_bool == true {
+			if burn_timecode.is_turned_on == true {
 				timecode_burn_options = "drawtext=/usr/share/fonts/TTF/LiberationMono-Regular.ttf:text=%{pts \\\\: hms}:fontcolor=#ffc400:fontsize=" +
 					strconv.Itoa(timecode_font_size) + ":box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)"
 			}
@@ -4143,7 +4114,7 @@ func main() {
 			/////////////////////////////////////////////////////
 
 			// Add pullup option on the ffmpeg commandline
-			if *inverse_telecine == true {
+			if inverse_telecine.is_turned_on == true {
 				ffmpeg_filter_options = ffmpeg_filter_options + "pullup"
 			}
 
@@ -4154,7 +4125,7 @@ func main() {
 			ffmpeg_filter_options = ffmpeg_filter_options + deinterlace_options
 
 			// Add crop commands to ffmpeg commandline
-			if *autocrop_bool == true {
+			if autocrop_option.is_turned_on == true {
 				if ffmpeg_filter_options != "" {
 					ffmpeg_filter_options = ffmpeg_filter_options + ","
 				}
@@ -4162,7 +4133,7 @@ func main() {
 			}
 
 			// Add denoise options to ffmpeg commandline
-			if *denoise_bool == true {
+			if denoise_option.is_turned_on == true {
 				if ffmpeg_filter_options != "" {
 					ffmpeg_filter_options = ffmpeg_filter_options + ","
 				}
@@ -4170,12 +4141,12 @@ func main() {
 			}
 
 			// Add timecode burn in options
-			if *burn_timecode_bool == true {
+			if burn_timecode.is_turned_on == true {
 				ffmpeg_filter_options_2 = ffmpeg_filter_options_2 + "," + timecode_burn_options
 			}
 
 			// Add grayscale options to ffmpeg commandline
-			if *grayscale_bool == true {
+			if grayscale_option.is_turned_on == true {
 				ffmpeg_filter_options_2 = ffmpeg_filter_options_2 + "," + grayscale_options
 			}
 
@@ -4187,10 +4158,10 @@ func main() {
 			v_width := 0
 			v_height := 0
 
-			if *parallel_sd == true || *scale_to_sd == true {
+			if parallel_sd.is_turned_on == true || scale_to_sd.is_turned_on == true {
 
 				// Use cropped video resolution if it is defined else use original wideo reso
-				if *autocrop_bool == true {
+				if autocrop_option.is_turned_on == true {
 
 					v_width = crop_values_picture_width
 				} else {
@@ -4237,13 +4208,13 @@ func main() {
 			if subtitle_mux_bool == false && subtitle_burn_number == -1 {
 
 				// There is no subtitle to process add the "no subtitle" option to FFmpeg commandline.
-				if *parallel_sd == true {
+				if parallel_sd.is_turned_on == true {
 
 					// Create a main (HD) and SD - video simultaneously
 					// FFmpeg scaling needs only resolution of one axis and it calculates the other automatically. For example for a 1920x1080 source video: scale=1024:-2 will scale the video to 1024x576. The -2 means calculate axis automatically so that it is divisible by 2
 					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:v:0]" + ffmpeg_filter_options + ffmpeg_filter_options_2 + ",split=2[main_processed_video_out][sd_input],[sd_input]scale=" + strconv.Itoa(sd_width) + ":-2[sd_scaled_out]", "-map", "[main_processed_video_out]", "-sn")
 
-				} else if *scale_to_sd == true {
+				} else if scale_to_sd.is_turned_on == true {
 					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:v:0]" + ffmpeg_filter_options + ffmpeg_filter_options_2 + "[sd_input],[sd_input]scale=" + strconv.Itoa(sd_width) + ":-2[sd_scaled_out]")
 				} else {
 
@@ -4258,13 +4229,13 @@ func main() {
 			if subtitle_mux_bool == true {
 
 				// There is a dvd, dvb or bluray bitmap subtitle to mux into the target file add the relevant options to FFmpeg commandline.
-				if *parallel_sd == true {
+				if parallel_sd.is_turned_on == true {
 
 					// Create a main (HD) and SD - video simultaneously
 					// FFmpeg scaling needs only resolution of one axis and it calculates the other automatically. For example for a 1920x1080 source video: scale=1024:-2 will scale the video to 1024x576. The -2 means calculate axis automatically so that it is divisible by 2
 					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:v:0]" + ffmpeg_filter_options + ffmpeg_filter_options_2 + ",split=2[main_processed_video_out][sd_input],[sd_input]scale=" + strconv.Itoa(sd_width) + ":-2[sd_scaled_out]", "-map", "[main_processed_video_out]")
 
-				} else if *scale_to_sd == true {
+				} else if scale_to_sd.is_turned_on == true {
 					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", "[0:v:0]" + ffmpeg_filter_options + ffmpeg_filter_options_2 + "[sd_input],[sd_input]scale=" + strconv.Itoa(sd_width) + ":-2[sd_scaled_out]")
 				} else {
 
@@ -4290,19 +4261,19 @@ func main() {
 
 				// When cropping video widthwise shrink subtitles to fit on top of the cropped video.
 				// This results in smaller subtitle font.
-				if *autocrop_bool == true && *subtitle_burn_downscale == true {
+				if autocrop_option.is_turned_on == true && subtitle_burn_downscale.is_turned_on == true {
 					subtitle_processing_options = "scale=" + strconv.Itoa(crop_values_picture_width) + ":" + strconv.Itoa(crop_values_picture_height)
 				}
 
 				subtitle_source_file := "[0:s:"
 
-				if *subtitle_burn_split == true {
+				if subtitle_burn_split.is_turned_on == true {
 
 					subtitle_source_file = "[1:v:"
 					subtitle_burn_number = 0
 				}
 
-				if *parallel_sd == true {
+				if parallel_sd.is_turned_on == true {
 
 					// Create a main (HD) and SD - video simultaneously
 					// FFmpeg scaling needs only resolution of one axis and it calculates the other automatically. For example for a 1920x1080 source video: scale=1024:-2 will scale the video to 1024x576. The -2 means calculate axis automatically so that it is divisible by 2
@@ -4312,7 +4283,7 @@ func main() {
 						strconv.Itoa(subtitle_burn_vertical_offset_int) + ffmpeg_filter_options_2 +
 						",split=2[main_processed_video_out][sd_input],[sd_input]scale=" + strconv.Itoa(sd_width) + ":-2[sd_scaled_out]", "-map", "[main_processed_video_out]")
 
-				} else if *scale_to_sd == true {
+				} else if scale_to_sd.is_turned_on == true {
 					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-filter_complex", subtitle_source_file + strconv.Itoa(subtitle_burn_number) +
 						"]" + subtitle_processing_options + "[subtitle_processing_stream];[0:v:0]" + ffmpeg_filter_options +
 						"[video_processing_stream];[video_processing_stream][subtitle_processing_stream]overlay=" + subtitle_horizontal_offset_str + ":main_h-overlay_h+" +
@@ -4330,7 +4301,7 @@ func main() {
 				}
 
 			// Inverse telecine returns frame rate back to original 24 fps
-			if *inverse_telecine == true {
+			if inverse_telecine.is_turned_on == true {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-r", "24")
 			}
 
@@ -4345,7 +4316,7 @@ func main() {
 			// Calculate 2-pass bitrate based on the pixecount on the video frame //
 			////////////////////////////////////////////////////////////////////////
 
-			if *autocrop_bool == true {
+			if autocrop_option.is_turned_on == true {
 
 				v_width = crop_values_picture_width
 				v_height = crop_values_picture_height
@@ -4360,7 +4331,7 @@ func main() {
 
 			// User overrides automatic bitrate calculation and defines one on the commandline
 			if user_main_bitrate_bool == true {
-				main_video_2_pass_bitrate_str = *user_main_bitrate
+				main_video_2_pass_bitrate_str = main_bitrate_option.user_string
 			}
 
 			// Parallel SD video 2-pass bitrate is fixed to 1620k
@@ -4368,7 +4339,7 @@ func main() {
 
 			// User overrides automatic bitrate calculation and defines one on the commandline
 			if user_sd_bitrate_bool == true {
-				sd_video_bitrate = *user_sd_bitrate
+				sd_video_bitrate = sd_bitrate_option.user_string
 			}
 
 			/////////////////////////////////////////////////////////////////
@@ -4386,7 +4357,7 @@ func main() {
 				main_video_compression_options = video_compression_options_hd
 			}
 
-			if *crf_bool == true {
+			if crf_option.is_turned_on == true {
 				// Use constant quality instead of 2-pass encoding
 				main_video_compression_options = append(main_video_compression_options, "-crf", crf_value)
 				main_video_2_pass_bitrate_str = "Constant Quality: " + crf_value
@@ -4395,7 +4366,7 @@ func main() {
 				main_video_compression_options = append(main_video_compression_options, "-b:v", main_video_2_pass_bitrate_str)
 			}
 
-			if *force_lossless_bool == true {
+			if force_lossless.is_turned_on == true {
 				// Lossless audio compression options
 				audio_compression_options = nil
 				audio_compression_options = audio_compression_options_lossless
@@ -4405,7 +4376,7 @@ func main() {
 				main_video_2_pass_bitrate_str = "Lossless"
 			}
 
-			if *audio_compression_flac == true {
+			if audio_compression_flac.is_turned_on == true {
 				audio_compression_options = nil
 				audio_compression_options = audio_compression_options_lossless
 			}
@@ -4417,7 +4388,7 @@ func main() {
 			bitrate_int := number_of_audio_channels_int * audio_bitrate_multiplier
 			bitrate_str := strconv.Itoa(bitrate_int) + "k"
 
-			if *audio_compression_aac == true {
+			if audio_compression_aac.is_turned_on == true {
 
 				audio_compression_options = nil
 				audio_compression_options = []string{"-c:a", "aac", "-b:a", bitrate_str}
@@ -4428,7 +4399,7 @@ func main() {
 			// If we are encoding audio to opus, then enable FFmpeg experimental features
 			// -strict -2 is needed for FFmpeg to use still experimental support for opus in mp4 container.
 			// 2020.11.14: FFmpeg 4.3.1 seems to support opus in mp4 withous strict 2, these can be removed from the following lines
-			if *audio_compression_opus == true {
+			if audio_compression_opus.is_turned_on == true {
 
 				if number_of_audio_channels_int <= 2 {
 					audio_compression_options = nil
@@ -4445,7 +4416,7 @@ func main() {
 				audio_compression_options = append(audio_compression_options, "-strict", "-2")
 			}
 
-			if *audio_compression_ac3 == true {
+			if audio_compression_ac3.is_turned_on == true {
 
 				if bitrate_int > 640 {
 
@@ -4459,13 +4430,13 @@ func main() {
 
 			}
 
-			if *no_audio == true {
+			if no_audio.is_turned_on == true {
 				audio_compression_options = nil
 				audio_compression_options = append(audio_compression_options, "-an")
 			}
 
 			// Add subtitle options for parallel SD processing
-			if *parallel_sd == true || *scale_to_sd == true {
+			if parallel_sd.is_turned_on == true || scale_to_sd.is_turned_on == true {
 
 				if subtitle_mux_bool == false && subtitle_burn_number == -1 {
 					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-sn")
@@ -4482,22 +4453,22 @@ func main() {
 			}
 
 			// Add video compression options to ffmpeg commandline
-			if *scale_to_sd == false {
+			if scale_to_sd.is_turned_on == false {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, main_video_compression_options...)
 			}
 
-			if *parallel_sd == true || *scale_to_sd == true {
+			if parallel_sd.is_turned_on == true || scale_to_sd.is_turned_on == true {
 
 				sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, video_compression_options_sd...)
 
-				if *crf_bool == true {
+				if crf_option.is_turned_on == true {
 					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-crf", crf_value)
 				} else {
 					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-b:v", sd_video_bitrate)
 				}
 			}
 
-			if *scale_to_sd == false {
+			if scale_to_sd.is_turned_on == false {
 				// Add color subsampling options if needed
 				if color_subsampling != "yuv420p" {
 					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, color_subsampling_options...)
@@ -4506,21 +4477,21 @@ func main() {
 				// Add audio compression options to ffmpeg commandline
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, audio_compression_options...)
 
-				if *no_audio == false {
+				if no_audio.is_turned_on == false {
 					// Add audiomapping options on the commanline
 					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(audio_stream_number_int))
 				}
 			}
 
 			// Add color subsampling options to SD commandline if needed
-			if color_subsampling != "yuv420p" && *parallel_sd == true || *scale_to_sd == true {
+			if color_subsampling != "yuv420p" && parallel_sd.is_turned_on == true || scale_to_sd.is_turned_on == true {
 				sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, color_subsampling_options...)
 			}
 
 			// Add audio compression options to SD commandline
-			if *parallel_sd == true || *scale_to_sd == true {
+			if parallel_sd.is_turned_on == true || scale_to_sd.is_turned_on == true {
 
-				if *force_lossless_bool == true {
+				if force_lossless.is_turned_on == true {
 
 					// If main video audio is lossless use aac compression for the SD video
 					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-c:a", "aac", "-b:a", bitrate_str)
@@ -4531,65 +4502,65 @@ func main() {
 			}
 
 			// Add audiomapping options on the SD commanline
-			if *parallel_sd == true || *scale_to_sd == true {
+			if parallel_sd.is_turned_on == true || scale_to_sd.is_turned_on == true {
 
-				if *no_audio == false {
+				if no_audio.is_turned_on == false {
 					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-map", "0:a:" + strconv.Itoa(audio_stream_number_int))
 				}
 			}
 
-			if *scale_to_sd == false {
-				if *processing_time_str != "" {
-					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-t", *processing_time_str)
+			if scale_to_sd.is_turned_on == false {
+				if processing_duration.user_string != "" {
+					ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-t", processing_duration.user_string)
 				}
 			}
 
-			if *parallel_sd == true || *scale_to_sd == true {
-				if *processing_time_str != "" {
-					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-t", *processing_time_str)
+			if parallel_sd.is_turned_on == true || scale_to_sd.is_turned_on == true {
+				if processing_duration.user_string != "" {
+					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-t", processing_duration.user_string)
 				}
 			}
 
 			ffmpeg_2_pass_logfile_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension))
 			ffmpeg_sd_2_pass_logfile_path := filepath.Join(inputfile_path, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension) + "-sd")
 
-			if *temp_file_directory != "" {
-				ffmpeg_2_pass_logfile_path = filepath.Join(*temp_file_directory, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension))
-				ffmpeg_sd_2_pass_logfile_path = filepath.Join(*temp_file_directory, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension) + "-sd")
+			if temp_file_directory.user_string != "" {
+				ffmpeg_2_pass_logfile_path = filepath.Join(temp_file_directory.user_string, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension))
+				ffmpeg_sd_2_pass_logfile_path = filepath.Join(temp_file_directory.user_string, output_directory_name, strings.TrimSuffix(inputfile_name, input_filename_extension) + "-sd")
 			}
 
-			if *fast_encode_bool == false && *crf_bool == false && *scale_to_sd == false {
+			if fast_encode.is_turned_on == false && crf_option.is_turned_on == false && scale_to_sd.is_turned_on == false {
 				// Add 2 - pass logfile path to ffmpeg commandline
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-passlogfile")
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, ffmpeg_2_pass_logfile_path)
 			}
 
-			if *parallel_sd == true || *scale_to_sd == true {
+			if parallel_sd.is_turned_on == true || scale_to_sd.is_turned_on == true {
 
-				if *fast_encode_bool == false && *crf_bool == false {
+				if fast_encode.is_turned_on == false && crf_option.is_turned_on == false {
 					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-passlogfile")
 					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, ffmpeg_sd_2_pass_logfile_path)
 				}
 			}
 
-			if *scale_to_sd == false {
+			if scale_to_sd.is_turned_on == false {
 				// Add video output format to ffmpeg commandline
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, output_video_format...)
 			}
 
 			// Add video output format SD to ffmpeg commandline
-			if *parallel_sd == true || *scale_to_sd == true {
+			if parallel_sd.is_turned_on == true || scale_to_sd.is_turned_on == true {
 				sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, output_video_format...)
 			}
 
 			// Copy ffmpeg pass 2 commandline to ffmpeg pass 1 commandline
 			ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, ffmpeg_pass_2_commandline...)
-			if *parallel_sd == true || *scale_to_sd == true {
+			if parallel_sd.is_turned_on == true || scale_to_sd.is_turned_on == true {
 				sd_ffmpeg_pass_1_commandline = append(sd_ffmpeg_pass_1_commandline, sd_ffmpeg_pass_2_commandline...)
 			}
 
 			// Add pass 1/2 info on ffmpeg commandline
-			if *fast_encode_bool == false && *crf_bool == false && *scale_to_sd == false {
+			if fast_encode.is_turned_on == false && crf_option.is_turned_on == false && scale_to_sd.is_turned_on == false {
 
 				ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, "-pass", "1")
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, "-pass", "2")
@@ -4599,9 +4570,9 @@ func main() {
 
 			}
 
-			if *parallel_sd == true || *scale_to_sd == true {
+			if parallel_sd.is_turned_on == true || scale_to_sd.is_turned_on == true {
 
-				if *fast_encode_bool == false && *crf_bool == false {
+				if fast_encode.is_turned_on == false && crf_option.is_turned_on == false {
 					sd_ffmpeg_pass_1_commandline = append(sd_ffmpeg_pass_1_commandline, "-pass", "1")
 					sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, "-pass", "2")
 
@@ -4611,20 +4582,20 @@ func main() {
 			}
 
 			// Add outfile path to ffmpeg pass 2 commandline
-			if *scale_to_sd == false {
+			if scale_to_sd.is_turned_on == false {
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, output_file_absolute_path)
 			}
 			sd_ffmpeg_pass_2_commandline = append(sd_ffmpeg_pass_2_commandline, sd_output_file_absolute_path)
 
 			// Add parallel SD compression options to FFmpeg commandline.
-			if *parallel_sd == true || *scale_to_sd == true {
+			if parallel_sd.is_turned_on == true || scale_to_sd.is_turned_on == true {
 				ffmpeg_pass_1_commandline = append(ffmpeg_pass_1_commandline, sd_ffmpeg_pass_1_commandline...)
 				ffmpeg_pass_2_commandline = append(ffmpeg_pass_2_commandline, sd_ffmpeg_pass_2_commandline...)
 			}
 
 			// If we have "fast" mode on then we will only do 1-pass encoding and the pass 1 commandline is the same as pass 2.
 			// In this case we won't do pass 2 at all.
-			if *fast_encode_bool == true || *crf_bool == true {
+			if fast_encode.is_turned_on == true || crf_option.is_turned_on == true {
 				ffmpeg_pass_1_commandline = ffmpeg_pass_2_commandline
 				sd_ffmpeg_pass_1_commandline = sd_ffmpeg_pass_2_commandline
 			}
@@ -4632,7 +4603,7 @@ func main() {
 			/////////////////////////////////////////
 			// Print variable values in debug mode //
 			/////////////////////////////////////////
-			if *debug_mode_on == true {
+			if debug_option.is_turned_on == true {
 				fmt.Println()
 				fmt.Println("video_compression_options_sd:", video_compression_options_sd)
 				fmt.Println("video_compression_options_hd:", video_compression_options_hd)
@@ -4642,34 +4613,34 @@ func main() {
 				fmt.Println("deinterlace_options:", deinterlace_options)
 				fmt.Println("ffmpeg_commandline_start:", ffmpeg_commandline_start)
 				fmt.Println("subtitle_burn_number:", subtitle_burn_number)
-				fmt.Println("subtitle_burn_language_str:", subtitle_burn_language_str)
+				fmt.Println("subtitle_language_option.user_string:", subtitle_language_option.user_string)
 				fmt.Println("subtitle_burn_vertical_offset_int:", subtitle_burn_vertical_offset_int)
-				fmt.Println("*subtitle_burn_downscale:", *subtitle_burn_downscale)
-				fmt.Println("*subtitle_burn_palette:", *subtitle_burn_palette)
-				fmt.Println("*subtitle_burn_split:", *subtitle_burn_split)
+				fmt.Println("subtitle_burn_downscale.is_turned_on:", subtitle_burn_downscale.is_turned_on)
+				fmt.Println("subtitle_burn_palette.user_string:", subtitle_burn_palette.user_string)
+				fmt.Println("subtitle_burn_split.is_turned_on:", subtitle_burn_split.is_turned_on)
 				fmt.Println("subtitle_mux_bool:", subtitle_mux_bool)
 				fmt.Println("user_subtitle_mux_numbers_slice:", user_subtitle_mux_numbers_slice)
 				fmt.Println("user_subtitle_mux_languages_slice:", user_subtitle_mux_languages_slice)
-				fmt.Println("*grayscale_bool:", *grayscale_bool)
+				fmt.Println("grayscale_option.is_turned_on:", grayscale_option.is_turned_on)
 				fmt.Println("grayscale_options:", grayscale_options)
 				fmt.Println("color_subsampling_options", color_subsampling_options)
-				fmt.Println("*autocrop_bool:", *autocrop_bool)
+				fmt.Println("autocrop_option.is_turned_on:", autocrop_option.is_turned_on)
 				fmt.Println("subtitle_burn_number:", subtitle_burn_number)
-				fmt.Println("*no_deinterlace_bool:", *no_deinterlace_bool)
-				fmt.Println("*denoise_bool:", *denoise_bool)
+				fmt.Println("no_deinterlace.is_turned_on:", no_deinterlace.is_turned_on)
+				fmt.Println("denoise_option.is_turned_on:", denoise_option.is_turned_on)
 				fmt.Println("audio_stream_number_int:", audio_stream_number_int)
-				fmt.Println("*scan_mode_only_bool", *scan_mode_only_bool)
-				fmt.Println("*search_start_str", *search_start_str)
-				fmt.Println("*processing_stop_time_str", *processing_stop_time_str)
-				fmt.Println("*processing_time_str", *processing_time_str)
-				fmt.Println("*fast_bool", *fast_bool)
-				fmt.Println("*fast_search_bool", *fast_search_bool)
-				fmt.Println("*fast_encode_bool", *fast_encode_bool)
-				fmt.Println("*burn_timecode_bool", *burn_timecode_bool)
+				fmt.Println("scan_mode_only.is_turned_on:", scan_mode_only.is_turned_on)
+				fmt.Println("search_start_option.user_string", search_start_option.user_string)
+				fmt.Println("processing_stop_time.user_string", processing_stop_time.user_string)
+				fmt.Println("processing_duration.user_string", processing_duration.user_string)
+				fmt.Println("fast_encode_and_search.is_turned_on", fast_encode_and_search.is_turned_on)
+				fmt.Println("fast_search.is_turned_on", fast_search.is_turned_on)
+				fmt.Println("fast_encode.is_turned_on", fast_encode.is_turned_on)
+				fmt.Println("burn_timecode.is_turned_on", burn_timecode.is_turned_on)
 				fmt.Println("timecode_burn_options", timecode_burn_options)
-				fmt.Println("*crf_bool", *crf_bool)
+				fmt.Println("crf_option.is_turned_on", crf_option.is_turned_on)
 				fmt.Println("crf_value", crf_value)
-				fmt.Println("*debug_mode_on", *debug_mode_on)
+				fmt.Println("debug_option.is_turned_on", debug_option.is_turned_on)
 				fmt.Println()
 				fmt.Println("input_filenames:", input_filenames)
 			}
@@ -4695,7 +4666,7 @@ func main() {
 
 			pass_1_commandline_for_logfile = first_part_of_string + second_part_of_string + third_part_of_string
 
-			if *debug_mode_on == true || * only_print_commands == true {
+			if debug_option.is_turned_on == true || only_print_commands.is_turned_on == true {
 
 				fmt.Println()
 				fmt.Println("ffmpeg_pass_1_commandline:")
@@ -4704,25 +4675,25 @@ func main() {
 			} else {
 				fmt.Println()
 
-				if *inverse_telecine == true {
+				if inverse_telecine.is_turned_on == true {
 					fmt.Print("Performing Inverse Telecine on video.\n")
 				}
 
-				if frame_rate_str == "29.970" && *inverse_telecine == false {
+				if frame_rate_str == "29.970" && inverse_telecine.is_turned_on == false {
 					fmt.Println("\033[7mWarning: Video frame rate is 29.970. You may need to pullup (Inverse Telecine) this video with option -it\033[0m")
 				}
 
-				if *parallel_sd == true || *scale_to_sd == true {
+				if parallel_sd.is_turned_on == true || scale_to_sd.is_turned_on == true {
 
-					if *scale_to_sd == false && *crf_bool == true {
+					if scale_to_sd.is_turned_on == false && crf_option.is_turned_on == true {
 
 						fmt.Println("Encoding main and SD video with", main_video_2_pass_bitrate_str)
 
-					} else if *scale_to_sd == true && *crf_bool == true {
+					} else if scale_to_sd.is_turned_on == true && crf_option.is_turned_on == true {
 
 						fmt.Println("Encoding SD video with", main_video_2_pass_bitrate_str)
 
-					} else if * scale_to_sd == true && *crf_bool == false {
+					} else if scale_to_sd.is_turned_on == true && crf_option.is_turned_on == false {
 
 						fmt.Println("Encoding SD-video with bitrate:", sd_video_bitrate)
 
@@ -4732,7 +4703,7 @@ func main() {
 					}
 				} else {
 
-					if *crf_bool == true {
+					if crf_option.is_turned_on == true {
 						fmt.Println("Encoding video with", main_video_2_pass_bitrate_str)
 					} else {
 						fmt.Println("Encoding video with bitrate:", main_video_2_pass_bitrate_str)
@@ -4743,19 +4714,19 @@ func main() {
 					fmt.Println("Subsampling color:", color_subsampling, "---> yuv420p")
 				}
 
-				if *no_audio == true {
+				if no_audio.is_turned_on == true {
 
 					fmt.Println("Audio processing is off.")
 
-				} else if *audio_compression_ac3 == true {
+				} else if audio_compression_ac3.is_turned_on == true {
 
 					fmt.Printf("Encoding %s channel audio to ac3 with bitrate: %s\n", strconv.Itoa(number_of_audio_channels_int), audio_compression_options[3])
 
-				} else if *audio_compression_aac == true {
+				} else if audio_compression_aac.is_turned_on == true {
 
 					fmt.Printf("Encoding %s channel audio to aac with bitrate: %s\n", strconv.Itoa(number_of_audio_channels_int), audio_compression_options[3])
 
-				} else if *audio_compression_opus == true {
+				} else if audio_compression_opus.is_turned_on == true {
 
 					fmt.Printf("Encoding %s channel audio to opus with bitrate: %s\n", strconv.Itoa(number_of_audio_channels_int), audio_compression_options[3])
 				} else {
@@ -4775,7 +4746,7 @@ func main() {
 			var ffmpeg_pass_1_error_output_temp []string
 			var error_code error
 
-			if *only_print_commands == false {
+			if only_print_commands.is_turned_on == false {
 				ffmpeg_pass_1_output_temp, ffmpeg_pass_1_error_output_temp, error_code = run_external_command(ffmpeg_pass_1_commandline)
 			}
 
@@ -4800,7 +4771,7 @@ func main() {
 
 			pass_1_elapsed_time = time.Since(pass_1_start_time)
 
-			if *only_print_commands == false {
+			if only_print_commands.is_turned_on == false {
 				fmt.Printf("took %s", pass_1_elapsed_time.Round(time.Millisecond))
 			}
 			fmt.Println()
@@ -4825,7 +4796,7 @@ func main() {
 			log_messages_str_slice = append(log_messages_str_slice, "-----------------------")
 			log_messages_str_slice = append(log_messages_str_slice, pass_1_commandline_for_logfile)
 
-			if *debug_mode_on == true {
+			if debug_option.is_turned_on == true {
 
 				fmt.Println()
 
@@ -4844,9 +4815,9 @@ func main() {
 			/////////////////////////////////////
 			// Run Pass 2 encoding with FFmpeg //
 			/////////////////////////////////////
-			if *fast_encode_bool == false && *crf_bool == false {
+			if fast_encode.is_turned_on == false && crf_option.is_turned_on == false {
 
-				if *debug_mode_on == true || *only_print_commands == true  {
+				if debug_option.is_turned_on == true || only_print_commands.is_turned_on == true  {
 
 					fmt.Println()
 					fmt.Println("ffmpeg_pass_2_commandline:")
@@ -4858,7 +4829,7 @@ func main() {
 					fmt.Printf("Pass 2 encoding: " + inputfile_name + " ")
 				}
 
-				if *only_print_commands == true {
+				if only_print_commands.is_turned_on == true {
 					os.Exit(0)
 				}
 
@@ -4907,7 +4878,7 @@ func main() {
 				log_messages_str_slice = append(log_messages_str_slice, "-----------------------")
 				log_messages_str_slice = append(log_messages_str_slice, pass_2_commandline_for_logfile)
 
-				if *debug_mode_on == true {
+				if debug_option.is_turned_on == true {
 
 					fmt.Println()
 
@@ -4927,7 +4898,7 @@ func main() {
 			}
 
 
-			if *only_print_commands == true {
+			if only_print_commands.is_turned_on == true {
 				os.Exit(0)
 			}
 
@@ -4951,7 +4922,7 @@ func main() {
 				os.Remove(ffmpeg_sd_2_pass_logfile_path + "-0.log.mbtree")
 			}
 
-			if *debug_mode_on == true {
+			if debug_option.is_turned_on == true {
 
 				fmt.Println("\nSplitfiles are not deleted in debug - mode.\n")
 
@@ -4973,8 +4944,8 @@ func main() {
 
 			}
 
-			if *subtitle_burn_split == true {
-				if *debug_mode_on == true {
+			if subtitle_burn_split.is_turned_on == true {
+				if debug_option.is_turned_on == true {
 					fmt.Println("\nExtracted subtitle images are not deleted in debug - mode.\n")
 				} else {
 
@@ -5002,7 +4973,7 @@ func main() {
 			}
 
 			// Delete SD output directory if it is empty
-			if *parallel_sd == true {
+			if parallel_sd.is_turned_on == true {
 				file_handle, err := os.Open(sd_directory_path)
 				defer file_handle.Close()
 
