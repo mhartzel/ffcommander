@@ -1,4 +1,4 @@
-% FFCOMMANDER(1) ffcommander 2.41
+% FFCOMMANDER(1) ffcommander 2.44
 % Mikael Hartzell (C) 2018
 % 2021
 

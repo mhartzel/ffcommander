@@ -88,7 +88,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.43" // This is the version of this program
+var version_number string = "2.44" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1855,7 +1855,6 @@ func main() {
 	no_deinterlace := store_options_and_help_text_bool("Video", "nd", "No Deinterlace. By default deinterlace is always used. This option disables it.")
 	parallel_sd := store_options_and_help_text_bool("Video", "psd", "Parallel SD. Create SD version in parallel to HD processing. This creates an additional version of the video downconverted to SD resolution. The SD file is stored in directory: sd")
 	sd_bitrate_option := store_options_and_help_text_string("Video", "sbr", "", "Override parallel sd videoprocessing automatic bitrate calculation and define bitrate manually. SD - video is stored in directory 'sd'")
-	split_times := store_options_and_help_text_string("Video", "sf", "", "Split out parts of the file. Give start and stop times for the parts of the file to use. Use either commas and slashes or only commas to separate time values. Example: -sf 0-10:00,01:35:12.800-01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.")
 	scale_to_sd := store_options_and_help_text_bool("Video", "ssd", "Scale to SD. Scale video down to SD resolution. Calculates resolution automatically. Video is stored in directory 'sd'")
 	burn_timecode := store_options_and_help_text_bool("Video", "tc", "Burn timecode on top of the video. Timecode can be used to look for exact edit points for the file split feature")
 
@@ -1879,6 +1878,7 @@ func main() {
 	fast_encode := store_options_and_help_text_bool("Scan", "fe", "Fast encoding mode. Encode video using 1-pass encoding.")
 	fast_search := store_options_and_help_text_bool("Scan", "fs", "Fast seek mode. When using the -fs option with -st do not decode video before the point we are trying to locate, but instead try to jump directly to it. This search method might or might not be accurate depending on the file format.")
 	scan_mode_only := store_options_and_help_text_bool("Scan", "scan", "Only scan input files and print video, audio and subtitle stream info.")
+	split_times := store_options_and_help_text_string("Scan", "sf", "", "Split out parts of the file. Give start and stop times for the parts of the file to use. Use either commas and slashes or only commas to separate time values. Example: -sf 0-10:00,01:35:12.800-01:52:14 defines that 0 secs - 10 mins of the start of the file will be used and joined to the next part that starts at 01 hours 35 mins 12 seconds and 800 milliseconds and stops at 01 hours 52 mins 14 seconds. Don't use space - characters. A zero or word 'start' can be used to mark the absolute start of the file and word 'end' the end of the file. Both start and stop times must be defined.")
 	search_start_option := store_options_and_help_text_string("Scan", "st", "", "Start time. Start video processing from this timecode. Example -st 30:00 starts processing from 30 minutes from the start of the file.")
 	processing_stop_time := store_options_and_help_text_string("Scan", "et", "", "End time. Stop video processing to this timecode. Example -et 01:30:00 stops processing at 1 hour 30 minutes. You can define a time range like this: -st 10:09 -et 01:22:49.500 This results in a video file that starts at 10 minutes 9 seconds and stops at 1 hour 22 minutes, 49 seconds and 500 milliseconds.")
 	processing_duration := store_options_and_help_text_string("Scan", "d", "", "Duration of video to process. Example -d 01:02 process 1 minutes and 2 seconds of the file. Use either -et or -d option not both.")
@@ -2015,16 +2015,124 @@ func main() {
 		cut_list_seconds_str_slice, cut_positions_as_timecodes = process_split_times(split_times.user_string, debug_option.is_turned_on)
 	}
 
-	// -f option turns on both options -fs and -fe
-	if fast_encode_and_search.is_turned_on == true {
-		fast_search.is_turned_on = true
-		fast_encode.is_turned_on = true
-	}
-
 	// Parallel SD processing requires defining inputfile seek for each output file or placing the seek before the inputfile.
 	// We choose to place the seek before the inputfile. This results using the fast but sometimes inaccurate FFmpeg seek.
 	if parallel_sd.is_turned_on == true || scale_to_sd.is_turned_on == true {
 		fast_search.is_turned_on = true
+	}
+
+	// Test if user gave more than one audio compression option
+	var audio_compression_slice []string
+
+	if audio_compression_ac3.is_turned_on == true {
+		audio_compression_slice = append(audio_compression_slice, "-ac3")
+	}
+
+	if audio_compression_aac.is_turned_on == true {
+		audio_compression_slice = append(audio_compression_slice, "-aac")
+	}
+
+	if audio_compression_opus.is_turned_on == true {
+		audio_compression_slice = append(audio_compression_slice, "-opus")
+	}
+
+	if audio_compression_flac.is_turned_on == true {
+		audio_compression_slice = append(audio_compression_slice, "-flac")
+	}
+
+	if len(audio_compression_slice) > 1 {
+		fmt.Println()
+		fmt.Printf("Error: more than one audio compression options on the commandline: ")
+
+		for _, item := range(audio_compression_slice) {
+			fmt.Printf(item + " ")
+		}
+
+		fmt.Println("\n")
+		os.Exit(0)
+	}
+
+	if force_lossless.is_turned_on == true && len(audio_compression_slice) >= 1 {
+		fmt.Println()
+		fmt.Printf("Error: -ls (lossless processing) cannot be used at the same time as audio compression options: ")
+
+			for _, item := range(audio_compression_slice) {
+				fmt.Printf(item + " ")
+			}
+
+		fmt.Println("\n")
+		os.Exit(0)
+	}
+
+	if audio_language_option.is_turned_on == true && audio_stream_number_option.is_turned_on == true {
+		fmt.Println()
+		fmt.Println("Error: options -a and -an can't be used at the same time.")
+		fmt.Println()
+		os.Exit(0)
+	}
+
+	if no_audio.is_turned_on == true {
+
+		if audio_language_option.is_turned_on == true || audio_stream_number_option.is_turned_on == true {
+			fmt.Println()
+			fmt.Printf("Error: -na (no audio) cannot be used at the same time as audio selection options.")
+			fmt.Println()
+			os.Exit(0)
+		}
+	}
+
+	if crf_option.is_turned_on == true {
+
+		if fast_encode_and_search.is_turned_on == true || fast_encode.is_turned_on == true {
+			fmt.Println()
+			fmt.Println("Error: option -crf can't be used at the same time as options -f or -fe.")
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		if main_bitrate_option.is_turned_on == true {
+			fmt.Println()
+			fmt.Println("Error: options -crf and -mbr can't be used at the same time.")
+			fmt.Println()
+			os.Exit(0)
+		}
+	}
+
+	if processing_stop_time.is_turned_on == true && processing_duration.is_turned_on == true {
+		fmt.Println()
+		fmt.Println("Error: options -et and -d can't be used at the same time.")
+		fmt.Println()
+		os.Exit(0)
+	}
+
+	if subtitle_language_option.is_turned_on == true && subtitle_stream_number_option.is_turned_on == true {
+		fmt.Println()
+		fmt.Println("Error: options -s and -sn can't be used at the same time.")
+		fmt.Println()
+		os.Exit(0)
+	}
+
+	if subtitle_burn_split.is_turned_on == true && subtitle_vertical_offset.is_turned_on == true {
+		fmt.Println()
+		fmt.Println("Error: options -sp and -so can't be used at the same time.")
+		fmt.Println()
+		os.Exit(0)
+	}
+
+	if split_times.is_turned_on == true {
+
+		if search_start_option.is_turned_on == true || processing_stop_time.is_turned_on == true {
+			fmt.Println()
+			fmt.Println("Error: options -sp can't be used at the same time as -st or -et.")
+			fmt.Println()
+			os.Exit(0)
+		}
+	}
+
+	// -f option turns on both options -fs and -fe
+	if fast_encode_and_search.is_turned_on == true {
+		fast_search.is_turned_on = true
+		fast_encode.is_turned_on = true
 	}
 
 	if search_start_option.user_string == "" && processing_stop_time.user_string != "" {
@@ -2033,6 +2141,7 @@ func main() {
 			fmt.Println()
 			os.Exit(0)
 	}
+
 	// Convert processing end time to duration and store it in variable used with -d option (duration).
 	// FFmpeg does not understarnd end times, only start time + duration.
 	if processing_stop_time.user_string != "" {
