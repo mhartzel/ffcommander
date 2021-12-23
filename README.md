@@ -50,7 +50,7 @@ FFcommander source code does not have any dependencies but it needs FFmpeg and I
 You can either use the binary version of FFcommander or build it yourself from source.
 
 ## Option 1 use binary release:
-- Download FFcommander binary: **wget -c https://github.com/mhartzel/ffcommander/blob/master/binary_release/ffcommander.tgz**  
+- Download FFcommander binary: **wget -c https://raw.github.com/mhartzel/ffcommander/master/binary_release/ffcommander.tgz**  
 - Unpack binary: **tar xzf ffcommander.tgz**  
 - Copy the executable to /usr/bin/: **sudo cp ffcommander /usr/bin/**  
 
@@ -62,11 +62,11 @@ You can either use the binary version of FFcommander or build it yourself from s
 - Copy the executable to /usr/bin/: **sudo cp ffcommander /usr/bin/**  
 
 # Installation for Ubuntu 20.04
-We need to build ImageMagick from source since ImageMagick version 7 is not available in Ubuntu repo. Only the older version 6 is avaible at this time (Ubuntu versions 20.04, 20.10, 21.04, 21.10). The imei script (https://github.com/SoftCreatR/imei/) makes building ImageMagick very easy.
+We need to build ImageMagick from source since ImageMagick version 7 is not available in Ubuntu repo. Only the older version 6 is avaible at this time (Ubuntu versions 20.04, 20.10, 21.04, 21.10). The "**ImageMagick Easy Install**" script (https://github.com/SoftCreatR/imei/) makes building ImageMagick very easy.
 
 - Remove previous installation of ImageMagick 6: **sudo apt remove imagemagick**  
 - Install programs and build tools: **sudo apt install git ffmpeg build-essential**  
-- Download FFcommander binary: **wget -c https://github.com/mhartzel/ffcommander/blob/master/binary_release/ffcommander.tgz**  
+- Download FFcommander binary: **wget -c https://raw.github.com/mhartzel/ffcommander/master/binary_release/ffcommander.tgz**  
 - Unpack binary: **tar xzf ffcommander.tgz**  
 - Copy the executable to /usr/bin/: **sudo cp ffcommander /usr/bin/**  
 
