@@ -38,18 +38,43 @@ I wrote FFcommander out of frustration to Handbrake and its limitations. FFcomma
 
 - Display the commandlines that FFcommander creates for FFmpeg to learn how FFmpeg coomandline works (**-print**).
 
+# Dependencies
+FFmpeg 4, ImageMagick 7 (or any later version of these programs). Go - language version 1.16 or later is needed for building the source code.
+
 # Program installation
-FFcommander source code does not have any external dependencies so building the program is very easy (just one command). First install a couple of programs from your distros repo.  
+FFcommander source code does not have any dependencies but it needs FFmpeg and ImageMagick to process files. ImageMagick is only needed when processing subtitles with the -sp option.
 
-- Install FFmpeg, Imagemagick, git, and the go - language compiler:  
+# Installation for Manjaro / Arch Linux
+- Install programs: **sudo pacman -S ffmpeg imagemagick**  
 
-- Arch or Manjaro: **pacman -S ffmpeg imagemagick go go-tools**  
-- Ubuntu: **apt-get install ffmpeg imagemagick golang**  
+You can either use the binary version of FFcommander or build it yourself from source.
 
-- Get the source code: **git clone https://github.com/mhartzel/ffcommander.git/**  
-- Go to source directory: **cd ffcommander.git/**  
+## Option 1 use binary release:
+- Download FFcommander binary: **wget -c https://github.com/mhartzel/ffcommander/blob/master/binary_release/ffcommander.tgz**  
+- Unpack binary: **tar xzf ffcommander.tgz**  
+- Copy the executable to /usr/bin/: **sudo cp ffcommander /usr/bin/**  
+
+## Option 2 build from source:
+- Install build tools: **sudo pacman -S git go go-tools**  
+- Get source code: **git clone https://github.com/mhartzel/ffcommander.git/**  
+- Go to source directory: **cd ffcommander**  
 - Build the program: **go build ffcommander.go**  
-- Copy the executable: **ffcommander** to some directory in your path for example: **sudo cp ffcommander /usr/bin/**
+- Copy the executable to /usr/bin/: **sudo cp ffcommander /usr/bin/**  
+
+# Installation for Ubuntu 20.04
+We need to build ImageMagick from source since ImageMagick version 7 is not available in Ubuntu repo. Only the older version 6 is avaible at this time (Ubuntu versions 20.04, 20.10, 21.04, 21.10). The imei script (https://github.com/SoftCreatR/imei/) makes building ImageMagick very easy.
+
+- Remove previous installation of ImageMagick 6: **sudo apt remove imagemagick**  
+- Install programs and build tools: **sudo apt install git ffmpeg build-essential**  
+- Download FFcommander binary: **wget -c https://github.com/mhartzel/ffcommander/blob/master/binary_release/ffcommander.tgz**  
+- Unpack binary: **tar xzf ffcommander.tgz**  
+- Copy the executable to /usr/bin/: **sudo cp ffcommander /usr/bin/**  
+
+Then get the imei build script and build ImageMagick.  
+- Get the build-script: **git clone https://github.com/SoftCreatR/imei**  
+- Go to source directory: **cd imei**  
+- Make script executable: **chmod +x imei.sh**  
+- Start the build-script: **sudo ./imei.sh**  
 
 # Manpage installation
 - The man page has exactly the same text as the **README.md** included in the git repository. However if you want to install the man page in your system then do the following:
