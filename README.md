@@ -168,7 +168,7 @@ Then get the imei build script and build ImageMagick.
 
 **-h** or **-help** Display help text.
 
-# The mpv videoplayer
+# The mpv video player
 The mpv video player is very uselful when trying to find in and out points to cut a video. **mpv** can be configured to show timecode in 1000th of a second resolution.  Put the text: **osd-fractions** in the file **~/.config/mpv/mpv.conf** ). Turn timecode display on or off with the keyboard shortcut **ctrl + o** Mpv also lets you step forward / back frame by frame while displaying the timecode (, and . keys).  
 
 # Examples

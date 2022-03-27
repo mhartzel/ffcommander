@@ -88,7 +88,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.45" // This is the version of this program
+var version_number string = "2.47" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -568,30 +568,20 @@ func convert_seconds_to_timecode(item string) string {
 
 func process_split_times(split_times string, debug_option bool) ([]string, []string) {
 
-	var cut_list_string_slice, cut_list_seconds_str_slice, cut_list_positions_and_durations_seconds, cut_positions_after_processing_seconds, cut_positions_as_timecodes []string
+	var cut_list_seconds_str_slice, cut_list_positions_and_durations_seconds, cut_positions_after_processing_seconds, cut_positions_as_timecodes []string
 	var seconds_total_str, error_happened string
 
-	var runes []rune
-
-	// The time values have characters 0-9 and : and . in them. Recognize these characters as time values.
-	// This lets the user use any other character to separate time values from each other,
-	// excluding characters that the shell tries to interpret: ()#!<>*/
-	for _, item := range split_times {
-
-		switch item {
-		case rune('0'),rune('1'),rune('2'),rune('3'),rune('4'),rune('5'),rune('6'),rune('7'),rune('8'),rune('9'),rune(':'),rune('.'):
-			runes = append(runes, item)
-		default:
-			cut_list_string_slice = append(cut_list_string_slice, string(runes))
-			runes = nil
-		}
-	}
-
-	cut_list_string_slice = append(cut_list_string_slice, string(runes)) // Append the last time value to the slice
+	split_times = strings.ReplaceAll(split_times, "-", ",")
+	cut_list_string_slice := strings.Split(split_times, ",")
 
 	if len(cut_list_string_slice)%2 != 0 {
 		fmt.Println("\nError: Split timecodes must be given in pairs (start_time, stop_time). There are:", len(cut_list_string_slice), "times on the commandline\n")
 		os.Exit(1)
+	}
+
+	if debug_option == true {
+		fmt.Println("")
+		fmt.Println("process_split_times: cut_list_string_slice:", cut_list_string_slice, "len(cut_list_string_slice):", len(cut_list_string_slice))
 	}
 
 	//////////////////////////////////////////////////////////////
