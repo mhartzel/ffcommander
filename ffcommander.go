@@ -88,7 +88,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.47" // This is the version of this program
+var version_number string = "2.48" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1220,7 +1220,7 @@ func store_options_and_help_text_int(category string, option string, value int, 
 
 	// This function does what flag.Int does in go and extends it a little
 	// The function stores category, option name, variables and help text for a commandline option.
-	// It also returns pointer to the value default value for the commandline option
+	// It also returns pointer to the default value for the commandline option
 	// so that it can be assigned to a variable.
 
 	if category == "" {
@@ -1274,7 +1274,7 @@ func store_options_and_help_text_bool(category string, option string, help_text 
 
 	// This function does what flag.Bool does in go and extends it a little
 	// The function stores category, option name, variables and help text for a commandline option.
-	// It also returns pointer to the value default value for the commandline option
+	// It also returns pointer to the default value for the commandline option
 	// so that it can be assigned to a variable.
 
 	if category == "" {
@@ -1327,7 +1327,7 @@ func store_options_and_help_text_string(category string, option string, value st
 
 	// This function does what flag.String does in go and extends it a little
 	// The function stores category, option name, variables and help text for a commandline option.
-	// It also returns pointer to the value default value for the commandline option
+	// It also returns pointer to the default value for the commandline option
 	// so that it can be assigned to a variable.
 
 	if category == "" {
@@ -1837,6 +1837,9 @@ func main() {
 
 	// Video options
 	autocrop_option := store_options_and_help_text_bool("Video", "ac", "Autocrop. Find crop values automatically by doing 10 second spot checks in 10 places for the duration of the file.")
+	adjust_black_point := store_options_and_help_text_string("Video", "ab", "", "Adjust video black point to make light video darker. This will move dark tones closer to black. Range is from -100 to 100. 0 = no change, numbers bigger than 0 makes video darker. Example: -ab 30")
+	adjust_gamma := store_options_and_help_text_string("Video", "ag", "", "Adjust video gamma. This will make mid tones lighter or darker. Range is from 10 to 100. 10 = no change, numbers bigger than 10 moves mid tones towards white. Example: -ag 20")
+	adjust_white_point := store_options_and_help_text_string("Video", "aw", "", "Adjust video white point to make dark video lighter. This will move light tones closer to white. Range is from -100 to 100. 100 = no change, numbers smaller than 100 makes video lighter. Example: -aw 70")
 	crf_option := store_options_and_help_text_bool("Video", "crf", "Use Constant Quality instead of 2-pass encoding. The default value for crf is 18, which produces the same quality as default 2-pass but a bigger file. CRF is much faster that 2-pass encoding.")
 	denoise_option := store_options_and_help_text_bool("Video", "dn", "Denoise. Use HQDN3D - filter to remove noise from the picture. This option is equal to Hanbrakes 'medium' noise reduction settings.")
 	grayscale_option := store_options_and_help_text_bool("Video", "gr", "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.")
@@ -2458,6 +2461,129 @@ func main() {
 		fmt.Println("Error: options -psd and -ssd can't be used at the same time.")
 		fmt.Println()
 		os.Exit(0)
+	}
+
+	// Check that the number given for the -ab option is between -100 and 100 and convert it to a number between -1.0 and 1.0
+	// First adjust black, then white, and then gamma.
+	if adjust_black_point.is_turned_on == true {
+
+		var error_happened error
+
+		adjust_black_point.user_int, error_happened = strconv.Atoi(adjust_black_point.user_string)
+
+		if error_happened == nil {
+			adjust_black_point.user_int, error_happened = strconv.Atoi(adjust_black_point.user_string)
+		} else {
+			fmt.Println()
+			fmt.Println("Error: value for option -aw is not an integer: ", adjust_black_point.user_string)
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		if adjust_black_point.user_int < -100 || adjust_black_point.user_int > 100 {
+			fmt.Println()
+			fmt.Println("Error: value for option -aw must be a integer between -100 and 100.")
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		var temp_string string
+
+		if len(adjust_black_point.user_string) == 3 {
+			temp_string = string(adjust_black_point.user_string[0]) + string('.') + string(adjust_black_point.user_string[1:])
+		}
+
+		if len(adjust_black_point.user_string) == 2 {
+			temp_string = string('0') + string('.') + adjust_black_point.user_string
+		}
+
+		if len(adjust_black_point.user_string) == 1 {
+			temp_string = string('0') + string('.') + string('0')  + adjust_black_point.user_string
+		}
+
+		adjust_black_point.user_string = temp_string
+	}
+
+	// Check that the number given for the -aw option is between -100 and 100 and convert it to a number between -1.0 and 1.0
+	// First adjust black, then white, and then gamma.
+	if adjust_white_point.is_turned_on == true {
+
+		var error_happened error
+
+		adjust_white_point.user_int, error_happened = strconv.Atoi(adjust_white_point.user_string)
+
+		if error_happened == nil {
+			adjust_white_point.user_int, error_happened = strconv.Atoi(adjust_white_point.user_string)
+		} else {
+			fmt.Println()
+			fmt.Println("Error: value for option -aw is not an integer: ", adjust_white_point.user_string)
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		if adjust_white_point.user_int < -100 || adjust_white_point.user_int > 100 {
+			fmt.Println()
+			fmt.Println("Error: value for option -aw must be a integer between -100 and 100.")
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		var temp_string string
+
+		if len(adjust_white_point.user_string) == 3 {
+			temp_string = string(adjust_white_point.user_string[0]) + string('.') + string(adjust_white_point.user_string[1:])
+		}
+
+		if len(adjust_white_point.user_string) == 2 {
+			temp_string = string('0') + string('.') + adjust_white_point.user_string
+		}
+
+		if len(adjust_white_point.user_string) == 1 {
+			temp_string = string('0') + string('.') + string('0')  + adjust_white_point.user_string
+		}
+
+		adjust_white_point.user_string = temp_string
+	}
+
+	// Check that the number given for the -ag option is between 10 and 100 and convert it to a number between 0.1 and 10
+	// First adjust black, then white, and then gamma.
+	if adjust_gamma.is_turned_on == true {
+
+		var error_happened error
+
+		adjust_gamma.user_int, error_happened = strconv.Atoi(adjust_gamma.user_string)
+
+		if error_happened == nil {
+			adjust_gamma.user_int, error_happened = strconv.Atoi(adjust_gamma.user_string)
+		} else {
+			fmt.Println()
+			fmt.Println("Error: value for option -aw is not an integer: ", adjust_gamma.user_string)
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		if adjust_gamma.user_int < 10 || adjust_gamma.user_int > 100 {
+			fmt.Println()
+			fmt.Println("Error: value for option -aw must be a integer between 10 and 100.")
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		var temp_string string
+
+		if len(adjust_gamma.user_string) == 3 {
+			temp_string = string(adjust_gamma.user_string[0:2]) + string('.') + string(adjust_gamma.user_string[2])
+		}
+
+		if len(adjust_gamma.user_string) == 2 {
+			temp_string = string(adjust_gamma.user_string[0]) + string('.') + string(adjust_gamma.user_string[1])
+		}
+
+		if len(adjust_gamma.user_string) == 1 {
+			temp_string = string('0') + string('.') + adjust_gamma.user_string
+		}
+
+		adjust_gamma.user_string = temp_string
 	}
 
 	if debug_option.is_turned_on == true && only_print_commands.is_turned_on == true {
@@ -3267,6 +3393,9 @@ func main() {
 			fmt.Println("output_file_absolute_path:", output_file_absolute_path)
 			fmt.Println("video_width:", video_width)
 			fmt.Println("video_height:", video_height)
+			fmt.Println("adjust_black_point.user_string:", adjust_black_point.user_string)
+			fmt.Println("adjust_white_point.user_string:", adjust_white_point.user_string)
+			fmt.Println("adjust_gamma.user_string:", adjust_gamma.user_string)
 			fmt.Println("orig_subtitle_path", orig_subtitle_path)
 			fmt.Println("cropped_subtitle_path", cropped_subtitle_path)
 			fmt.Println("subtitle_extract_base_path", subtitle_extract_base_path)
@@ -4208,6 +4337,23 @@ func main() {
 					strconv.Itoa(timecode_font_size) + ":box=1:boxcolor=black@0.7:boxborderw=10:x=(w-text_w)/2:y=(text_h/2)"
 			}
 
+			// Create white point adjustment command
+			var black_point_adjustment_command string
+			var gamma_adjustment_command string
+			var white_point_adjustment_command string
+
+			if adjust_black_point.is_turned_on == true {
+				black_point_adjustment_command = "colorlevels=rimin=" + adjust_black_point.user_string + ":gimin=" + adjust_black_point.user_string + ":bimin=" + adjust_black_point.user_string
+			}
+
+			if adjust_white_point.is_turned_on == true {
+				white_point_adjustment_command = "colorlevels=rimax=" + adjust_white_point.user_string + ":gimax=" + adjust_white_point.user_string + ":bimax=" + adjust_white_point.user_string
+			}
+
+			if adjust_gamma.is_turned_on == true {
+				gamma_adjustment_command = "eq=gamma=" + adjust_gamma.user_string
+			}
+
 			/////////////////////////////////////////////////////
 			// Create -filter_complex processing chain options //
 			/////////////////////////////////////////////////////
@@ -4237,6 +4383,34 @@ func main() {
 					ffmpeg_filter_options = ffmpeg_filter_options + ","
 				}
 				ffmpeg_filter_options = ffmpeg_filter_options + strings.Join(denoise_options, "")
+			}
+
+			// Add black point adjustment options to ffmpeg commandline
+			if adjust_black_point.is_turned_on == true {
+				if ffmpeg_filter_options != "" {
+					ffmpeg_filter_options = ffmpeg_filter_options + ","
+				}
+				ffmpeg_filter_options = ffmpeg_filter_options + black_point_adjustment_command
+			}
+
+			// Add white point adjustment options to ffmpeg commandline
+			if adjust_white_point.is_turned_on == true {
+				if ffmpeg_filter_options != "" {
+					ffmpeg_filter_options = ffmpeg_filter_options + ","
+				}
+				ffmpeg_filter_options = ffmpeg_filter_options + white_point_adjustment_command
+			}
+
+			// Add gamma adjustment options to ffmpeg commandline
+			if adjust_gamma.is_turned_on == true {
+				if ffmpeg_filter_options != "" {
+					ffmpeg_filter_options = ffmpeg_filter_options + ","
+				}
+				ffmpeg_filter_options = ffmpeg_filter_options + gamma_adjustment_command
+			}
+
+			if adjust_black_point.is_turned_on == true || adjust_white_point.is_turned_on == true {
+				ffmpeg_filter_options = ffmpeg_filter_options + ",format=yuv420p"
 			}
 
 			// Add timecode burn in options

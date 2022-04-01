@@ -1,4 +1,4 @@
-% FFCOMMANDER(1) ffcommander 2.45
+% FFCOMMANDER(1) ffcommander 2.48
 % Mikael Hartzell (C) 2018
 % 2021
 
@@ -78,6 +78,12 @@ Then get the imei build script and build ImageMagick.
 
 # Video options
 **-ac** Autocrop. Find crop values automatically by doing 10 second spot checks in 10 places for the duration of the file.  
+
+**-ab** Adjust video black point to make light video darker. This will move dark tones closer to black. Range is from -100 to 100. 0 = no change, numbers bigger than 0 makes video darker. Example: -ab 30  
+
+**-ag** Adjust video gamma. This will make mid tones lighter or darker. Range is from 10 to 100. 10 = no change, numbers bigger than 10 moves mid tones towards white. Example: -ag 20  
+
+**-aw** Adjust video white point to make dark video lighter. This will move light tones closer to white. Range is from -100 to 100. 100 = no change, numbers smaller than 100 makes video lighter. Example: -aw 70"  
 
 **-crf** Use Constant Quality instead of 2-pass encoding. The default value for crf is 18, which produces the same quality as default 2-pass but a bigger file. CRF is much faster that 2-pass encoding.  
 
