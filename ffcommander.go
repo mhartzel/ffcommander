@@ -88,7 +88,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.48" // This is the version of this program
+var version_number string = "2.49" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1836,10 +1836,11 @@ func main() {
 	no_audio := store_options_and_help_text_bool("Audio", "na", "Disable audio processing. There is no audio in the resulting file.")
 
 	// Video options
+	adjust_black_point := store_options_and_help_text_string("Video", "abk", "", "Adjust video black point to make light video darker. This will move dark tones closer to black. Range is from -100 to 100. 0 = no change, numbers bigger than 0 makes video darker. Example: -abk 30")
 	autocrop_option := store_options_and_help_text_bool("Video", "ac", "Autocrop. Find crop values automatically by doing 10 second spot checks in 10 places for the duration of the file.")
-	adjust_black_point := store_options_and_help_text_string("Video", "ab", "", "Adjust video black point to make light video darker. This will move dark tones closer to black. Range is from -100 to 100. 0 = no change, numbers bigger than 0 makes video darker. Example: -ab 30")
-	adjust_gamma := store_options_and_help_text_string("Video", "ag", "", "Adjust video gamma. This will make mid tones lighter or darker. Range is from 10 to 100. 10 = no change, numbers bigger than 10 moves mid tones towards white. Example: -ag 20")
-	adjust_white_point := store_options_and_help_text_string("Video", "aw", "", "Adjust video white point to make dark video lighter. This will move light tones closer to white. Range is from -100 to 100. 100 = no change, numbers smaller than 100 makes video lighter. Example: -aw 70")
+	adjust_chroma := store_options_and_help_text_string("Video", "ach", "", "Adjust Chroma to increase or decrease the amount of color in the video. Range is 0 to 300. Value of 100 means no change. Values less than 100 decrease and values bigger than 100 increases the level of color in the video. Example -ach 85")
+	adjust_gamma := store_options_and_help_text_string("Video", "agm", "", "Adjust video gamma. This will make mid tones lighter or darker. Range is from 10 to 1000. 100 = no change, numbers bigger than 100 moves mid tones towards white. Example: -agm 105")
+	adjust_white_point := store_options_and_help_text_string("Video", "awh", "", "Adjust video white point to make dark video lighter. This will move light tones closer to white. Range is from -100 to 100. 100 = no change, numbers smaller than 100 makes video lighter. Example: -awh 70")
 	crf_option := store_options_and_help_text_bool("Video", "crf", "Use Constant Quality instead of 2-pass encoding. The default value for crf is 18, which produces the same quality as default 2-pass but a bigger file. CRF is much faster that 2-pass encoding.")
 	denoise_option := store_options_and_help_text_bool("Video", "dn", "Denoise. Use HQDN3D - filter to remove noise from the picture. This option is equal to Hanbrakes 'medium' noise reduction settings.")
 	grayscale_option := store_options_and_help_text_bool("Video", "gr", "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.")
@@ -2463,7 +2464,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Check that the number given for the -ab option is between -100 and 100 and convert it to a number between -1.0 and 1.0
+	// Check that the number given for the -abk option is between -100 and 100 and convert it to a number between -1.0 and 1.0
 	// First adjust black, then white, and then gamma.
 	if adjust_black_point.is_turned_on == true {
 
@@ -2475,14 +2476,14 @@ func main() {
 			adjust_black_point.user_int, error_happened = strconv.Atoi(adjust_black_point.user_string)
 		} else {
 			fmt.Println()
-			fmt.Println("Error: value for option -aw is not an integer: ", adjust_black_point.user_string)
+			fmt.Println("Error: value for option -abk is not an integer: ", adjust_black_point.user_string)
 			fmt.Println()
 			os.Exit(0)
 		}
 
 		if adjust_black_point.user_int < -100 || adjust_black_point.user_int > 100 {
 			fmt.Println()
-			fmt.Println("Error: value for option -aw must be a integer between -100 and 100.")
+			fmt.Println("Error: value for option -abk must be an integer between -100 and 100.")
 			fmt.Println()
 			os.Exit(0)
 		}
@@ -2504,7 +2505,7 @@ func main() {
 		adjust_black_point.user_string = temp_string
 	}
 
-	// Check that the number given for the -aw option is between -100 and 100 and convert it to a number between -1.0 and 1.0
+	// Check that the number given for the -awh option is between -100 and 100 and convert it to a number between -1.0 and 1.0
 	// First adjust black, then white, and then gamma.
 	if adjust_white_point.is_turned_on == true {
 
@@ -2516,14 +2517,14 @@ func main() {
 			adjust_white_point.user_int, error_happened = strconv.Atoi(adjust_white_point.user_string)
 		} else {
 			fmt.Println()
-			fmt.Println("Error: value for option -aw is not an integer: ", adjust_white_point.user_string)
+			fmt.Println("Error: value for option -awh is not an integer: ", adjust_white_point.user_string)
 			fmt.Println()
 			os.Exit(0)
 		}
 
 		if adjust_white_point.user_int < -100 || adjust_white_point.user_int > 100 {
 			fmt.Println()
-			fmt.Println("Error: value for option -aw must be a integer between -100 and 100.")
+			fmt.Println("Error: value for option -awh must be an integer between -100 and 100.")
 			fmt.Println()
 			os.Exit(0)
 		}
@@ -2545,7 +2546,7 @@ func main() {
 		adjust_white_point.user_string = temp_string
 	}
 
-	// Check that the number given for the -ag option is between 10 and 100 and convert it to a number between 0.1 and 10
+	// Check that the number given for the -agm option is between 10 and 1000 and convert it to a number between 0.1 and 10
 	// First adjust black, then white, and then gamma.
 	if adjust_gamma.is_turned_on == true {
 
@@ -2557,33 +2558,74 @@ func main() {
 			adjust_gamma.user_int, error_happened = strconv.Atoi(adjust_gamma.user_string)
 		} else {
 			fmt.Println()
-			fmt.Println("Error: value for option -aw is not an integer: ", adjust_gamma.user_string)
+			fmt.Println("Error: value for option -agm is not an integer: ", adjust_gamma.user_string)
 			fmt.Println()
 			os.Exit(0)
 		}
 
-		if adjust_gamma.user_int < 10 || adjust_gamma.user_int > 100 {
+		if adjust_gamma.user_int < 10 || adjust_gamma.user_int > 1000 {
 			fmt.Println()
-			fmt.Println("Error: value for option -aw must be a integer between 10 and 100.")
+			fmt.Println("Error: value for option -agm must be an integer between 10 and 1000.")
 			fmt.Println()
 			os.Exit(0)
 		}
 
 		var temp_string string
 
-		if len(adjust_gamma.user_string) == 3 {
+		if len(adjust_gamma.user_string) == 4 {
 			temp_string = string(adjust_gamma.user_string[0:2]) + string('.') + string(adjust_gamma.user_string[2])
 		}
 
-		if len(adjust_gamma.user_string) == 2 {
-			temp_string = string(adjust_gamma.user_string[0]) + string('.') + string(adjust_gamma.user_string[1])
+		if len(adjust_gamma.user_string) == 3 {
+			temp_string = string(adjust_gamma.user_string[0]) + string('.') + string(adjust_gamma.user_string[1:])
 		}
 
-		if len(adjust_gamma.user_string) == 1 {
+		if len(adjust_gamma.user_string) == 2 {
 			temp_string = string('0') + string('.') + adjust_gamma.user_string
 		}
 
 		adjust_gamma.user_string = temp_string
+	}
+
+	// Check that the number given for the -ach option is between 0 and 300 and convert it to a number between 0.0 and 3.0
+	// First adjust black, then white, and then gamma.
+	if adjust_chroma.is_turned_on == true {
+
+		var error_happened error
+
+		adjust_chroma.user_int, error_happened = strconv.Atoi(adjust_chroma.user_string)
+
+		if error_happened == nil {
+			adjust_chroma.user_int, error_happened = strconv.Atoi(adjust_chroma.user_string)
+		} else {
+			fmt.Println()
+			fmt.Println("Error: value for option -ach is not an integer: ", adjust_chroma.user_string)
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		if adjust_chroma.user_int < 0 || adjust_chroma.user_int > 300 {
+			fmt.Println()
+			fmt.Println("Error: value for option -ach must be an integer between 0 and 300.")
+			fmt.Println()
+			os.Exit(0)
+		}
+
+		var temp_string string
+
+		if len(adjust_chroma.user_string) == 3 {
+			temp_string = string(adjust_chroma.user_string[0]) + string('.') + string(adjust_chroma.user_string[1:])
+		}
+
+		if len(adjust_chroma.user_string) == 2 {
+			temp_string = string('0') + string('.') + adjust_chroma.user_string
+		}
+
+		if len(adjust_chroma.user_string) == 1 {
+			temp_string = string('0') + string('.') + string('0')  + adjust_chroma.user_string
+		}
+
+		adjust_chroma.user_string = temp_string
 	}
 
 	if debug_option.is_turned_on == true && only_print_commands.is_turned_on == true {
@@ -3396,6 +3438,7 @@ func main() {
 			fmt.Println("adjust_black_point.user_string:", adjust_black_point.user_string)
 			fmt.Println("adjust_white_point.user_string:", adjust_white_point.user_string)
 			fmt.Println("adjust_gamma.user_string:", adjust_gamma.user_string)
+			fmt.Println("adjust_chroma.user_string:", adjust_chroma.user_string)
 			fmt.Println("orig_subtitle_path", orig_subtitle_path)
 			fmt.Println("cropped_subtitle_path", cropped_subtitle_path)
 			fmt.Println("subtitle_extract_base_path", subtitle_extract_base_path)
@@ -4341,6 +4384,7 @@ func main() {
 			var black_point_adjustment_command string
 			var gamma_adjustment_command string
 			var white_point_adjustment_command string
+			var chroma_adjustment_command string
 
 			if adjust_black_point.is_turned_on == true {
 				black_point_adjustment_command = "colorlevels=rimin=" + adjust_black_point.user_string + ":gimin=" + adjust_black_point.user_string + ":bimin=" + adjust_black_point.user_string
@@ -4352,6 +4396,10 @@ func main() {
 
 			if adjust_gamma.is_turned_on == true {
 				gamma_adjustment_command = "eq=gamma=" + adjust_gamma.user_string
+			}
+
+			if adjust_chroma.is_turned_on == true {
+				chroma_adjustment_command = "eq=saturation=" + adjust_chroma.user_string
 			}
 
 			/////////////////////////////////////////////////////
@@ -4401,6 +4449,10 @@ func main() {
 				ffmpeg_filter_options = ffmpeg_filter_options + white_point_adjustment_command
 			}
 
+			if adjust_black_point.is_turned_on == true || adjust_white_point.is_turned_on == true {
+				ffmpeg_filter_options = ffmpeg_filter_options + ",format=yuv420p"
+			}
+
 			// Add gamma adjustment options to ffmpeg commandline
 			if adjust_gamma.is_turned_on == true {
 				if ffmpeg_filter_options != "" {
@@ -4409,8 +4461,12 @@ func main() {
 				ffmpeg_filter_options = ffmpeg_filter_options + gamma_adjustment_command
 			}
 
-			if adjust_black_point.is_turned_on == true || adjust_white_point.is_turned_on == true {
-				ffmpeg_filter_options = ffmpeg_filter_options + ",format=yuv420p"
+			// Add chroma adjustment options to ffmpeg commandline
+			if adjust_chroma.is_turned_on == true {
+				if ffmpeg_filter_options != "" {
+					ffmpeg_filter_options = ffmpeg_filter_options + ","
+				}
+				ffmpeg_filter_options = ffmpeg_filter_options + chroma_adjustment_command
 			}
 
 			// Add timecode burn in options
