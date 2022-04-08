@@ -88,7 +88,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.49" // This is the version of this program
+var version_number string = "2.50" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -598,6 +598,8 @@ func process_split_times(split_times string, debug_option bool) ([]string, []str
 			break
 		}
 
+		temp_string = sanitize_float(temp_string, debug_option)
+
 		seconds_total_str, error_happened = convert_timecode_to_seconds(temp_string)
 
 		if error_happened != "" {
@@ -863,6 +865,200 @@ func custom_float_substraction(value_1_str string, value_2_str string) (remainin
 	remaining_float, _ = strconv.ParseFloat(remaining_str, 64)
 
 	return remaining_str, remaining_float
+}
+
+func sanitize_float(input_string string, debug_option bool) (string) {
+
+	if debug_option == true {
+		fmt.Println()
+		fmt.Println("sanitize_float Before:", input_string)
+	}
+
+	if strings.Index(input_string, ".") == -1 {
+		// There is no decimal part, sanitize a whole number
+
+		// Remove unnecessary leading zeros if there are any
+		for input_string[0] == '0' && len(input_string) > 1 {
+			input_string = input_string[1:]
+		}
+
+	} else {
+
+		// There is a decimal part in the float
+
+		// Add leading zero if it is missing
+		if input_string[0] == '.' {
+			input_string = "0" + input_string
+		}
+
+		// Add trailing zero if it is missing
+		if input_string[len(input_string) -1] == '.' {
+			input_string = input_string + "0"
+		}
+
+		// Remove unnecessary leading zeros if there are any
+		for input_string[0] == '0' && input_string[1] != '.' {
+			input_string = input_string[1:]
+		}
+
+		// Remove unnecessary trailing zeros if there are any
+		for input_string[len(input_string) - 1] == '0' && input_string[len(input_string) - 2] != '.' {
+			input_string = input_string[0:len(input_string) - 1]
+		}
+	}
+
+	if debug_option == true {
+		fmt.Println("sanitize_float After:", input_string)
+		fmt.Println()
+	}
+
+	return input_string
+}
+
+func float_is_between_limits(value_to_compare_str string, min_value_str string, max_value_str string, debug_option bool) (float_is_between_limits bool) {
+
+	// Check that a float is between lower and upper limits.
+	// Don't use real floats since I don't trust them to do the job correctly.
+	// Instead use strings and remove the decimal component and compare values as ints.
+
+	var value_to_compare_int, min_value_int, max_value_int, biggest_decimal_part, value_to_compare_decimal_lenght, min_value_decimal_lenght, max_value_decimal_lenght int
+	var error_happened error
+
+	// Find index of decimal point in the number
+	value_to_compare_index := strings.Index(value_to_compare_str, ".")
+	min_value_index := strings.Index(min_value_str, ".")
+	max_value_index := strings.Index(max_value_str, ".")
+
+	if value_to_compare_index == 0 {
+		fmt.Println("Error: illegal number:", value_to_compare_str)
+		os.Exit(0)
+	}
+
+	if min_value_index == 0 {
+		fmt.Println("Error: illegal number:", min_value_str)
+		os.Exit(0)
+	}
+
+	if max_value_index == 0 {
+		fmt.Println("Error: illegal number:", max_value_str)
+		os.Exit(0)
+	}
+
+	if value_to_compare_index < 0 { value_to_compare_index = 0 }
+	if min_value_index < 0 { min_value_index = 0 }
+	if max_value_index < 0 { max_value_index = 0 }
+
+	// How many numbers are there after the decimal point
+	if value_to_compare_index > 0 {
+
+		value_to_compare_decimal_lenght = len(value_to_compare_str[value_to_compare_index + 1:])
+	}
+
+	if min_value_index > 0 {
+
+		min_value_decimal_lenght = len(min_value_str[min_value_index + 1:])
+	}
+
+	if max_value_index > 0 {
+
+		max_value_decimal_lenght = len(max_value_str[max_value_index + 1:])
+	}
+
+	if value_to_compare_decimal_lenght > biggest_decimal_part {
+		biggest_decimal_part = value_to_compare_decimal_lenght
+	}
+
+	if min_value_decimal_lenght > biggest_decimal_part {
+		biggest_decimal_part = min_value_decimal_lenght
+	}
+
+	if max_value_decimal_lenght > biggest_decimal_part {
+		biggest_decimal_part = max_value_decimal_lenght
+	}
+
+	///////////
+	// Value //
+	///////////
+	value_to_compare_str = strings.Replace(value_to_compare_str, ".", "", 1)
+
+	for x := 1 ; x <= biggest_decimal_part - value_to_compare_decimal_lenght ; x++ {
+		value_to_compare_str = value_to_compare_str + "0"
+	}
+
+	value_to_compare_int, error_happened = strconv.Atoi(value_to_compare_str)
+
+	if error_happened != nil {
+		fmt.Println("Custom float Comparison: Error converting string to int:", value_to_compare_str)
+		os.Exit(0)
+	}
+
+	///////////////
+	// Min Limit //
+	///////////////
+	min_value_str = strings.Replace(min_value_str, ".", "", 1)
+
+	for x := 1 ; x <= biggest_decimal_part - min_value_decimal_lenght ; x++ {
+		min_value_str = min_value_str + "0"
+	}
+
+	min_value_int, error_happened = strconv.Atoi(min_value_str)
+
+	if error_happened != nil {
+		fmt.Println("Custom float Comparison: Error converting string to int:", min_value_str)
+		os.Exit(0)
+	}
+
+	///////////////
+	// Max Limit //
+	///////////////
+	max_value_str = strings.Replace(max_value_str, ".", "", 1)
+
+	for x := 1 ; x <= biggest_decimal_part - max_value_decimal_lenght ; x++ {
+		max_value_str = max_value_str + "0"
+	}
+
+	max_value_int, error_happened = strconv.Atoi(max_value_str)
+
+	if error_happened != nil {
+		fmt.Println("Custom float Comparison: Error converting string to int:", max_value_str)
+		os.Exit(0)
+	}
+
+	//////////////////
+	// Compare Ints //
+	//////////////////
+	if value_to_compare_int >= min_value_int && value_to_compare_int <= max_value_int {
+		float_is_between_limits = true
+	} else {
+		float_is_between_limits = false
+	}
+
+	if debug_option == true {
+		fmt.Println("")
+		fmt.Println("value_to_compare_str", value_to_compare_str)
+		fmt.Println("value_to_compare_index", value_to_compare_index)
+		fmt.Println("value_to_compare_decimal_lenght", value_to_compare_decimal_lenght)
+		fmt.Println("value_to_compare_int", value_to_compare_int)
+		fmt.Println("")
+
+		fmt.Println("min_value_str", min_value_str)
+		fmt.Println("min_value_index", min_value_index)
+		fmt.Println("min_value_decimal_lenght", min_value_decimal_lenght)
+		fmt.Println("min_value_int", min_value_int)
+		fmt.Println("")
+
+		fmt.Println("max_value_str", max_value_str)
+		fmt.Println("max_value_index", max_value_index)
+		fmt.Println("max_value_decimal_lenght", max_value_decimal_lenght)
+		fmt.Println("max_value_int", max_value_int)
+		fmt.Println("")
+
+		fmt.Println("biggest_decimal_part", biggest_decimal_part)
+		fmt.Println("float_is_between_limits", float_is_between_limits)
+		fmt.Println("")
+	}
+
+	return float_is_between_limits
 }
 
 func read_filenames_in_a_dir(source_dir string) (files_str_slice []string) {
@@ -1836,11 +2032,11 @@ func main() {
 	no_audio := store_options_and_help_text_bool("Audio", "na", "Disable audio processing. There is no audio in the resulting file.")
 
 	// Video options
-	adjust_black_point := store_options_and_help_text_string("Video", "abk", "", "Adjust video black point to make light video darker. This will move dark tones closer to black. Range is from -100 to 100. 0 = no change, numbers bigger than 0 makes video darker. Example: -abk 30")
+	adjust_black_point := store_options_and_help_text_string("Video", "abk", "", "Adjust video black point to make light video darker. This will move dark tones closer to black. Range is from -1.0 to 1.0. 0 = no change, numbers bigger than 0 makes video darker. Example: -abk 0.3")
 	autocrop_option := store_options_and_help_text_bool("Video", "ac", "Autocrop. Find crop values automatically by doing 10 second spot checks in 10 places for the duration of the file.")
-	adjust_chroma := store_options_and_help_text_string("Video", "ach", "", "Adjust Chroma to increase or decrease the amount of color in the video. Range is 0 to 300. Value of 100 means no change. Values less than 100 decrease and values bigger than 100 increases the level of color in the video. Example -ach 85")
-	adjust_gamma := store_options_and_help_text_string("Video", "agm", "", "Adjust video gamma. This will make mid tones lighter or darker. Range is from 10 to 1000. 100 = no change, numbers bigger than 100 moves mid tones towards white. Example: -agm 105")
-	adjust_white_point := store_options_and_help_text_string("Video", "awh", "", "Adjust video white point to make dark video lighter. This will move light tones closer to white. Range is from -100 to 100. 100 = no change, numbers smaller than 100 makes video lighter. Example: -awh 70")
+	adjust_chroma := store_options_and_help_text_string("Video", "ach", "", "Adjust Chroma to increase or decrease the amount of color in the video. Range is 0.0 to 3.0. Value of 1 means no change. Values less than 1 decrease and values bigger than 1 increases the level of color in the video. Example -ach 0.85")
+	adjust_gamma := store_options_and_help_text_string("Video", "agm", "", "Adjust video gamma. This will make mid tones lighter or darker. Range is from 0.1 to 10. 1 = no change, numbers bigger than 1 moves mid tones towards white. Example: -agm 1.05")
+	adjust_white_point := store_options_and_help_text_string("Video", "awh", "", "Adjust video white point to make dark video lighter. This will move light tones closer to white. Range is from -1.0 to 1.0. 1 = no change, numbers smaller than 1 makes video lighter. Example: -awh 0.7")
 	crf_option := store_options_and_help_text_bool("Video", "crf", "Use Constant Quality instead of 2-pass encoding. The default value for crf is 18, which produces the same quality as default 2-pass but a bigger file. CRF is much faster that 2-pass encoding.")
 	denoise_option := store_options_and_help_text_bool("Video", "dn", "Denoise. Use HQDN3D - filter to remove noise from the picture. This option is equal to Hanbrakes 'medium' noise reduction settings.")
 	grayscale_option := store_options_and_help_text_bool("Video", "gr", "Convert video to Grayscale. Use this option if the original source is black and white. This results more bitrate being available for b/w information and better picture quality.")
@@ -2464,168 +2660,57 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Check that the number given for the -abk option is between -100 and 100 and convert it to a number between -1.0 and 1.0
+	// Check that the number given for the -abk option is between -1.0 and 1.0
 	// First adjust black, then white, and then gamma.
 	if adjust_black_point.is_turned_on == true {
 
-		var error_happened error
+		adjust_black_point.user_string = sanitize_float(adjust_black_point.user_string, debug_option.is_turned_on)
 
-		adjust_black_point.user_int, error_happened = strconv.Atoi(adjust_black_point.user_string)
-
-		if error_happened == nil {
-			adjust_black_point.user_int, error_happened = strconv.Atoi(adjust_black_point.user_string)
-		} else {
+		if float_is_between_limits(adjust_black_point.user_string, "-1.0", "1.0", debug_option.is_turned_on) == false {
 			fmt.Println()
-			fmt.Println("Error: value for option -abk is not an integer: ", adjust_black_point.user_string)
+			fmt.Println("Error: value for option -abk must be between -1.0 and 1.0")
 			fmt.Println()
 			os.Exit(0)
 		}
-
-		if adjust_black_point.user_int < -100 || adjust_black_point.user_int > 100 {
-			fmt.Println()
-			fmt.Println("Error: value for option -abk must be an integer between -100 and 100.")
-			fmt.Println()
-			os.Exit(0)
-		}
-
-		var temp_string string
-
-		if len(adjust_black_point.user_string) == 3 {
-			temp_string = string(adjust_black_point.user_string[0]) + string('.') + string(adjust_black_point.user_string[1:])
-		}
-
-		if len(adjust_black_point.user_string) == 2 {
-			temp_string = string('0') + string('.') + adjust_black_point.user_string
-		}
-
-		if len(adjust_black_point.user_string) == 1 {
-			temp_string = string('0') + string('.') + string('0')  + adjust_black_point.user_string
-		}
-
-		adjust_black_point.user_string = temp_string
 	}
 
-	// Check that the number given for the -awh option is between -100 and 100 and convert it to a number between -1.0 and 1.0
-	// First adjust black, then white, and then gamma.
+	// Check that the number given for the -awh option is between -1.0 and 1.0
 	if adjust_white_point.is_turned_on == true {
 
-		var error_happened error
+		adjust_white_point.user_string = sanitize_float(adjust_white_point.user_string, debug_option.is_turned_on)
 
-		adjust_white_point.user_int, error_happened = strconv.Atoi(adjust_white_point.user_string)
-
-		if error_happened == nil {
-			adjust_white_point.user_int, error_happened = strconv.Atoi(adjust_white_point.user_string)
-		} else {
+		if float_is_between_limits(adjust_white_point.user_string, "-1.0", "1.0", debug_option.is_turned_on) == false {
 			fmt.Println()
-			fmt.Println("Error: value for option -awh is not an integer: ", adjust_white_point.user_string)
+			fmt.Println("Error: value for option -awh must be between -1.0 and 1.0")
 			fmt.Println()
 			os.Exit(0)
 		}
-
-		if adjust_white_point.user_int < -100 || adjust_white_point.user_int > 100 {
-			fmt.Println()
-			fmt.Println("Error: value for option -awh must be an integer between -100 and 100.")
-			fmt.Println()
-			os.Exit(0)
-		}
-
-		var temp_string string
-
-		if len(adjust_white_point.user_string) == 3 {
-			temp_string = string(adjust_white_point.user_string[0]) + string('.') + string(adjust_white_point.user_string[1:])
-		}
-
-		if len(adjust_white_point.user_string) == 2 {
-			temp_string = string('0') + string('.') + adjust_white_point.user_string
-		}
-
-		if len(adjust_white_point.user_string) == 1 {
-			temp_string = string('0') + string('.') + string('0')  + adjust_white_point.user_string
-		}
-
-		adjust_white_point.user_string = temp_string
 	}
 
-	// Check that the number given for the -agm option is between 10 and 1000 and convert it to a number between 0.1 and 10
-	// First adjust black, then white, and then gamma.
+	// Check that the number given for the -agm option is between 0.1 and 10
 	if adjust_gamma.is_turned_on == true {
 
-		var error_happened error
+		adjust_gamma.user_string = sanitize_float(adjust_gamma.user_string, debug_option.is_turned_on)
 
-		adjust_gamma.user_int, error_happened = strconv.Atoi(adjust_gamma.user_string)
-
-		if error_happened == nil {
-			adjust_gamma.user_int, error_happened = strconv.Atoi(adjust_gamma.user_string)
-		} else {
+		if float_is_between_limits(adjust_gamma.user_string, "0.1", "10.0", debug_option.is_turned_on) == false {
 			fmt.Println()
-			fmt.Println("Error: value for option -agm is not an integer: ", adjust_gamma.user_string)
+			fmt.Println("Error: value for option -agm must be between 0.1 and 10")
 			fmt.Println()
 			os.Exit(0)
 		}
-
-		if adjust_gamma.user_int < 10 || adjust_gamma.user_int > 1000 {
-			fmt.Println()
-			fmt.Println("Error: value for option -agm must be an integer between 10 and 1000.")
-			fmt.Println()
-			os.Exit(0)
-		}
-
-		var temp_string string
-
-		if len(adjust_gamma.user_string) == 4 {
-			temp_string = string(adjust_gamma.user_string[0:2]) + string('.') + string(adjust_gamma.user_string[2])
-		}
-
-		if len(adjust_gamma.user_string) == 3 {
-			temp_string = string(adjust_gamma.user_string[0]) + string('.') + string(adjust_gamma.user_string[1:])
-		}
-
-		if len(adjust_gamma.user_string) == 2 {
-			temp_string = string('0') + string('.') + adjust_gamma.user_string
-		}
-
-		adjust_gamma.user_string = temp_string
 	}
 
-	// Check that the number given for the -ach option is between 0 and 300 and convert it to a number between 0.0 and 3.0
-	// First adjust black, then white, and then gamma.
+	// Check that the number given for the -ach option is between 0.0 and 3.0
 	if adjust_chroma.is_turned_on == true {
 
-		var error_happened error
+		adjust_chroma.user_string = sanitize_float(adjust_chroma.user_string, debug_option.is_turned_on)
 
-		adjust_chroma.user_int, error_happened = strconv.Atoi(adjust_chroma.user_string)
-
-		if error_happened == nil {
-			adjust_chroma.user_int, error_happened = strconv.Atoi(adjust_chroma.user_string)
-		} else {
+		if float_is_between_limits(adjust_chroma.user_string, "0.0", "3.0", debug_option.is_turned_on) == false {
 			fmt.Println()
-			fmt.Println("Error: value for option -ach is not an integer: ", adjust_chroma.user_string)
+			fmt.Println("Error: value for option -ach must be between 0.0 and 3.0")
 			fmt.Println()
 			os.Exit(0)
 		}
-
-		if adjust_chroma.user_int < 0 || adjust_chroma.user_int > 300 {
-			fmt.Println()
-			fmt.Println("Error: value for option -ach must be an integer between 0 and 300.")
-			fmt.Println()
-			os.Exit(0)
-		}
-
-		var temp_string string
-
-		if len(adjust_chroma.user_string) == 3 {
-			temp_string = string(adjust_chroma.user_string[0]) + string('.') + string(adjust_chroma.user_string[1:])
-		}
-
-		if len(adjust_chroma.user_string) == 2 {
-			temp_string = string('0') + string('.') + adjust_chroma.user_string
-		}
-
-		if len(adjust_chroma.user_string) == 1 {
-			temp_string = string('0') + string('.') + string('0')  + adjust_chroma.user_string
-		}
-
-		adjust_chroma.user_string = temp_string
 	}
 
 	if debug_option.is_turned_on == true && only_print_commands.is_turned_on == true {
@@ -4386,6 +4471,7 @@ func main() {
 			var white_point_adjustment_command string
 			var chroma_adjustment_command string
 
+			// First adjust black, then white, then gamma, then chroma.
 			if adjust_black_point.is_turned_on == true {
 				black_point_adjustment_command = "colorlevels=rimin=" + adjust_black_point.user_string + ":gimin=" + adjust_black_point.user_string + ":bimin=" + adjust_black_point.user_string
 			}

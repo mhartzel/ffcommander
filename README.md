@@ -1,4 +1,4 @@
-% FFCOMMANDER(1) ffcommander 2.49
+% FFCOMMANDER(1) ffcommander 2.50
 % Mikael Hartzell (C) 2018
 % 2021
 
@@ -77,15 +77,15 @@ Then get the imei build script and build ImageMagick.
 - Update the manual database: **sudo mandb**  
 
 # Video options
-**-abk** Adjust video black point to make light video darker. This will move dark tones closer to black. Range is from -100 to 100. 0 = no change, numbers bigger than 0 makes video darker. Example: -abk 30  
+**-abk** Adjust video black point to make light video darker. This will move dark tones closer to black. Range is from -1.0 to 1.0. 0 = no change, numbers bigger than 0 makes video darker. Example: -abk 0.3  
 
 **-ac** Autocrop. Find crop values automatically by doing 10 second spot checks in 10 places for the duration of the file.  
 
-**-ach** Adjust Chroma to increase or decrease the amount of color in the video. Range is 0 to 300. Value of 100 means no change. Values less than 100 decrease and values bigger than 100 increases the level of color in the video. Example -ach 85  
+**-ach** Adjust Chroma to increase or decrease the amount of color in the video. Range is 0.0 to 3.0. Value of 1 means no change. Values less than 1 decrease and values bigger than 1 increases the level of color in the video. Example -ach 0.85  
 
-**-agm** Adjust video gamma. This will make mid tones lighter or darker. Range is from 10 to 1000. 100 = no change, numbers bigger than 100 moves mid tones towards white. Example: -agm 105  
+**-agm** Adjust video gamma. This will make mid tones lighter or darker. Range is from 0.1 to 10. 1 = no change, numbers bigger than 1 moves mid tones towards white. Example: -agm 1.05  
 
-**-awh** Adjust video white point to make dark video lighter. This will move light tones closer to white. Range is from -100 to 100. 100 = no change, numbers smaller than 100 makes video lighter. Example: -awh 70  
+**-awh** Adjust video white point to make dark video lighter. This will move light tones closer to white. Range is from -1.0 to 1.0. 1 = no change, numbers smaller than 1 makes video lighter. Example: -awh 0.7  
 
 **-crf** Use Constant Quality instead of 2-pass encoding. The default value for crf is 18, which produces the same quality as default 2-pass but a bigger file. CRF is much faster that 2-pass encoding.  
 
