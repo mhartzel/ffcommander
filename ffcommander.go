@@ -88,7 +88,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.50" // This is the version of this program
+var version_number string = "2.51" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -2081,7 +2081,7 @@ func main() {
 	show_program_version_short := store_options_and_help_text_bool("Misc", "v", "Show the version of FFcommander.")
 	show_program_version_long := store_options_and_help_text_bool("Misc", "version", "Show the version of FFcommander.")
 	temp_file_directory := store_options_and_help_text_string("Misc", "td", "", "Path to directory for temporary files, example_ -td PathToDir. This option directs temporary files created with 2-pass encoding and subtitle processing (-sp) to a separate directory. Processing with the -sp switch goes much faster when temporary files are created on a ram or ssd - disk. The -sp switch extracts every frame of a movie as a tiff image, so you need to have lots of free space in the temp directory. For a FullHD movie you need 20 GB or more storage for temporary files. Subtitle extraction with the -sp switch fails silently if you run out of storage space. If this happens then some of the last subtitles won't be available when the video is compressed and this results the last available subtitle being 'stuck' on top of video until the end of the movie. This is a limitation in how FFmpeg works and cannot be worked around.")
-	help := store_options_and_help_text_bool("Misc", "h", "Display help text")
+	help := store_options_and_help_text_bool("Misc", "h", "Display help text.")
 
 	//////////////////////
 	// Define variables //
@@ -2189,6 +2189,7 @@ func main() {
 	// Test if user gave a valid float on the commandline
 	if subtitle_burn_resize.user_string != "" {
 
+		subtitle_burn_resize.user_string = sanitize_float(subtitle_burn_resize.user_string, debug_option.is_turned_on)
 		subtitle_resize_float, float_parse_error := strconv.ParseFloat(subtitle_burn_resize.user_string, 64)
 
 		if  float_parse_error != nil || subtitle_resize_float == 0.0 {
@@ -3021,10 +3022,10 @@ func main() {
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	var subtitles_selected_for_muxing_map = make(map[string][]string)
-	var audio_stream_number_int int
 
 	for _, file_info_slice := range Complete_file_info_slice {
 
+		var audio_stream_number_int int
 		video_slice_temp := file_info_slice[0]
 		video_slice := video_slice_temp[0]
 		inputfile_full_path := video_slice[0]
@@ -3433,7 +3434,7 @@ func main() {
 		}
 
 		// Store selected subtitles to mux to a map
-		if subtitle_mux_bool == true && len(user_subtitle_mux_numbers_slice) >0 {
+		if subtitle_mux_bool == true && len(user_subtitle_mux_numbers_slice) > 0 {
 			subtitles_selected_for_muxing_map[inputfile_full_path] = user_subtitle_mux_numbers_slice
 			user_subtitle_mux_numbers_slice = nil
 		}
@@ -3568,13 +3569,11 @@ func main() {
 		fmt.Println("Processing file " + file_counter_str + "/" + files_to_process_str + "  '" + inputfile_name + "'")
 
 		audio_slice := file_info_slice[1]
-		audio_info := audio_slice[audio_stream_number_int]
+		selected_streams_slice := selected_streams[inputfile_full_path]
+		audio_stream_number_int, _ := strconv.Atoi(selected_streams_slice[1])
+		audio_info := audio_slice[audio_stream_number_int] 
 		number_of_audio_channels = audio_info[2]
 		audio_codec = audio_info[4]
-
-
-		selected_streams_slice := selected_streams[inputfile_full_path]
-		audio_stream_number_int, _ = strconv.Atoi(selected_streams_slice[1])
 		subtitle_burn_number, _ = strconv.Atoi(selected_streams_slice[2])
 
 		////////////////////////////////////////////////////
