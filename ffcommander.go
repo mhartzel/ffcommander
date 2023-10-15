@@ -88,7 +88,7 @@ var default_max_threads = ""
 
 
 
-var version_number string = "2.51" // This is the version of this program
+var version_number string = "2.52" // This is the version of this program
 var Complete_stream_info_map = make(map[int][]string)
 var video_stream_info_map = make(map[string]string)
 var audio_stream_info_map = make(map[string]string)
@@ -1111,7 +1111,7 @@ func subtitle_trim(original_subtitles_absolute_path string, fixed_subtitles_abso
 		if trim_error_code != nil {
 
 			fmt.Println()
-			fmt.Println("ImageMagick trim reported error: ", subtitle_trim_error)
+			fmt.Println("ImageMagick trim reported error: ", trim_error_code, subtitle_trim_error)
 			fmt.Println()
 
 			continue
@@ -1334,7 +1334,10 @@ func remove_duplicate_subtitle_images (original_subtitles_absolute_path string, 
 		///////////////////////////////////////////////////////////////////////////////////////////////////
 		// If there is no subtitle in the image, then create a subtitle file with an empty alpha channel //
 		///////////////////////////////////////////////////////////////////////////////////////////////////
-		if trim_error_code != nil {
+		// Imagemagick telling that there is no image is only a warning so the error code will be 0,
+		// but there is a warning string: "geometry does not contain image".
+
+		if strings.Contains(subtitle_trim_error[0], "does not contain image") == true && trim_error_code == nil {
 
 			// Get md5 of the empty image
 			subtitle_path := filepath.Join(original_subtitles_absolute_path, subtitle_name)
@@ -1366,6 +1369,15 @@ func remove_duplicate_subtitle_images (original_subtitles_absolute_path string, 
 			}
 
 			break // Jump out of the loop when the first image without subtitle has been found
+		}
+
+		if trim_error_code != nil {
+
+			fmt.Println()
+			fmt.Println("ImageMagick trim reported error: ", trim_error_code, subtitle_trim_error)
+			fmt.Println()
+
+			continue
 		}
 	}
 
